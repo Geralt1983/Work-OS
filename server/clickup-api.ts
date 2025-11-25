@@ -156,18 +156,29 @@ class ClickUpAPI {
 
   async findTierFieldId(listId: string): Promise<string | null> {
     const fields = await this.getListCustomFields(listId);
-    const tierField = fields.find(f => f.name.toLowerCase() === "tier");
+    // Match field names that contain "tier" (handles emoji prefixes like "⛰️ Tier")
+    const tierField = fields.find(f => f.name.toLowerCase().includes("tier"));
     return tierField?.id || null;
   }
 
   getTierValueFromTask(task: ClickUpTask): string | null {
     if (!task.custom_fields) return null;
-    const tierField = task.custom_fields.find(f => f.name.toLowerCase() === "tier");
+    // Match field names that contain "tier" (handles emoji prefixes like "⛰️ Tier")
+    const tierField = task.custom_fields.find(f => f.name.toLowerCase().includes("tier"));
     if (!tierField || tierField.value === null || tierField.value === undefined) return null;
     
-    // Handle dropdown type - value is the option ID (string), need to get option name
+    // Handle dropdown type - value can be option ID (string) or orderindex (number)
     if (tierField.type === "drop_down" && tierField.type_config?.options) {
-      const optionId = String(tierField.value);
+      const value = tierField.value;
+      
+      // Try matching by orderindex first (ClickUp sometimes returns orderindex as value)
+      if (typeof value === "number") {
+        const option = tierField.type_config.options.find(o => o.orderindex === value);
+        return option?.name?.toLowerCase() || null;
+      }
+      
+      // Try matching by option ID (string)
+      const optionId = String(value);
       const option = tierField.type_config.options.find(o => o.id === optionId);
       return option?.name?.toLowerCase() || null;
     }
@@ -177,7 +188,8 @@ class ClickUpAPI {
 
   async getTierFieldWithOptions(listId: string): Promise<{ fieldId: string; options: Map<string, string> } | null> {
     const fields = await this.getListCustomFields(listId);
-    const tierField = fields.find(f => f.name.toLowerCase() === "tier");
+    // Match field names that contain "tier" (handles emoji prefixes like "⛰️ Tier")
+    const tierField = fields.find(f => f.name.toLowerCase().includes("tier"));
     
     if (!tierField) return null;
     
