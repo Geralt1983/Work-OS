@@ -87,7 +87,16 @@ The daily audit checks:
 - run_pipeline_audit: Check all clients have active/queued/backlog
 - get_client_pipeline: Get specific client's pipeline status
 - check_task_actionable: AI evaluates if task is actionable
-- promote_task: Move task from backlog→queued or queued→active
+- promote_task: Move task from backlog→queued or queued→active (updates ClickUp status)
+- demote_task: Move task backwards (active→queued or queued→backlog)
+- set_task_status: Set any ClickUp status on a task
+- complete_task: Mark a task as complete
+
+**Status Mapping (customizable in pipeline-tools.ts):**
+- Active: "in progress", "today", "active", "doing"
+- Queued: "next", "queued", "ready", "to do"  
+- Backlog: default for uncategorized tasks
+- Done: "complete", "done", "closed"
 
 ### System Prompt Behavior
 
