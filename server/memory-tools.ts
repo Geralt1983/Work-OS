@@ -87,21 +87,28 @@ export const memoryTools = [
   },
   {
     name: "cleanup_daily_log",
-    description: "Remove specific task entries from today's daily log. Use this to clean up test tasks, duplicates, or incorrectly logged moves. Also deletes the tasks from ClickUp.",
+    description: "Remove test tasks, duplicates, or specific tasks from today's log. Can work by pattern (e.g. 'test', 'MCP') or by specific task IDs. Also deletes from ClickUp.",
     parameters: {
       type: "object",
       properties: {
+        pattern: { 
+          type: "string",
+          description: "Pattern to match in task names (e.g. 'test', 'MCP test'). Case-insensitive." 
+        },
+        remove_duplicates: {
+          type: "boolean",
+          description: "If true, removes duplicate entries (same task name, keeps earliest)"
+        },
         move_ids: { 
           type: "array", 
           items: { type: "string" },
-          description: "Array of ClickUp task IDs to remove from the log and delete from ClickUp" 
+          description: "Specific ClickUp task IDs to remove (optional, use pattern instead for convenience)" 
         },
         delete_from_clickup: {
           type: "boolean",
           description: "Whether to also delete these tasks from ClickUp (default true)"
         }
       },
-      required: ["move_ids"],
     },
   },
 ];
@@ -309,12 +316,70 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
     }
 
     case "cleanup_daily_log": {
-      const moveIds = args.move_ids as string[];
+      const pattern = args.pattern as string | undefined;
+      const removeDuplicates = args.remove_duplicates as boolean | undefined;
+      let moveIds = (args.move_ids as string[]) || [];
       const deleteFromClickup = args.delete_from_clickup !== false; // default true
       const today = new Date().toISOString().split('T')[0];
       
+      // Get today's log to find matching tasks
+      const dailyLog = await storage.getDailyLog(today);
+      if (!dailyLog) {
+        return { success: false, message: "No daily log found for today" };
+      }
+      
+      const completedMoves = (dailyLog.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string }>) || [];
+      const toRemove: string[] = [...moveIds];
+      const matchedTasks: Array<{ id: string; name: string }> = [];
+      
+      // Find tasks matching pattern
+      if (pattern) {
+        const lowerPattern = pattern.toLowerCase();
+        for (const move of completedMoves) {
+          if (move.description.toLowerCase().includes(lowerPattern)) {
+            if (!toRemove.includes(move.moveId)) {
+              toRemove.push(move.moveId);
+              matchedTasks.push({ id: move.moveId, name: move.description });
+            }
+          }
+        }
+      }
+      
+      // Find duplicates (same name, keep earliest by timestamp)
+      if (removeDuplicates) {
+        const seenNames = new Map<string, { moveId: string; at: string }>();
+        for (const move of completedMoves) {
+          const existing = seenNames.get(move.description);
+          if (existing) {
+            // Keep the earlier one, mark later one for removal
+            const existingTime = new Date(existing.at).getTime();
+            const currentTime = new Date(move.at).getTime();
+            if (currentTime > existingTime) {
+              // Current is later, remove it
+              if (!toRemove.includes(move.moveId)) {
+                toRemove.push(move.moveId);
+                matchedTasks.push({ id: move.moveId, name: `${move.description} (duplicate)` });
+              }
+            } else {
+              // Existing is later, remove it
+              if (!toRemove.includes(existing.moveId)) {
+                toRemove.push(existing.moveId);
+                matchedTasks.push({ id: existing.moveId, name: `${move.description} (duplicate)` });
+              }
+              seenNames.set(move.description, { moveId: move.moveId, at: move.at });
+            }
+          } else {
+            seenNames.set(move.description, { moveId: move.moveId, at: move.at });
+          }
+        }
+      }
+      
+      if (toRemove.length === 0) {
+        return { success: true, message: "No tasks matched the cleanup criteria" };
+      }
+      
       // Remove from daily log
-      const removedCount = await storage.removeCompletedMoves(today, moveIds);
+      const removedCount = await storage.removeCompletedMoves(today, toRemove);
       
       // Delete from ClickUp if requested
       const deleted: string[] = [];
@@ -322,7 +387,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
       
       if (deleteFromClickup) {
         const { executeClickUpTool } = await import("./clickup-api");
-        for (const taskId of moveIds) {
+        for (const taskId of toRemove) {
           try {
             await executeClickUpTool("delete_task", { task_id: taskId });
             deleted.push(taskId);
@@ -336,7 +401,8 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
         success: true,
         removedFromLog: removedCount,
         deletedFromClickup: deleted.length,
-        failedToDelete: failed,
+        failedToDelete: failed.length > 0 ? failed : undefined,
+        matchedTasks,
         message: `Removed ${removedCount} entries from daily log` + 
           (deleteFromClickup ? `, deleted ${deleted.length} tasks from ClickUp` : ''),
       };
