@@ -198,9 +198,19 @@ class ClickUpAPI {
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    await this.request(`/task/${taskId}`, {
+    const response = await fetch(`${CLICKUP_API_BASE}/task/${taskId}`, {
       method: "DELETE",
+      headers: {
+        "Authorization": this.apiKey,
+        "Content-Type": "application/json",
+      },
     });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`ClickUp API error: ${response.status} - ${error}`);
+    }
+    // DELETE returns empty response, don't try to parse JSON
   }
 
   async getListCustomFields(listId: string): Promise<ClickUpCustomField[]> {
