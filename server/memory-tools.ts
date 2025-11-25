@@ -99,6 +99,10 @@ export const memoryTools = [
           type: "boolean",
           description: "If true, removes duplicate entries (same task name, keeps earliest)"
         },
+        remove_semantic_duplicates: {
+          type: "boolean",
+          description: "If true, uses AI to find semantically similar tasks (e.g. 'Get analytics' and 'Send analytics' for same client)"
+        },
         move_ids: { 
           type: "array", 
           items: { type: "string" },
@@ -318,6 +322,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
     case "cleanup_daily_log": {
       const pattern = args.pattern as string | undefined;
       const removeDuplicates = args.remove_duplicates as boolean | undefined;
+      const removeSemanticDuplicates = args.remove_semantic_duplicates as boolean | undefined;
       let moveIds = (args.move_ids as string[]) || [];
       const deleteFromClickup = args.delete_from_clickup !== false; // default true
       const today = new Date().toISOString().split('T')[0];
@@ -330,7 +335,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
       
       const completedMoves = (dailyLog.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string }>) || [];
       const toRemove: string[] = [...moveIds];
-      const matchedTasks: Array<{ id: string; name: string }> = [];
+      const matchedTasks: Array<{ id: string; name: string; reason?: string }> = [];
       
       // Find tasks matching pattern
       if (pattern) {
@@ -339,7 +344,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
           if (move.description.toLowerCase().includes(lowerPattern)) {
             if (!toRemove.includes(move.moveId)) {
               toRemove.push(move.moveId);
-              matchedTasks.push({ id: move.moveId, name: move.description });
+              matchedTasks.push({ id: move.moveId, name: move.description, reason: "pattern match" });
             }
           }
         }
@@ -351,25 +356,70 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
         for (const move of completedMoves) {
           const existing = seenNames.get(move.description);
           if (existing) {
-            // Keep the earlier one, mark later one for removal
             const existingTime = new Date(existing.at).getTime();
             const currentTime = new Date(move.at).getTime();
             if (currentTime > existingTime) {
-              // Current is later, remove it
               if (!toRemove.includes(move.moveId)) {
                 toRemove.push(move.moveId);
-                matchedTasks.push({ id: move.moveId, name: `${move.description} (duplicate)` });
+                matchedTasks.push({ id: move.moveId, name: move.description, reason: "exact duplicate" });
               }
             } else {
-              // Existing is later, remove it
               if (!toRemove.includes(existing.moveId)) {
                 toRemove.push(existing.moveId);
-                matchedTasks.push({ id: existing.moveId, name: `${move.description} (duplicate)` });
+                matchedTasks.push({ id: existing.moveId, name: move.description, reason: "exact duplicate" });
               }
               seenNames.set(move.description, { moveId: move.moveId, at: move.at });
             }
           } else {
             seenNames.set(move.description, { moveId: move.moveId, at: move.at });
+          }
+        }
+      }
+      
+      // Find semantic duplicates using LLM
+      if (removeSemanticDuplicates && completedMoves.length > 1) {
+        const OpenAI = (await import("openai")).default;
+        const openai = new OpenAI();
+        
+        // Group by client first
+        const byClient = new Map<string, Array<{ moveId: string; description: string; at: string }>>();
+        for (const move of completedMoves) {
+          if (toRemove.includes(move.moveId)) continue; // Skip already marked
+          const list = byClient.get(move.clientName) || [];
+          list.push(move);
+          byClient.set(move.clientName, list);
+        }
+        
+        // Check each client's tasks for semantic duplicates
+        for (const [clientName, moves] of Array.from(byClient.entries())) {
+          if (moves.length < 2) continue;
+          
+          const taskList = moves.map((m, i) => `${i + 1}. "${m.description}"`).join("\n");
+          
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+              role: "system",
+              content: "You identify semantically duplicate tasks. Tasks are duplicates if they represent the same work unit (e.g., 'Get analytics' and 'Send analytics' are part of one workflow, or 'Review document' and 'Send document feedback' are the same work). Return ONLY the indices of tasks to REMOVE (keep the most meaningful one). Return empty array [] if no duplicates."
+            }, {
+              role: "user", 
+              content: `Client: ${clientName}\nTasks:\n${taskList}\n\nReturn JSON array of indices to remove (1-indexed), e.g. [2] or [2,3]. Empty [] if none.`
+            }],
+            temperature: 0,
+          });
+          
+          try {
+            const content = response.choices[0]?.message?.content || "[]";
+            const indices = JSON.parse(content.replace(/```json\n?|\n?```/g, "").trim()) as number[];
+            for (const idx of indices) {
+              const move = moves[idx - 1];
+              if (move && !toRemove.includes(move.moveId)) {
+                toRemove.push(move.moveId);
+                matchedTasks.push({ id: move.moveId, name: move.description, reason: "semantic duplicate" });
+              }
+            }
+          } catch (e) {
+            console.error("[Cleanup] Failed to parse LLM response:", e);
           }
         }
       }
