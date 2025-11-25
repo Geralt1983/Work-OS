@@ -6,10 +6,11 @@ export interface EmptyStateProps {
 }
 
 const examplePrompts = [
-  "Create a task to review the marketing materials",
-  "Show me my tasks due this week",
-  "Update the status of TASK-123 to In Progress",
-  "What tasks are assigned to me?",
+  "Make a Raleigh move to review their backlog",
+  "Summarize Memphis",
+  "What did I do today?",
+  "Which clients are stale?",
+  "Show me all my tasks",
 ];
 
 export default function EmptyState({ onExampleClick }: EmptyStateProps) {
@@ -24,10 +25,10 @@ export default function EmptyState({ onExampleClick }: EmptyStateProps) {
 
         <div className="space-y-3">
           <h2 className="text-3xl font-semibold tracking-tight" data-testid="text-welcome-title">
-            Welcome to ClickUp Assistant
+            Your Work OS
           </h2>
           <p className="text-[15px] text-muted-foreground leading-relaxed max-w-lg mx-auto">
-            Tell me what you'd like to do with your tasks, and I'll help you manage them naturally.
+            One move per client, every day. Just tell me what to do and I'll execute immediately.
           </p>
         </div>
 

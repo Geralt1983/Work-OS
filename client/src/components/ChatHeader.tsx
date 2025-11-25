@@ -29,9 +29,9 @@ export default function ChatHeader({ onClearChat, isConnected = true }: ChatHead
         <div className="flex items-center gap-4">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" data-testid="text-app-title">
-              ClickUp Assistant
+              Work OS
             </h1>
-            <p className="text-sm text-muted-foreground">Manage tasks naturally</p>
+            <p className="text-sm text-muted-foreground">Move clients forward, daily</p>
           </div>
         </div>
 
