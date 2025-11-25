@@ -30,7 +30,7 @@ export interface IStorage {
   createDailyLog(log: InsertDailyLog): Promise<DailyLog>;
   getDailyLog(date: string): Promise<DailyLog | undefined>;
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
-  addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<void>;
+  addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean>;
   
   // Learning memory: patterns
   recordPattern(pattern: InsertUserPattern): Promise<UserPattern>;
@@ -214,11 +214,10 @@ class DatabaseStorage implements IStorage {
     await db.update(dailyLog).set(updates).where(eq(dailyLog.date, date));
   }
 
-  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<void> {
+  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean> {
     let existing = await this.getDailyLog(date);
     
     if (!existing) {
-      // Create a new daily log entry
       existing = await this.createDailyLog({
         date,
         completedMoves: [],
@@ -235,21 +234,25 @@ class DatabaseStorage implements IStorage {
       ? (existing.clientsTouched as string[])
       : [];
     
-    // Add the move if not already present
+    // Check if move already exists (by moveId)
     const alreadyExists = completedMoves.some(m => m.moveId === move.moveId);
-    if (!alreadyExists) {
-      completedMoves.push(move);
-      
-      // Add client to touched list if not already there
-      if (!clientsTouched.includes(move.clientName)) {
-        clientsTouched.push(move.clientName);
-      }
-      
-      await this.updateDailyLog(date, {
-        completedMoves: completedMoves as unknown as string[],
-        clientsTouched,
-      });
+    if (alreadyExists) {
+      return false; // Not added, was duplicate
     }
+    
+    completedMoves.push(move);
+    
+    // Add client to touched list if not already there
+    if (!clientsTouched.includes(move.clientName)) {
+      clientsTouched.push(move.clientName);
+    }
+    
+    await this.updateDailyLog(date, {
+      completedMoves: completedMoves as unknown as string[],
+      clientsTouched,
+    });
+    
+    return true; // Successfully added
   }
 
   // Learning memory: patterns

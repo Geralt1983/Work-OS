@@ -31,26 +31,8 @@ export async function syncCompletedTasks(): Promise<SyncResult> {
     // Fetch recently completed tasks from ClickUp
     const completedTasks = await clickupApi.getRecentlyCompletedTasks(today);
 
-    // Get today's log to check what's already tracked
-    const todayLog = await storage.getDailyLog(todayStr);
-    const loggedMoveIds = new Set<string>();
-    
-    if (todayLog && Array.isArray(todayLog.completedMoves)) {
-      for (const move of todayLog.completedMoves as Array<{ moveId?: string }>) {
-        if (move.moveId) {
-          loggedMoveIds.add(move.moveId);
-        }
-      }
-    }
-
     // Process each completed task
     for (const task of completedTasks) {
-      // Skip if already logged
-      if (loggedMoveIds.has(task.id)) {
-        result.alreadyLogged++;
-        continue;
-      }
-
       // Extract client name from list name or tags
       const clientName = task.list?.name || 
         task.tags?.find(t => t.name)?.name || 
@@ -62,8 +44,8 @@ export async function syncCompletedTasks(): Promise<SyncResult> {
         ? new Date(parseInt(dateDone, 10)) 
         : new Date();
 
-      // Log this completion
-      await storage.addCompletedMove(todayStr, {
+      // Log this completion (returns false if already exists)
+      const wasAdded = await storage.addCompletedMove(todayStr, {
         moveId: task.id,
         description: task.name,
         clientName,
@@ -71,17 +53,21 @@ export async function syncCompletedTasks(): Promise<SyncResult> {
         source: "clickup_sync",
       });
 
-      // Update client memory
-      await storage.updateClientMove(clientName, task.id, task.name);
+      if (wasAdded) {
+        // Only update client memory if move was actually added
+        await storage.updateClientMove(clientName, task.id, task.name);
 
-      // Track for result
-      result.synced++;
-      result.tasks.push({
-        id: task.id,
-        name: task.name,
-        clientName,
-        completedAt,
-      });
+        // Track for result
+        result.synced++;
+        result.tasks.push({
+          id: task.id,
+          name: task.name,
+          clientName,
+          completedAt,
+        });
+      } else {
+        result.alreadyLogged++;
+      }
     }
 
     lastSyncTime = new Date();

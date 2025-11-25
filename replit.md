@@ -44,6 +44,22 @@ Prevents backlog stagnation through multiple mechanics:
 - Recommends promotions based on priority/age
 - Surfaces tasks that may need to be deleted/archived
 
+## ClickUp Sync
+
+The system automatically syncs completed tasks from ClickUp every 15 minutes to ensure metrics stay accurate even when tasks are completed directly in ClickUp (not through Work OS chat).
+
+**How it works:**
+- Background sync runs every 15 minutes
+- Fetches tasks completed today from ClickUp
+- Compares against what's already logged in Work OS
+- Adds any missing completions to the daily log
+- Updates client memory and metrics accordingly
+
+**Manual sync:**
+- Use `sync_clickup_completions` tool in chat
+- Or call POST `/api/sync` endpoint
+- Check sync status via GET `/api/sync/status`
+
 ## System Architecture
 
 ### Frontend Architecture
