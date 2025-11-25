@@ -5,11 +5,16 @@ import ChatInput from "@/components/ChatInput";
 import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -24,7 +29,22 @@ export default function Chat() {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleSendMessage = (content: string) => {
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch("/api/health");
+        const data = await response.json();
+        setIsConnected(data.mcpConnected);
+      } catch (error) {
+        setIsConnected(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSendMessage = async (content: string) => {
     const userMessage: ChatMessageProps = {
       role: "user",
       content,
@@ -34,22 +54,41 @@ export default function Chat() {
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const response = await apiRequest("/api/chat", "POST", {
+        sessionId,
+        message: content,
+      });
+
+      if (!sessionId) {
+        setSessionId(response.sessionId);
+      }
+
       const aiMessage: ChatMessageProps = {
         role: "assistant",
-        content: "I've processed your request. Here's what I found:",
-        timestamp: new Date(),
-        taskCard: Math.random() > 0.5 ? {
-          title: content.substring(0, 50),
-          taskId: `TASK-${Math.floor(Math.random() * 9000) + 1000}`,
-          status: ["To Do", "In Progress", "Done"][Math.floor(Math.random() * 3)],
-          dueDate: "Dec 20, 2025",
-        } : undefined,
+        content: response.assistantMessage.content,
+        timestamp: new Date(response.assistantMessage.timestamp),
+        taskCard: response.assistantMessage.taskCard,
       };
+
       setMessages((prev) => [...prev, aiMessage]);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+
+      const errorMessage: ChatMessageProps = {
+        role: "assistant",
+        content: "I'm having trouble connecting to ClickUp right now. Please check your configuration and try again.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleExampleClick = (example: string) => {
@@ -58,13 +97,13 @@ export default function Chat() {
 
   const handleClearChat = () => {
     setMessages([]);
+    setSessionId(null);
     setIsTyping(false);
-    console.log("Chat cleared");
   };
 
   return (
     <div className="h-screen flex flex-col bg-background" data-testid="page-chat">
-      <ChatHeader onClearChat={handleClearChat} isConnected={true} />
+      <ChatHeader onClearChat={handleClearChat} isConnected={isConnected} />
 
       {messages.length === 0 ? (
         <EmptyState onExampleClick={handleExampleClick} />
