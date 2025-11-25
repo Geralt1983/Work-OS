@@ -22,6 +22,8 @@ interface ClickUpTask {
   description?: string;
   status: { status: string };
   due_date?: string;
+  date_done?: string; // Unix timestamp in ms when task was closed
+  date_closed?: string; // Alternative field for closed date
   priority?: { priority: string };
   list: { id: string; name: string };
   custom_fields?: ClickUpCustomField[];
@@ -267,6 +269,7 @@ class ClickUpAPI {
     statuses?: string[];
     include_closed?: boolean;
     subtasks?: boolean;
+    date_done_gt?: number; // Unix timestamp in ms - filter tasks completed after this date
   }): Promise<ClickUpTask[]> {
     const params = new URLSearchParams();
     if (options?.statuses) {
@@ -278,9 +281,32 @@ class ClickUpAPI {
     if (options?.subtasks) {
       params.append("subtasks", "true");
     }
+    if (options?.date_done_gt) {
+      params.append("date_done_gt", options.date_done_gt.toString());
+    }
     
     const data = await this.request(`/team/${this.teamId}/task?${params.toString()}`);
     return data.tasks;
+  }
+
+  async getRecentlyCompletedTasks(sinceDate?: Date): Promise<ClickUpTask[]> {
+    // Default to start of today if no date provided
+    const since = sinceDate || new Date(new Date().setHours(0, 0, 0, 0));
+    
+    // Fetch all closed tasks since the given date
+    const allTasks = await this.getAllWorkspaceTasks({
+      include_closed: true,
+      date_done_gt: since.getTime(),
+    });
+    
+    // Filter to only tasks that have a date_done (completed tasks)
+    return allTasks.filter(task => {
+      const dateDone = task.date_done || task.date_closed;
+      if (!dateDone) return false;
+      
+      const completedAt = parseInt(dateDone, 10);
+      return completedAt >= since.getTime();
+    });
   }
 
   async searchTasks(query: string): Promise<ClickUpTask[]> {

@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { processChat } from "./openai-service";
+import { syncCompletedTasks, startSyncInterval, getLastSyncTime, isSyncRunning } from "./sync-service";
 import { z } from "zod";
 
 const sendMessageSchema = z.object({
@@ -111,6 +112,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch client metrics" });
     }
   });
+
+  // Sync endpoints
+  app.post("/api/sync", async (req, res) => {
+    try {
+      const result = await syncCompletedTasks();
+      res.json({
+        success: true,
+        synced: result.synced,
+        alreadyLogged: result.alreadyLogged,
+        tasks: result.tasks,
+        message: `Synced ${result.synced} completed tasks from ClickUp`,
+      });
+    } catch (error) {
+      console.error("Error syncing with ClickUp:", error);
+      res.status(500).json({ error: "Failed to sync with ClickUp" });
+    }
+  });
+
+  app.get("/api/sync/status", async (req, res) => {
+    res.json({
+      running: isSyncRunning(),
+      lastSyncTime: getLastSyncTime(),
+    });
+  });
+
+  // Start background sync every 15 minutes
+  startSyncInterval(15);
 
   const httpServer = createServer(app);
 

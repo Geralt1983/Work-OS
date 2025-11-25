@@ -135,6 +135,7 @@ You have:
 - **Learning tools**: record patterns, get insights, track client sentiment/importance
 - **Backlog tools**: get_backlog_health, get_aging_backlog, auto_promote_stale_backlog, should_pull_from_backlog, run_backlog_triage
 - **Tagging tools**: batch_tag_list (tag all tasks in a list), add_tag_to_task (add tag to specific task)
+- **Sync tools**: sync_clickup_completions (sync completed tasks from ClickUp to update metrics)
 
 When creating a task, always:
 1. Create the task in ClickUp (auto-tags with client name for dashboard compatibility)

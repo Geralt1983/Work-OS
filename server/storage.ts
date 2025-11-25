@@ -30,6 +30,7 @@ export interface IStorage {
   createDailyLog(log: InsertDailyLog): Promise<DailyLog>;
   getDailyLog(date: string): Promise<DailyLog | undefined>;
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
+  addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<void>;
   
   // Learning memory: patterns
   recordPattern(pattern: InsertUserPattern): Promise<UserPattern>;
@@ -211,6 +212,44 @@ class DatabaseStorage implements IStorage {
 
   async updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void> {
     await db.update(dailyLog).set(updates).where(eq(dailyLog.date, date));
+  }
+
+  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<void> {
+    let existing = await this.getDailyLog(date);
+    
+    if (!existing) {
+      // Create a new daily log entry
+      existing = await this.createDailyLog({
+        date,
+        completedMoves: [],
+        clientsTouched: [],
+        clientsSkipped: [],
+      });
+    }
+    
+    const completedMoves = Array.isArray(existing.completedMoves) 
+      ? (existing.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string; source?: string }>)
+      : [];
+    
+    const clientsTouched = Array.isArray(existing.clientsTouched)
+      ? (existing.clientsTouched as string[])
+      : [];
+    
+    // Add the move if not already present
+    const alreadyExists = completedMoves.some(m => m.moveId === move.moveId);
+    if (!alreadyExists) {
+      completedMoves.push(move);
+      
+      // Add client to touched list if not already there
+      if (!clientsTouched.includes(move.clientName)) {
+        clientsTouched.push(move.clientName);
+      }
+      
+      await this.updateDailyLog(date, {
+        completedMoves: completedMoves as unknown as string[],
+        clientsTouched,
+      });
+    }
   }
 
   // Learning memory: patterns

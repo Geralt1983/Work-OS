@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { syncCompletedTasks, getLastSyncTime, isSyncRunning } from "./sync-service";
 
 export const memoryTools = [
   {
@@ -78,6 +79,11 @@ export const memoryTools = [
         summary: { type: "string", description: "Optional summary of the day" },
       },
     },
+  },
+  {
+    name: "sync_clickup_completions",
+    description: "Sync completed tasks from ClickUp to update metrics. Call this to ensure all ClickUp completions are reflected in the Work OS metrics. Auto-runs every 15 minutes.",
+    parameters: { type: "object", properties: {} },
   },
 ];
 
@@ -265,6 +271,21 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
         clientsTouched: clientsTouched.length,
         clientsSkipped: skipped,
         summary: args.summary,
+      };
+    }
+
+    case "sync_clickup_completions": {
+      const result = await syncCompletedTasks();
+      return {
+        success: true,
+        synced: result.synced,
+        alreadyLogged: result.alreadyLogged,
+        tasks: result.tasks,
+        lastSyncTime: getLastSyncTime(),
+        autoSyncRunning: isSyncRunning(),
+        message: result.synced > 0 
+          ? `Synced ${result.synced} completed tasks from ClickUp`
+          : `No new completions to sync (${result.alreadyLogged} already logged)`,
       };
     }
 
