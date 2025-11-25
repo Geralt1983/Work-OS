@@ -56,6 +56,39 @@ export interface IStorage {
   getAgingBacklogTasks(daysThreshold?: number): Promise<BacklogEntry[]>;
   getBacklogMoveStats(daysBack?: number): Promise<{ backlogMoves: number; nonBacklogMoves: number }>;
   incrementBacklogMoveCount(date: string, isBacklog: boolean): Promise<void>;
+  
+  // Metrics
+  getWeeklyLogs(days?: number): Promise<DailyLog[]>;
+  getTodayMetrics(): Promise<{
+    date: string;
+    movesCompleted: number;
+    estimatedMinutes: number;
+    targetMinutes: number;
+    pacingPercent: number;
+    clientsTouched: string[];
+    backlogMoves: number;
+    nonBacklogMoves: number;
+  }>;
+  getWeeklyMetrics(): Promise<{
+    days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }>;
+    averageMovesPerDay: number;
+    totalMoves: number;
+    totalMinutes: number;
+  }>;
+  getClientMetrics(): Promise<Array<{
+    clientName: string;
+    totalMoves: number;
+    lastMoveAt: Date | null;
+    daysSinceLastMove: number;
+    sentiment: string;
+    importance: string;
+    tier: string;
+  }>>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -452,6 +485,144 @@ class DatabaseStorage implements IStorage {
         nonBacklogMovesCount: isBacklog ? 0 : 1
       });
     }
+  }
+
+  async getWeeklyLogs(days: number = 7): Promise<DailyLog[]> {
+    const logs = await db.select().from(dailyLog)
+      .orderBy(desc(dailyLog.date))
+      .limit(days);
+    return logs;
+  }
+
+  async getTodayMetrics(): Promise<{
+    date: string;
+    movesCompleted: number;
+    estimatedMinutes: number;
+    targetMinutes: number;
+    pacingPercent: number;
+    clientsTouched: string[];
+    backlogMoves: number;
+    nonBacklogMoves: number;
+  }> {
+    const today = new Date().toISOString().split("T")[0];
+    const log = await this.getDailyLog(today);
+    
+    const completedMoves = (log?.completedMoves as string[] || []);
+    const clientsTouched = (log?.clientsTouched as string[] || []);
+    const movesCompleted = completedMoves.length;
+    const estimatedMinutes = movesCompleted * 20; // 20 min per move
+    const targetMinutes = 180; // 3 hours = 180 minutes
+    
+    // Calculate pacing with proper clamping
+    let pacingPercent = 0;
+    if (targetMinutes > 0) {
+      pacingPercent = Math.min(Math.round((estimatedMinutes / targetMinutes) * 100), 100);
+    }
+    
+    return {
+      date: today,
+      movesCompleted,
+      estimatedMinutes,
+      targetMinutes,
+      pacingPercent,
+      clientsTouched,
+      backlogMoves: log?.backlogMovesCount || 0,
+      nonBacklogMoves: log?.nonBacklogMovesCount || 0,
+    };
+  }
+
+  async getWeeklyMetrics(): Promise<{
+    days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }>;
+    averageMovesPerDay: number;
+    totalMoves: number;
+    totalMinutes: number;
+  }> {
+    const logs = await this.getWeeklyLogs(7);
+    const targetMinutes = 180;
+    
+    // Create a map of existing logs by date
+    const logsByDate = new Map<string, DailyLog>();
+    for (const log of logs) {
+      logsByDate.set(log.date, log);
+    }
+    
+    // Generate array of last 7 days in chronological order
+    const days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }> = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0];
+      
+      const log = logsByDate.get(dateStr);
+      const completedMoves = log ? (log.completedMoves as string[] || []) : [];
+      const movesCompleted = completedMoves.length;
+      const estimatedMinutes = movesCompleted * 20;
+      const pacingPercent = targetMinutes > 0 
+        ? Math.min(Math.round((estimatedMinutes / targetMinutes) * 100), 100)
+        : 0;
+      
+      days.push({
+        date: dateStr,
+        movesCompleted,
+        estimatedMinutes,
+        pacingPercent,
+      });
+    }
+    
+    const totalMoves = days.reduce((sum, d) => sum + d.movesCompleted, 0);
+    const totalMinutes = totalMoves * 20;
+    // Average over days with actual data
+    const daysWithData = days.filter(d => d.movesCompleted > 0).length;
+    const averageMovesPerDay = daysWithData > 0 ? Math.round(totalMoves / daysWithData) : 0;
+    
+    return {
+      days,
+      averageMovesPerDay,
+      totalMoves,
+      totalMinutes,
+    };
+  }
+
+  async getClientMetrics(): Promise<Array<{
+    clientName: string;
+    totalMoves: number;
+    lastMoveAt: Date | null;
+    daysSinceLastMove: number;
+    sentiment: string;
+    importance: string;
+    tier: string;
+  }>> {
+    const clients = await this.getAllClients();
+    const now = new Date();
+    
+    return clients.map(client => {
+      let daysSinceLastMove = 999;
+      if (client.lastMoveAt) {
+        const lastMove = new Date(client.lastMoveAt);
+        daysSinceLastMove = Math.floor((now.getTime() - lastMove.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      
+      return {
+        clientName: client.clientName,
+        totalMoves: client.totalMoves || 0,
+        lastMoveAt: client.lastMoveAt,
+        daysSinceLastMove,
+        sentiment: client.sentiment || "neutral",
+        importance: client.importance || "medium",
+        tier: client.tier || "active",
+      };
+    });
   }
 }
 

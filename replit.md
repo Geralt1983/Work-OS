@@ -76,6 +76,9 @@ Prevents backlog stagnation through multiple mechanics:
 - POST `/api/sessions`: Create new session
 - GET `/api/sessions/:id/messages`: Get conversation history
 - GET `/api/health`: Check ClickUp configuration
+- GET `/api/metrics/today`: Today's pacing metrics (moves, time, target)
+- GET `/api/metrics/weekly`: Weekly trends (last 7 days)
+- GET `/api/metrics/clients`: Per-client activity metrics
 
 ### Database Schema
 
@@ -95,7 +98,10 @@ Prevents backlog stagnation through multiple mechanics:
 - get_hierarchy: Full workspace structure (spaces/folders/lists)
 - get_spaces, get_folders, get_lists, get_folderless_lists
 - get_tasks, get_all_tasks, search_tasks
-- create_task, update_task, delete_task, get_task
+- create_task: Create new task (auto-tags with client name for dashboard compatibility)
+- update_task, delete_task, get_task
+- batch_tag_list: Tag all tasks in a list with client name for ClickUp dashboard filtering
+- add_tag_to_task: Add a tag to an existing task
 
 **Memory Tools:**
 - get_client_memory: Get client state
@@ -115,7 +121,8 @@ Prevents backlog stagnation through multiple mechanics:
 - promote_task: Move task from backlog→queued or queued→active (updates tier field)
 - demote_task: Move task backwards (active→queued or queued→backlog)
 - set_task_tier: Set any tier value on a task
-- complete_task: Mark a task as complete (auto-promotes next task to fill the gap)
+- complete_task: Mark a task as complete (auto-promotes next task to fill pipeline gaps with full cascade)
+- quick_complete: Complete any task without tier requirements or cascade (for ad-hoc work)
 
 **Daily Planning Tools:**
 - suggest_next_move: AI-powered task recommendation based on user context

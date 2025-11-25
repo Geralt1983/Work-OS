@@ -81,6 +81,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Metrics endpoints
+  app.get("/api/metrics/today", async (req, res) => {
+    try {
+      const metrics = await storage.getTodayMetrics();
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching today's metrics:", error);
+      res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
+  app.get("/api/metrics/weekly", async (req, res) => {
+    try {
+      const metrics = await storage.getWeeklyMetrics();
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching weekly metrics:", error);
+      res.status(500).json({ error: "Failed to fetch weekly metrics" });
+    }
+  });
+
+  app.get("/api/metrics/clients", async (req, res) => {
+    try {
+      const metrics = await storage.getClientMetrics();
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching client metrics:", error);
+      res.status(500).json({ error: "Failed to fetch client metrics" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

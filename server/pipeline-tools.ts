@@ -136,11 +136,23 @@ export const pipelineTools = [
   },
   {
     name: "complete_task",
-    description: "Mark a task as complete/done",
+    description: "Mark a task as complete/done. Auto-promotes next tasks to fill pipeline gaps.",
     parameters: {
       type: "object",
       properties: {
         task_id: { type: "string", description: "The task ID" },
+      },
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "quick_complete",
+    description: "Quick-complete any task without tier requirements or pipeline cascading. Use for ad-hoc work that doesn't fit the normal tier workflow. Still logs the move and updates client memory.",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "The task ID" },
+        note: { type: "string", description: "Optional note about what was done" },
       },
       required: ["task_id"],
     },
@@ -899,6 +911,67 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         newTier: "done",
         message,
         autoPromoted: promotions,
+      };
+    }
+    
+    case "quick_complete": {
+      // Quick complete - no tier requirements, no cascade, just mark done and log
+      const task = await clickupApi.getTask(args.task_id as string);
+      const clientName = task.list?.name || "unknown";
+      const note = args.note as string | undefined;
+      
+      // Mark as complete via status (most lists have a "complete" status)
+      try {
+        await clickupApi.updateTask(args.task_id as string, { status: "complete" });
+      } catch (e) {
+        // If status update fails, try to set tier to done
+        try {
+          await setTaskTier(args.task_id as string, task.list.id, "done", task.name, clientName);
+        } catch (tierError) {
+          console.error("Failed to mark task as done:", tierError);
+        }
+      }
+      
+      // Update client memory with the move
+      await storage.updateClientMove(clientName, task.id, note || task.name);
+      
+      // Log to daily log with proper tracking
+      const today = new Date().toISOString().split("T")[0];
+      const existingLog = await storage.getDailyLog(today);
+      const completedMoves = (existingLog?.completedMoves as string[] || []);
+      completedMoves.push(task.name);
+      
+      // Update clientsTouched
+      const clientsTouched = (existingLog?.clientsTouched as string[] || []);
+      const normalizedClient = clientName.toLowerCase().trim();
+      if (!clientsTouched.includes(normalizedClient)) {
+        clientsTouched.push(normalizedClient);
+      }
+      
+      if (existingLog) {
+        await storage.updateDailyLog(today, { 
+          completedMoves,
+          clientsTouched,
+          nonBacklogMovesCount: (existingLog.nonBacklogMovesCount || 0) + 1
+        });
+      } else {
+        await storage.createDailyLog({
+          date: today,
+          completedMoves,
+          clientsTouched,
+          nonBacklogMovesCount: 1
+        });
+      }
+      
+      // Also update via incrementBacklogMoveCount for consistency
+      await storage.incrementBacklogMoveCount(today, false);
+      
+      return {
+        success: true,
+        task: task.name,
+        client: clientName,
+        message: `Quick-completed "${task.name}" for ${clientName}${note ? ` (${note})` : ""}. No pipeline cascade triggered.`,
+        cascaded: false,
       };
     }
     

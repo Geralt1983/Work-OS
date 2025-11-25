@@ -10,6 +10,12 @@ interface ClickUpCustomField {
   };
 }
 
+interface ClickUpTag {
+  name: string;
+  tag_fg?: string;
+  tag_bg?: string;
+}
+
 interface ClickUpTask {
   id: string;
   name: string;
@@ -19,6 +25,7 @@ interface ClickUpTask {
   priority?: { priority: string };
   list: { id: string; name: string };
   custom_fields?: ClickUpCustomField[];
+  tags?: ClickUpTag[];
 }
 
 interface ClickUpList {
@@ -116,6 +123,7 @@ class ClickUpAPI {
     description?: string;
     due_date?: number;
     priority?: number;
+    tags?: string[];
   }): Promise<ClickUpTask> {
     return this.request(`/list/${listId}/task`, {
       method: "POST",
@@ -134,6 +142,57 @@ class ClickUpAPI {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  async addTagToTask(taskId: string, tagName: string): Promise<void> {
+    await this.request(`/task/${taskId}/tag/${encodeURIComponent(tagName)}`, {
+      method: "POST",
+    });
+  }
+
+  async removeTagFromTask(taskId: string, tagName: string): Promise<void> {
+    await this.request(`/task/${taskId}/tag/${encodeURIComponent(tagName)}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getSpaceTags(spaceId: string): Promise<ClickUpTag[]> {
+    const data = await this.request(`/space/${spaceId}/tag`);
+    return data.tags || [];
+  }
+
+  async createSpaceTag(spaceId: string, tag: { name: string; tag_bg?: string; tag_fg?: string }): Promise<void> {
+    await this.request(`/space/${spaceId}/tag`, {
+      method: "POST",
+      body: JSON.stringify({ tag }),
+    });
+  }
+
+  async getList(listId: string): Promise<ClickUpList & { space?: { id: string } }> {
+    return this.request(`/list/${listId}`);
+  }
+
+  async batchTagTasksInList(listId: string, tagName: string): Promise<{ tagged: number; skipped: number }> {
+    const tasks = await this.getTasks(listId);
+    let tagged = 0;
+    let skipped = 0;
+
+    for (const task of tasks) {
+      const hasTag = task.tags?.some(t => t.name.toLowerCase() === tagName.toLowerCase());
+      if (hasTag) {
+        skipped++;
+        continue;
+      }
+      try {
+        await this.addTagToTask(task.id, tagName);
+        tagged++;
+      } catch (e) {
+        console.error(`Failed to tag task ${task.id}:`, e);
+        skipped++;
+      }
+    }
+
+    return { tagged, skipped };
   }
 
   async deleteTask(taskId: string): Promise<void> {
@@ -366,7 +425,7 @@ export const clickupTools = [
   },
   {
     name: "create_task",
-    description: "Create a new task in a list",
+    description: "Create a new task in a list. Auto-tags with the client/list name for dashboard tracking.",
     parameters: {
       type: "object",
       properties: {
@@ -375,8 +434,34 @@ export const clickupTools = [
         description: { type: "string", description: "Task description" },
         due_date: { type: "string", description: "Due date in YYYY-MM-DD format" },
         priority: { type: "number", description: "Priority (1=urgent, 2=high, 3=normal, 4=low)" },
+        tags: { type: "array", items: { type: "string" }, description: "Additional tags to add to the task" },
+        auto_tag_client: { type: "boolean", description: "Auto-add the list name as a tag (default: true)" },
       },
       required: ["list_id", "name"],
+    },
+  },
+  {
+    name: "batch_tag_list",
+    description: "Tag all tasks in a list with the client/list name. Use this to prepare existing tasks for ClickUp dashboard filtering.",
+    parameters: {
+      type: "object",
+      properties: {
+        list_id: { type: "string", description: "The list ID to tag all tasks in" },
+        tag_name: { type: "string", description: "Tag name to add (defaults to list name if not specified)" },
+      },
+      required: ["list_id"],
+    },
+  },
+  {
+    name: "add_tag_to_task",
+    description: "Add a tag to an existing task",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "The task ID" },
+        tag_name: { type: "string", description: "The tag name to add" },
+      },
+      required: ["task_id", "tag_name"],
     },
   },
   {
@@ -448,15 +533,66 @@ export async function executeClickUpTool(name: string, args: Record<string, unkn
       return clickupApi.searchTasks(args.query as string);
     
     case "create_task": {
+      const listId = args.list_id as string;
       const dueDate = args.due_date 
         ? new Date(args.due_date as string).getTime()
         : undefined;
-      return clickupApi.createTask(args.list_id as string, {
+      
+      // Build tags array
+      const tags: string[] = args.tags as string[] || [];
+      
+      // Auto-tag with client/list name unless explicitly disabled
+      const autoTagClient = args.auto_tag_client !== false;
+      if (autoTagClient) {
+        try {
+          const list = await clickupApi.getList(listId);
+          const clientTag = list.name;
+          if (clientTag && !tags.includes(clientTag)) {
+            tags.push(clientTag);
+          }
+        } catch (e) {
+          console.error("Failed to get list name for auto-tagging:", e);
+        }
+      }
+      
+      const task = await clickupApi.createTask(listId, {
         name: args.name as string,
         description: args.description as string,
         due_date: dueDate,
         priority: args.priority as number,
+        tags: tags.length > 0 ? tags : undefined,
       });
+      
+      return {
+        ...task,
+        autoTagged: tags,
+        message: tags.length > 0 ? `Created task with tags: ${tags.join(", ")}` : "Created task",
+      };
+    }
+    
+    case "batch_tag_list": {
+      const listId = args.list_id as string;
+      let tagName = args.tag_name as string;
+      
+      // Default to list name if no tag specified
+      if (!tagName) {
+        const list = await clickupApi.getList(listId);
+        tagName = list.name;
+      }
+      
+      const result = await clickupApi.batchTagTasksInList(listId, tagName);
+      return {
+        success: true,
+        tagName,
+        tasksTagged: result.tagged,
+        tasksSkipped: result.skipped,
+        message: `Tagged ${result.tagged} tasks with "${tagName}" (${result.skipped} already had the tag)`,
+      };
+    }
+    
+    case "add_tag_to_task": {
+      await clickupApi.addTagToTask(args.task_id as string, args.tag_name as string);
+      return { success: true, message: `Added tag "${args.tag_name}" to task` };
     }
     
     case "update_task": {

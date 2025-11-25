@@ -5,12 +5,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import Chat from "@/pages/Chat";
+import Metrics from "@/pages/Metrics";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Chat} />
+      <Route path="/metrics" component={Metrics} />
       <Route component={NotFound} />
     </Switch>
   );

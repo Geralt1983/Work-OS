@@ -130,15 +130,20 @@ Backlog tasks tend to rot if not actively managed. Use these mechanics to preven
 You have:
 - **ClickUp tools**: spaces, lists, tasks, hierarchy
 - **Memory tools**: client tracking, daily logs
-- **Pipeline tools**: audit all clients, check actionability, promote/demote tasks
+- **Pipeline tools**: audit all clients, check actionability, promote/demote tasks, complete_task (with auto-cascade), quick_complete (no cascade)
 - **Planning tools**: get_all_client_pipelines (see all work), suggest_next_move (AI-powered task recommendation)
 - **Learning tools**: record patterns, get insights, track client sentiment/importance
 - **Backlog tools**: get_backlog_health, get_aging_backlog, auto_promote_stale_backlog, should_pull_from_backlog, run_backlog_triage
+- **Tagging tools**: batch_tag_list (tag all tasks in a list), add_tag_to_task (add tag to specific task)
 
 When creating a task, always:
-1. Create the task in ClickUp
+1. Create the task in ClickUp (auto-tags with client name for dashboard compatibility)
 2. Update client memory with the move
 3. Confirm with task link/ID
+
+When completing a task:
+- Use **complete_task** for normal completions — this auto-promotes the next queued task to active, and backlog to queued (full cascade)
+- Use **quick_complete** for ad-hoc work that doesn't fit the pipeline — still logs the move but skips tier requirements and cascade
 
 When running daily check:
 1. Audit all client pipelines
@@ -150,7 +155,17 @@ When suggesting tasks:
 1. Check learned patterns and productivity insights
 2. Consider client sentiment and importance
 3. Avoid repeatedly suggesting avoided tasks
-4. Factor in current time of day and energy patterns`;
+4. Factor in current time of day and energy patterns
+
+## CLIENT TAGGING FOR DASHBOARDS
+
+All new tasks are auto-tagged with the client/list name to enable ClickUp dashboard filtering (since dashboards can't filter by list names, only tags).
+
+Use batch_tag_list when:
+- Setting up a new client's existing tasks for dashboard compatibility
+- Jeremy asks to "tag all tasks for [client]"
+
+The Metrics dashboard in the app shows pacing (target: 3 hours/day = 9 moves), weekly trends, and per-client activity.`;
 
 export async function processChat(
   messages: Message[],
