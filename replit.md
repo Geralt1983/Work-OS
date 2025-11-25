@@ -86,17 +86,23 @@ The daily audit checks:
 **Pipeline Tools:**
 - run_pipeline_audit: Check all clients have active/queued/backlog
 - get_client_pipeline: Get specific client's pipeline status
+- get_all_client_pipelines: Get pipelines for ALL clients at once
 - check_task_actionable: AI evaluates if task is actionable
-- promote_task: Move task from backlog→queued or queued→active (updates ClickUp status)
+- promote_task: Move task from backlog→queued or queued→active (updates tier field)
 - demote_task: Move task backwards (active→queued or queued→backlog)
-- set_task_status: Set any ClickUp status on a task
+- set_task_tier: Set any tier value on a task
 - complete_task: Mark a task as complete
 
-**Status Mapping (customizable in pipeline-tools.ts):**
-- Active: "in progress", "today", "active", "doing"
-- Queued: "next", "queued", "ready", "to do"  
-- Backlog: default for uncategorized tasks
-- Done: "complete", "done", "closed"
+**Daily Planning Tools:**
+- suggest_next_move: AI-powered task recommendation based on user context
+  - Takes: time_available_minutes, energy_level, context, prefer_client
+  - Returns: recommended task, reasoning, and alternatives
+
+**Tier Custom Field (ClickUp):**
+- Tasks are categorized by the "⛰️ Tier" dropdown field (not statuses)
+- Tier values: active, next, backlog (dropdown options)
+- Field name matching supports emoji prefixes
+- Value reading handles both option IDs and orderindex
 
 ### System Prompt Behavior
 
@@ -127,3 +133,10 @@ The AI operates in YOLO mode:
 - "Push the Memphis invoice through"
 - "Show me all my tasks"
 - "Show me the full ClickUp structure"
+
+**Daily Planning:**
+- "I have 45 minutes and low energy, what should I work on?"
+- "Just finished a call with Memphis, what's next?"
+- "Need a quick win before my meeting"
+- "Show me all my options across clients"
+- "What's the best move right now?"
