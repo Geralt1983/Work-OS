@@ -6,20 +6,23 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Status mappings - customize these to match your ClickUp workspace
-export const PIPELINE_STATUSES = {
-  active: ["in progress", "today", "active", "doing"],
-  queued: ["next", "queued", "ready", "to do"],
-  backlog: ["backlog", "ideas", "later", "someday"],
-  done: ["complete", "done", "closed"],
+// Tier custom field values - these match the dropdown options in ClickUp
+export const TIER_VALUES = {
+  active: ["active", "today", "current"],
+  queued: ["next", "queued", "upcoming"],
+  backlog: ["backlog", "later", "someday"],
+  done: ["done", "complete", "completed"],
 } as const;
 
-// Default status to set when promoting tasks
-export const DEFAULT_STATUS = {
-  active: "in progress",
+// Default tier values to set when promoting/demoting tasks
+export const DEFAULT_TIER = {
+  active: "active",
   queued: "next",
   backlog: "backlog",
 } as const;
+
+// Cache for tier field IDs per list (avoids repeated API calls)
+const tierFieldIdCache: Map<string, string | null> = new Map();
 
 interface TaskWithContext {
   id: string;
@@ -104,15 +107,15 @@ export const pipelineTools = [
     },
   },
   {
-    name: "set_task_status",
-    description: "Set a task's status to any value. Use this to move tasks through pipeline stages or mark them done.",
+    name: "set_task_tier",
+    description: "Set a task's tier custom field to any value. Use this to move tasks through pipeline stages.",
     parameters: {
       type: "object",
       properties: {
         task_id: { type: "string", description: "The task ID" },
-        status: { type: "string", description: "The new status (e.g., 'in progress', 'next', 'backlog', 'complete')" },
+        tier: { type: "string", description: "The new tier (e.g., 'active', 'next', 'backlog')" },
       },
-      required: ["task_id", "status"],
+      required: ["task_id", "tier"],
     },
   },
   {
@@ -160,19 +163,46 @@ async function getClientLists(): Promise<{ clientName: string; listId: string }[
   return clientLists;
 }
 
-function categorizeTask(task: any): "active" | "queued" | "backlog" | "done" {
-  const status = task.status?.status?.toLowerCase() || "";
+function categorizeTaskByTier(task: any): "active" | "queued" | "backlog" | "done" {
+  // Get tier value from custom field
+  const tierValue = clickupApi.getTierValueFromTask(task);
   
-  if (PIPELINE_STATUSES.active.some(s => status.includes(s))) {
-    return "active";
+  if (tierValue) {
+    if (TIER_VALUES.active.some(v => tierValue.includes(v))) {
+      return "active";
+    }
+    if (TIER_VALUES.queued.some(v => tierValue.includes(v))) {
+      return "queued";
+    }
+    if (TIER_VALUES.done.some(v => tierValue.includes(v))) {
+      return "done";
+    }
+    if (TIER_VALUES.backlog.some(v => tierValue.includes(v))) {
+      return "backlog";
+    }
   }
-  if (PIPELINE_STATUSES.queued.some(s => status.includes(s))) {
-    return "queued";
-  }
-  if (PIPELINE_STATUSES.done.some(s => status.includes(s))) {
-    return "done";
-  }
+  
+  // If no tier set, default to backlog
   return "backlog";
+}
+
+async function getTierFieldId(listId: string): Promise<string | null> {
+  if (tierFieldIdCache.has(listId)) {
+    return tierFieldIdCache.get(listId) || null;
+  }
+  
+  const fieldId = await clickupApi.findTierFieldId(listId);
+  tierFieldIdCache.set(listId, fieldId);
+  return fieldId;
+}
+
+async function setTaskTier(taskId: string, listId: string, tier: string): Promise<void> {
+  const fieldId = await getTierFieldId(listId);
+  if (!fieldId) {
+    throw new Error(`No "tier" custom field found for list ${listId}. Please add a dropdown custom field named "tier" with options: active, next, backlog`);
+  }
+  
+  await clickupApi.setCustomFieldValue(taskId, fieldId, tier);
 }
 
 async function checkActionability(taskName: string, taskDescription?: string): Promise<{ actionable: boolean; reason: string }> {
@@ -236,7 +266,7 @@ async function runPipelineAudit(shouldCheckActionability: boolean = true): Promi
       };
       
       for (const task of tasks) {
-        const category = categorizeTask(task);
+        const category = categorizeTaskByTier(task);
         const taskWithContext: TaskWithContext = {
           id: task.id,
           name: task.name,
@@ -320,7 +350,7 @@ async function getClientPipeline(clientName: string): Promise<ClientPipeline | n
   };
   
   for (const task of tasks) {
-    const category = categorizeTask(task);
+    const category = categorizeTaskByTier(task);
     pipeline[category].push({
       id: task.id,
       name: task.name,
@@ -364,61 +394,67 @@ export async function executePipelineTool(name: string, args: Record<string, unk
     
     case "promote_task": {
       const target = args.target as "today" | "next";
-      const newStatus = target === "today" ? DEFAULT_STATUS.active : DEFAULT_STATUS.queued;
+      const newTier = target === "today" ? DEFAULT_TIER.active : DEFAULT_TIER.queued;
       
-      const result = await clickupApi.updateTask(args.task_id as string, {
-        status: newStatus,
-      });
+      // Get task first to find its list ID
+      const task = await clickupApi.getTask(args.task_id as string);
+      await setTaskTier(args.task_id as string, task.list.id, newTier);
       
       return {
         success: true,
-        task: result.name,
-        newStatus,
-        message: `Moved "${result.name}" to ${target === "today" ? "Today (Active)" : "Next (Queued)"}`,
+        task: task.name,
+        newTier,
+        message: `Moved "${task.name}" to ${target === "today" ? "Today (Active)" : "Next (Queued)"}`,
       };
     }
     
-    case "set_task_status": {
-      const newStatus = args.status as string;
+    case "set_task_tier": {
+      const newTier = args.tier as string;
       
-      const result = await clickupApi.updateTask(args.task_id as string, {
-        status: newStatus,
-      });
+      // Get task first to find its list ID
+      const task = await clickupApi.getTask(args.task_id as string);
+      await setTaskTier(args.task_id as string, task.list.id, newTier);
       
       return {
         success: true,
-        task: result.name,
-        newStatus,
-        message: `Updated "${result.name}" status to "${newStatus}"`,
+        task: task.name,
+        newTier,
+        message: `Updated "${task.name}" tier to "${newTier}"`,
       };
     }
     
     case "demote_task": {
       const target = args.target as "next" | "backlog";
-      const newStatus = target === "next" ? DEFAULT_STATUS.queued : DEFAULT_STATUS.backlog;
+      const newTier = target === "next" ? DEFAULT_TIER.queued : DEFAULT_TIER.backlog;
       
-      const result = await clickupApi.updateTask(args.task_id as string, {
-        status: newStatus,
-      });
+      // Get task first to find its list ID
+      const task = await clickupApi.getTask(args.task_id as string);
+      await setTaskTier(args.task_id as string, task.list.id, newTier);
       
       return {
         success: true,
-        task: result.name,
-        newStatus,
-        message: `Moved "${result.name}" to ${target === "next" ? "Next (Queued)" : "Backlog"}`,
+        task: task.name,
+        newTier,
+        message: `Moved "${task.name}" to ${target === "next" ? "Next (Queued)" : "Backlog"}`,
       };
     }
     
     case "complete_task": {
-      const result = await clickupApi.updateTask(args.task_id as string, {
-        status: "complete",
-      });
+      // Get task first to find its list ID, then set tier to done
+      const task = await clickupApi.getTask(args.task_id as string);
+      
+      try {
+        await setTaskTier(args.task_id as string, task.list.id, "done");
+      } catch (e) {
+        // If "done" tier doesn't exist, fall back to setting status
+        await clickupApi.updateTask(args.task_id as string, { status: "complete" });
+      }
       
       return {
         success: true,
-        task: result.name,
-        newStatus: "complete",
-        message: `Marked "${result.name}" as complete`,
+        task: task.name,
+        newTier: "done",
+        message: `Marked "${task.name}" as complete`,
       };
     }
     

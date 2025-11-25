@@ -1,5 +1,15 @@
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
+interface ClickUpCustomField {
+  id: string;
+  name: string;
+  type: string;
+  value?: string | number | boolean | null;
+  type_config?: {
+    options?: Array<{ id: string; name: string; orderindex: number }>;
+  };
+}
+
 interface ClickUpTask {
   id: string;
   name: string;
@@ -8,6 +18,7 @@ interface ClickUpTask {
   due_date?: string;
   priority?: { priority: string };
   list: { id: string; name: string };
+  custom_fields?: ClickUpCustomField[];
 }
 
 interface ClickUpList {
@@ -129,6 +140,39 @@ class ClickUpAPI {
     await this.request(`/task/${taskId}`, {
       method: "DELETE",
     });
+  }
+
+  async getListCustomFields(listId: string): Promise<ClickUpCustomField[]> {
+    const data = await this.request(`/list/${listId}/field`);
+    return data.fields || [];
+  }
+
+  async setCustomFieldValue(taskId: string, fieldId: string, value: string | number | boolean): Promise<void> {
+    await this.request(`/task/${taskId}/field/${fieldId}`, {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async findTierFieldId(listId: string): Promise<string | null> {
+    const fields = await this.getListCustomFields(listId);
+    const tierField = fields.find(f => f.name.toLowerCase() === "tier");
+    return tierField?.id || null;
+  }
+
+  getTierValueFromTask(task: ClickUpTask): string | null {
+    if (!task.custom_fields) return null;
+    const tierField = task.custom_fields.find(f => f.name.toLowerCase() === "tier");
+    if (!tierField || tierField.value === null || tierField.value === undefined) return null;
+    
+    // Handle dropdown type - value is the option index, need to get option name
+    if (tierField.type === "drop_down" && tierField.type_config?.options) {
+      const optionIndex = typeof tierField.value === "number" ? tierField.value : parseInt(String(tierField.value));
+      const option = tierField.type_config.options.find(o => o.orderindex === optionIndex);
+      return option?.name?.toLowerCase() || null;
+    }
+    
+    return String(tierField.value).toLowerCase();
   }
 
   async getAllWorkspaceTasks(options?: {
