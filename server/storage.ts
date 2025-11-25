@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals } from "@shared/schema";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, backlogEntries } from "@shared/schema";
+import { eq, desc, and, gte, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { 
   Session, InsertSession, 
@@ -8,7 +8,8 @@ import type {
   ClientMemory, InsertClientMemory,
   DailyLog, InsertDailyLog,
   UserPattern, InsertUserPattern,
-  TaskSignal, InsertTaskSignal
+  TaskSignal, InsertTaskSignal,
+  BacklogEntry, InsertBacklogEntry
 } from "@shared/schema";
 
 export interface IStorage {
@@ -40,6 +41,21 @@ export interface IStorage {
   getTaskSignals(taskId?: string, clientName?: string, signalType?: string, daysBack?: number): Promise<TaskSignal[]>;
   getAvoidedTasks(daysBack?: number): Promise<{ taskId: string; taskName: string; clientName: string; count: number }[]>;
   getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]>;
+  
+  // Backlog resurfacing
+  recordBacklogEntry(entry: InsertBacklogEntry): Promise<BacklogEntry>;
+  markBacklogPromoted(taskId: string, autoPromoted?: boolean): Promise<void>;
+  getActiveBacklogEntries(): Promise<BacklogEntry[]>;
+  getBacklogHealth(): Promise<{ 
+    clientName: string; 
+    oldestDays: number; 
+    agingCount: number; 
+    totalCount: number;
+    avgDays: number;
+  }[]>;
+  getAgingBacklogTasks(daysThreshold?: number): Promise<BacklogEntry[]>;
+  getBacklogMoveStats(daysBack?: number): Promise<{ backlogMoves: number; nonBacklogMoves: number }>;
+  incrementBacklogMoveCount(date: string, isBacklog: boolean): Promise<void>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -316,6 +332,126 @@ class DatabaseStorage implements IStorage {
     
     return Array.from(hourStats.entries())
       .map(([hour, stats]) => ({ hour, ...stats }));
+  }
+
+  // Backlog resurfacing
+  async recordBacklogEntry(entry: InsertBacklogEntry): Promise<BacklogEntry> {
+    // Check if entry already exists for this task
+    const [existing] = await db.select().from(backlogEntries)
+      .where(and(
+        eq(backlogEntries.taskId, entry.taskId),
+        isNull(backlogEntries.promotedAt)
+      ));
+    
+    if (existing) {
+      // Task is already in backlog tracking, update it
+      return existing;
+    }
+    
+    const id = randomUUID();
+    const [created] = await db.insert(backlogEntries)
+      .values({ ...entry, id })
+      .returning();
+    return created;
+  }
+
+  async markBacklogPromoted(taskId: string, autoPromoted: boolean = false): Promise<void> {
+    await db.update(backlogEntries)
+      .set({ 
+        promotedAt: new Date(),
+        autoPromoted: autoPromoted ? 1 : 0
+      })
+      .where(and(
+        eq(backlogEntries.taskId, taskId),
+        isNull(backlogEntries.promotedAt)
+      ));
+  }
+
+  async getActiveBacklogEntries(): Promise<BacklogEntry[]> {
+    const entries = await db.select().from(backlogEntries)
+      .where(isNull(backlogEntries.promotedAt))
+      .orderBy(backlogEntries.enteredAt);
+    
+    // Calculate days in backlog
+    const now = new Date();
+    return entries.map(entry => ({
+      ...entry,
+      daysInBacklog: Math.floor((now.getTime() - new Date(entry.enteredAt).getTime()) / (1000 * 60 * 60 * 24))
+    }));
+  }
+
+  async getBacklogHealth(): Promise<{ clientName: string; oldestDays: number; agingCount: number; totalCount: number; avgDays: number }[]> {
+    const entries = await this.getActiveBacklogEntries();
+    
+    const clientStats = new Map<string, { tasks: number[]; }>();
+    
+    for (const entry of entries) {
+      const client = entry.clientName.toLowerCase();
+      if (!clientStats.has(client)) {
+        clientStats.set(client, { tasks: [] });
+      }
+      clientStats.get(client)!.tasks.push(entry.daysInBacklog || 0);
+    }
+    
+    return Array.from(clientStats.entries()).map(([clientName, stats]) => {
+      const tasks = stats.tasks;
+      const oldestDays = Math.max(...tasks, 0);
+      const agingCount = tasks.filter(d => d >= 7).length;
+      const avgDays = tasks.length > 0 ? Math.round(tasks.reduce((a, b) => a + b, 0) / tasks.length) : 0;
+      
+      return {
+        clientName,
+        oldestDays,
+        agingCount,
+        totalCount: tasks.length,
+        avgDays
+      };
+    }).sort((a, b) => b.oldestDays - a.oldestDays);
+  }
+
+  async getAgingBacklogTasks(daysThreshold: number = 7): Promise<BacklogEntry[]> {
+    const entries = await this.getActiveBacklogEntries();
+    return entries.filter(entry => (entry.daysInBacklog || 0) >= daysThreshold);
+  }
+
+  async getBacklogMoveStats(daysBack: number = 7): Promise<{ backlogMoves: number; nonBacklogMoves: number }> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - daysBack);
+    
+    const logs = await db.select().from(dailyLog)
+      .where(gte(dailyLog.createdAt, cutoff));
+    
+    let backlogMoves = 0;
+    let nonBacklogMoves = 0;
+    
+    for (const log of logs) {
+      backlogMoves += log.backlogMovesCount || 0;
+      nonBacklogMoves += log.nonBacklogMovesCount || 0;
+    }
+    
+    return { backlogMoves, nonBacklogMoves };
+  }
+
+  async incrementBacklogMoveCount(date: string, isBacklog: boolean): Promise<void> {
+    const existing = await this.getDailyLog(date);
+    
+    if (existing) {
+      if (isBacklog) {
+        await db.update(dailyLog)
+          .set({ backlogMovesCount: (existing.backlogMovesCount || 0) + 1 })
+          .where(eq(dailyLog.date, date));
+      } else {
+        await db.update(dailyLog)
+          .set({ nonBacklogMovesCount: (existing.nonBacklogMovesCount || 0) + 1 })
+          .where(eq(dailyLog.date, date));
+      }
+    } else {
+      await this.createDailyLog({
+        date,
+        backlogMovesCount: isBacklog ? 1 : 0,
+        nonBacklogMovesCount: isBacklog ? 0 : 1
+      });
+    }
   }
 }
 

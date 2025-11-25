@@ -3,6 +3,7 @@ import { clickupTools, executeClickUpTool } from "./clickup-api";
 import { memoryTools, executeMemoryTool } from "./memory-tools";
 import { pipelineTools, executePipelineTool } from "./pipeline-tools";
 import { LEARNING_TOOL_DEFINITIONS, executeLearningTool } from "./learning-tools";
+import { backlogToolDefinitions, executeBacklogTool } from "./backlog-tools";
 import type { Message } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -107,6 +108,23 @@ You learn and remember patterns over time:
 - "I'll do that Memphis task later" (3rd time) → record_signal(deferred) + notice avoidance pattern
 - "What should I work on?" → check learned patterns + productivity insights + suggest optimal task
 
+## BACKLOG RESURFACING
+
+Backlog tasks tend to rot if not actively managed. Use these mechanics to prevent stagnation:
+
+**"One From The Back" Rule**: After 5 moves from active/queued without touching backlog, should_pull_from_backlog will trigger. When it does, strongly consider recommending a backlog task.
+
+**Backlog Health**: Check get_backlog_health to see which clients have aging backlog tasks.
+
+**Auto-Promotion**: Tasks sitting in backlog for 10+ days get auto-promoted to Queued via auto_promote_stale_backlog.
+
+**Backlog Triage**: Run run_backlog_triage weekly or when backlog feels overwhelming.
+
+**When to surface backlog**:
+- During daily planning, mention aging backlog if present
+- If suggest_next_move returns a backlogAlert, communicate it
+- Proactively suggest backlog triage if multiple tasks are aging
+
 ## TOOLS AVAILABLE
 
 You have:
@@ -115,6 +133,7 @@ You have:
 - **Pipeline tools**: audit all clients, check actionability, promote/demote tasks
 - **Planning tools**: get_all_client_pipelines (see all work), suggest_next_move (AI-powered task recommendation)
 - **Learning tools**: record patterns, get insights, track client sentiment/importance
+- **Backlog tools**: get_backlog_health, get_aging_backlog, auto_promote_stale_backlog, should_pull_from_backlog, run_backlog_triage
 
 When creating a task, always:
 1. Create the task in ClickUp
@@ -155,7 +174,7 @@ export async function processChat(
     },
   }));
   
-  const openaiTools = [...legacyOpenaiTools, ...LEARNING_TOOL_DEFINITIONS];
+  const openaiTools = [...legacyOpenaiTools, ...LEARNING_TOOL_DEFINITIONS, ...backlogToolDefinitions];
 
   let response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -184,6 +203,9 @@ export async function processChat(
         const learningToolNames = LEARNING_TOOL_DEFINITIONS.map(t => 
           t.type === 'function' ? t.function.name : ''
         );
+        const backlogToolNames = backlogToolDefinitions.map(t => 
+          t.type === 'function' ? t.function.name : ''
+        );
         
         if (clickupTools.some(t => t.name === toolName)) {
           result = await executeClickUpTool(toolName, toolArgs);
@@ -191,6 +213,8 @@ export async function processChat(
           result = await executePipelineTool(toolName, toolArgs);
         } else if (learningToolNames.includes(toolName)) {
           result = await executeLearningTool(toolName, toolArgs);
+        } else if (backlogToolNames.includes(toolName)) {
+          result = await executeBacklogTool(toolName, toolArgs);
         } else {
           result = await executeMemoryTool(toolName, toolArgs);
         }

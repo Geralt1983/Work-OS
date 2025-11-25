@@ -234,7 +234,7 @@ async function getTierFieldInfo(listId: string): Promise<TierFieldCache | null> 
   return fieldInfo;
 }
 
-async function setTaskTier(taskId: string, listId: string, tier: string): Promise<void> {
+async function setTaskTier(taskId: string, listId: string, tier: string, taskName?: string, clientName?: string): Promise<void> {
   const fieldInfo = await getTierFieldInfo(listId);
   if (!fieldInfo) {
     throw new Error(`No "tier" custom field found for list ${listId}. Please add a dropdown custom field named "tier" with options: active, next, backlog`);
@@ -254,6 +254,24 @@ async function setTaskTier(taskId: string, listId: string, tier: string): Promis
     // Dropdown field but tier option not found
     const availableOptions = Array.from(fieldInfo.options.keys()).join(", ");
     throw new Error(`Tier "${tier}" not found in dropdown options. Available: ${availableOptions}`);
+  }
+  
+  // Track backlog entries for resurfacing
+  const isBacklog = TIER_VALUES.backlog.some(v => tierLower.includes(v));
+  const isActive = TIER_VALUES.active.some(v => tierLower.includes(v));
+  const isQueued = TIER_VALUES.queued.some(v => tierLower.includes(v));
+  
+  if (isBacklog && taskName && clientName) {
+    // Task entering backlog - record for age tracking
+    await storage.recordBacklogEntry({
+      taskId,
+      taskName,
+      clientName: clientName.toLowerCase(),
+      enteredAt: new Date(),
+    });
+  } else if ((isActive || isQueued) && !isBacklog) {
+    // Task leaving backlog - mark as promoted
+    await storage.markBacklogPromoted(taskId, false);
   }
 }
 
@@ -474,12 +492,18 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
   suggestedTask: TaskWithContext | null;
   reasoning: string;
   alternativeTasks: TaskWithContext[];
+  backlogAlert?: { shouldPull: boolean; reason: string; agingCount: number };
 }> {
   // Get all client pipelines
   const { clients, summary } = await getAllClientPipelines();
   
-  // Collect all available tasks (active first, then queued)
-  const availableTasks: (TaskWithContext & { tier: string })[] = [];
+  // Check backlog health and "one from the back" rule
+  const backlogMoveStats = await storage.getBacklogMoveStats(7);
+  const agingBacklog = await storage.getAgingBacklogTasks(7);
+  const shouldPullFromBacklog = backlogMoveStats.nonBacklogMoves >= 5 && backlogMoveStats.backlogMoves === 0;
+  
+  // Collect all available tasks (active first, then queued, then backlog for surfacing)
+  const availableTasks: (TaskWithContext & { tier: string; fromBacklog?: boolean })[] = [];
   
   for (const client of clients) {
     for (const task of client.active) {
@@ -487,6 +511,12 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
     }
     for (const task of client.queued) {
       availableTasks.push({ ...task, tier: "queued" });
+    }
+    // Include backlog tasks if we should pull from backlog or have aging tasks
+    if (shouldPullFromBacklog || agingBacklog.length > 0) {
+      for (const task of client.backlog.slice(0, 2)) { // Limit to 2 per client
+        availableTasks.push({ ...task, tier: "backlog", fromBacklog: true });
+      }
     }
   }
   
@@ -544,6 +574,16 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
     if (clientInfo?.sentiment === "negative") flags.push("DIFFICULT-CLIENT");
     if (clientInfo?.avoidanceScore && clientInfo.avoidanceScore > 2) flags.push("CLIENT-OFTEN-DEFERRED");
     
+    // Add backlog flags
+    if (t.tier === "backlog") {
+      flags.push("BACKLOG");
+      // Check if this task is aging
+      const agingEntry = agingBacklog.find(e => e.taskId === t.id);
+      if (agingEntry && agingEntry.daysInBacklog) {
+        flags.push(`AGING-${agingEntry.daysInBacklog}-DAYS`);
+      }
+    }
+    
     const flagStr = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
     return `${i + 1}. [${t.tier.toUpperCase()}] ${t.listName}: "${t.name}"${t.priority ? ` (${t.priority})` : ""}${t.dueDate ? ` - due ${t.dueDate}` : ""}${flagStr}`;
   }).join("\n");
@@ -569,6 +609,13 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
       ? "This is historically NOT a productive hour - consider easier tasks."
       : "";
   
+  // Backlog surfacing info
+  const backlogInfo = shouldPullFromBacklog
+    ? `\nBACKLOG ALERT: You've done ${backlogMoveStats.nonBacklogMoves} moves without touching backlog. Time to pull "one from the back"!`
+    : agingBacklog.length > 0
+      ? `\nBacklog health: ${agingBacklog.length} tasks aging (7+ days in backlog).`
+      : "";
+  
   const prompt = `You are helping prioritize work for today. Here are all available tasks:
 
 ${taskList}
@@ -576,6 +623,7 @@ ${taskList}
 ${staleInfo}
 ${clientInsights ? `\nClient insights:\n${clientInsights}` : ""}
 ${productivityHint ? `\nProductivity note: ${productivityHint}` : ""}
+${backlogInfo}
 
 User context:
 - Time available: ${args.time_available_minutes ? `${args.time_available_minutes} minutes` : "not specified"}
@@ -588,6 +636,8 @@ Task flags explained:
 - [HIGH-PRIORITY-CLIENT]: VIP client, prioritize their work
 - [DIFFICULT-CLIENT]: User has negative feelings about this client - be mindful when suggesting
 - [CLIENT-OFTEN-DEFERRED]: Work for this client tends to get postponed
+- [BACKLOG]: Task is in backlog tier - include in recommendations if backlog surfacing is triggered
+- [AGING-X-DAYS]: Task has been in backlog for X days - prioritize if aging
 
 Core principles:
 - Each task is a "move" (~20 minutes of focused work)
@@ -598,6 +648,8 @@ Core principles:
 - Respect user's learned patterns and preferences
 - During low energy, suggest easier/quicker wins from positive clients
 - Don't stack multiple difficult clients together
+- BACKLOG SURFACING: If backlog alert is triggered, strongly consider suggesting a backlog task to prevent stagnation
+- Aging backlog tasks (7+ days) need attention before they become forgotten
 
 Based on this, recommend the BEST task to work on right now. Consider:
 1. User's available time and energy
@@ -634,6 +686,14 @@ Respond with JSON:
       .filter((i: number) => i > 0 && i <= availableTasks.length)
       .map((i: number) => availableTasks[i - 1]);
     
+    const backlogAlert = shouldPullFromBacklog || agingBacklog.length > 0 ? {
+      shouldPull: shouldPullFromBacklog,
+      reason: shouldPullFromBacklog 
+        ? `${backlogMoveStats.nonBacklogMoves} moves without touching backlog - time for "one from the back"!`
+        : `${agingBacklog.length} backlog tasks aging (7+ days)`,
+      agingCount: agingBacklog.length,
+    } : undefined;
+    
     return {
       recommendation: suggestedTask 
         ? `Work on "${suggestedTask.name}" for ${suggestedTask.listName}`
@@ -641,6 +701,7 @@ Respond with JSON:
       suggestedTask,
       reasoning: result.reasoning || "No specific reasoning provided",
       alternativeTasks,
+      backlogAlert,
     };
   } catch (error) {
     console.error("Error suggesting next move:", error);
@@ -654,6 +715,11 @@ Respond with JSON:
       suggestedTask: fallbackTask,
       reasoning: "AI suggestion unavailable, showing first available task",
       alternativeTasks: availableTasks.slice(1, 3),
+      backlogAlert: shouldPullFromBacklog || agingBacklog.length > 0 ? {
+        shouldPull: shouldPullFromBacklog,
+        reason: `${agingBacklog.length} aging backlog tasks need attention`,
+        agingCount: agingBacklog.length,
+      } : undefined,
     };
   }
 }
@@ -686,7 +752,12 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       
       // Get task first to find its list ID
       const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier);
+      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
+      
+      // Track move source (promoted from backlog or from queued)
+      const wasBacklog = args.from_backlog === true;
+      const today = new Date().toISOString().split("T")[0];
+      await storage.incrementBacklogMoveCount(today, wasBacklog);
       
       return {
         success: true,
@@ -701,7 +772,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       
       // Get task first to find its list ID
       const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier);
+      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
       
       return {
         success: true,
@@ -717,7 +788,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       
       // Get task first to find its list ID
       const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier);
+      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
       
       return {
         success: true,
@@ -732,11 +803,14 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       const task = await clickupApi.getTask(args.task_id as string);
       
       try {
-        await setTaskTier(args.task_id as string, task.list.id, "done");
+        await setTaskTier(args.task_id as string, task.list.id, "done", task.name, task.list.name);
       } catch (e) {
         // If "done" tier doesn't exist, fall back to setting status
         await clickupApi.updateTask(args.task_id as string, { status: "complete" });
       }
+      
+      // Mark task as no longer in backlog
+      await storage.markBacklogPromoted(args.task_id as string, false);
       
       return {
         success: true,
