@@ -145,6 +145,40 @@ export const pipelineTools = [
       required: ["task_id"],
     },
   },
+  {
+    name: "get_all_client_pipelines",
+    description: "Get pipeline status for ALL clients at once. Returns active/queued/backlog tasks for every client. Useful for daily planning and seeing all available work.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "suggest_next_move",
+    description: "Suggest the best task to work on based on user's current context. Takes into account time available, energy level, client priorities, and recent activity.",
+    parameters: {
+      type: "object",
+      properties: {
+        time_available_minutes: { 
+          type: "number", 
+          description: "How many minutes the user has available (e.g., 20, 60, 120)" 
+        },
+        energy_level: { 
+          type: "string", 
+          enum: ["high", "medium", "low"],
+          description: "User's current energy level" 
+        },
+        context: { 
+          type: "string", 
+          description: "Any additional context from the user (e.g., 'just finished a call with Raleigh', 'need a quick win', 'want to tackle something meaty')" 
+        },
+        prefer_client: {
+          type: "string",
+          description: "If the user wants to focus on a specific client, specify the name"
+        },
+      },
+    },
+  },
 ];
 
 async function getClientLists(): Promise<{ clientName: string; listId: string }[]> {
@@ -388,6 +422,183 @@ async function getClientPipeline(clientName: string): Promise<ClientPipeline | n
   return pipeline;
 }
 
+async function getAllClientPipelines(): Promise<{
+  clients: ClientPipeline[];
+  summary: {
+    totalActive: number;
+    totalQueued: number;
+    totalBacklog: number;
+    staleClients: string[];
+  };
+}> {
+  const clientLists = await getClientLists();
+  const clients: ClientPipeline[] = [];
+  
+  let totalActive = 0;
+  let totalQueued = 0;
+  let totalBacklog = 0;
+  
+  for (const client of clientLists) {
+    const pipeline = await getClientPipeline(client.clientName);
+    if (pipeline) {
+      clients.push(pipeline);
+      totalActive += pipeline.active.length;
+      totalQueued += pipeline.queued.length;
+      totalBacklog += pipeline.backlog.length;
+    }
+  }
+  
+  // Get stale clients from memory
+  const staleClients = await storage.getStaleClients(2);
+  
+  return {
+    clients,
+    summary: {
+      totalActive,
+      totalQueued,
+      totalBacklog,
+      staleClients: staleClients.map(c => c.clientName),
+    },
+  };
+}
+
+interface SuggestMoveArgs {
+  time_available_minutes?: number;
+  energy_level?: "high" | "medium" | "low";
+  context?: string;
+  prefer_client?: string;
+}
+
+async function suggestNextMove(args: SuggestMoveArgs): Promise<{
+  recommendation: string;
+  suggestedTask: TaskWithContext | null;
+  reasoning: string;
+  alternativeTasks: TaskWithContext[];
+}> {
+  // Get all client pipelines
+  const { clients, summary } = await getAllClientPipelines();
+  
+  // Collect all available tasks (active first, then queued)
+  const availableTasks: (TaskWithContext & { tier: string })[] = [];
+  
+  for (const client of clients) {
+    for (const task of client.active) {
+      availableTasks.push({ ...task, tier: "active" });
+    }
+    for (const task of client.queued) {
+      availableTasks.push({ ...task, tier: "queued" });
+    }
+  }
+  
+  // Guard against empty task lists - return structured response instead of hallucinating
+  if (availableTasks.length === 0) {
+    const staleInfo = summary.staleClients.length > 0
+      ? `You have stale clients (${summary.staleClients.join(", ")}) that need attention.`
+      : "";
+    
+    return {
+      recommendation: "No active or queued tasks found. Consider checking your backlog or creating new tasks.",
+      suggestedTask: null,
+      reasoning: `No tasks are currently in the Active or Queued tiers across your clients. ${staleInfo} You may need to promote tasks from your backlog or create new moves.`,
+      alternativeTasks: [],
+    };
+  }
+  
+  // Get recent client activity from memory
+  const allClients = await storage.getAllClients();
+  const clientActivity = allClients.reduce((acc: Record<string, { lastMove: Date | null; staleDays: number }>, c) => {
+    acc[c.clientName] = {
+      lastMove: c.lastMoveAt,
+      staleDays: c.staleDays || 0,
+    };
+    return acc;
+  }, {} as Record<string, { lastMove: Date | null; staleDays: number }>);
+  
+  // Build context for AI
+  const taskList = availableTasks.map((t, i) => 
+    `${i + 1}. [${t.tier.toUpperCase()}] ${t.listName}: "${t.name}"${t.priority ? ` (${t.priority})` : ""}${t.dueDate ? ` - due ${t.dueDate}` : ""}`
+  ).join("\n");
+  
+  const staleInfo = summary.staleClients.length > 0 
+    ? `Stale clients (2+ days without moves): ${summary.staleClients.join(", ")}`
+    : "No stale clients.";
+  
+  const prompt = `You are helping prioritize work for today. Here are all available tasks:
+
+${taskList}
+
+${staleInfo}
+
+User context:
+- Time available: ${args.time_available_minutes ? `${args.time_available_minutes} minutes` : "not specified"}
+- Energy level: ${args.energy_level || "not specified"}
+- Preferred client: ${args.prefer_client || "none"}
+- Additional context: ${args.context || "none"}
+
+Core principles:
+- Each task is a "move" (~20 minutes of focused work)
+- One move per client per day is the goal
+- Stale clients should be prioritized to maintain momentum
+- Active tasks are already committed to today
+- Queued tasks are ready to be pulled into active
+
+Based on this, recommend the BEST task to work on right now. Consider:
+1. User's available time and energy
+2. Stale clients that need attention
+3. Task priority and due dates
+4. Any context the user provided
+
+Respond with JSON:
+{
+  "recommendedTaskIndex": <1-based index from the list above, or 0 if no good match>,
+  "reasoning": "<brief explanation of why this task is the best choice>",
+  "alternativeIndices": [<up to 2 alternative task indices>]
+}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a productivity assistant helping prioritize tasks based on context. Respond only with valid JSON." },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    const suggestedTask = result.recommendedTaskIndex > 0 && result.recommendedTaskIndex <= availableTasks.length
+      ? availableTasks[result.recommendedTaskIndex - 1]
+      : null;
+    
+    const alternativeTasks = (result.alternativeIndices || [])
+      .filter((i: number) => i > 0 && i <= availableTasks.length)
+      .map((i: number) => availableTasks[i - 1]);
+    
+    return {
+      recommendation: suggestedTask 
+        ? `Work on "${suggestedTask.name}" for ${suggestedTask.listName}`
+        : "No suitable task found based on your context",
+      suggestedTask,
+      reasoning: result.reasoning || "No specific reasoning provided",
+      alternativeTasks,
+    };
+  } catch (error) {
+    console.error("Error suggesting next move:", error);
+    
+    // Fallback: return first active or queued task
+    const fallbackTask = availableTasks[0] || null;
+    return {
+      recommendation: fallbackTask 
+        ? `Work on "${fallbackTask.name}" for ${fallbackTask.listName}`
+        : "No tasks available",
+      suggestedTask: fallbackTask,
+      reasoning: "AI suggestion unavailable, showing first available task",
+      alternativeTasks: availableTasks.slice(1, 3),
+    };
+  }
+}
+
 export async function executePipelineTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "run_pipeline_audit": {
@@ -474,6 +685,19 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         newTier: "done",
         message: `Marked "${task.name}" as complete`,
       };
+    }
+    
+    case "get_all_client_pipelines": {
+      return getAllClientPipelines();
+    }
+    
+    case "suggest_next_move": {
+      return suggestNextMove({
+        time_available_minutes: args.time_available_minutes as number | undefined,
+        energy_level: args.energy_level as "high" | "medium" | "low" | undefined,
+        context: args.context as string | undefined,
+        prefer_client: args.prefer_client as string | undefined,
+      });
     }
     
     default:
