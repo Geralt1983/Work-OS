@@ -12,6 +12,18 @@ Work OS is a conversational AI application that manages ClickUp tasks through na
 - **No guilt-based decisions**: System adapts, never scolds
 - **Natural language intent**: "Make a Raleigh move" → creates task
 
+## Pipeline Workflow
+
+Every client should have a healthy pipeline:
+- **Active (Today)**: 1 task currently being worked on
+- **Queued (Next)**: 1 task ready to start next
+- **Backlog**: Future tasks to pull from
+
+The daily audit checks:
+1. Every client has active/queued/backlog tasks
+2. Tasks are actionable (clear, concrete next steps)
+3. Stale clients are surfaced (2+ days without moves)
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -56,7 +68,8 @@ Work OS is a conversational AI application that manages ClickUp tasks through na
 ### AI Tools
 
 **ClickUp Tools:**
-- get_spaces, get_folders, get_lists
+- get_hierarchy: Full workspace structure (spaces/folders/lists)
+- get_spaces, get_folders, get_lists, get_folderless_lists
 - get_tasks, get_all_tasks, search_tasks
 - create_task, update_task, delete_task, get_task
 
@@ -70,6 +83,12 @@ Work OS is a conversational AI application that manages ClickUp tasks through na
 - get_today_summary: Get daily activity summary
 - log_daily_reset: End of day logging
 
+**Pipeline Tools:**
+- run_pipeline_audit: Check all clients have active/queued/backlog
+- get_client_pipeline: Get specific client's pipeline status
+- check_task_actionable: AI evaluates if task is actionable
+- promote_task: Move task from backlog→queued or queued→active
+
 ### System Prompt Behavior
 
 The AI operates in YOLO mode:
@@ -77,7 +96,9 @@ The AI operates in YOLO mode:
 2. **Interpret intent** — Natural language to ClickUp operations
 3. **Track clients** — Auto-update memory when creating/completing tasks
 4. **Surface stale clients** — Proactively mention 2+ day inactive clients
-5. **No guilt** — Shrink moves if overwhelmed, maintain momentum
+5. **Check pipelines** — Ensure every client has active/queued/backlog
+6. **Flag non-actionable** — Identify vague tasks that need rewriting
+7. **No guilt** — Shrink moves if overwhelmed, maintain momentum
 
 ## Environment Variables
 
@@ -92,5 +113,8 @@ The AI operates in YOLO mode:
 - "Summarize Memphis"
 - "What did I do today?"
 - "Which clients are stale?"
+- "Run daily check" (pipeline audit)
+- "Show me Raleigh's pipeline"
 - "Push the Memphis invoice through"
 - "Show me all my tasks"
+- "Show me the full ClickUp structure"
