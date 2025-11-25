@@ -6,6 +6,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Status mappings - customize these to match your ClickUp workspace
+export const PIPELINE_STATUSES = {
+  active: ["in progress", "today", "active", "doing"],
+  queued: ["next", "queued", "ready", "to do"],
+  backlog: ["backlog", "ideas", "later", "someday"],
+  done: ["complete", "done", "closed"],
+} as const;
+
+// Default status to set when promoting tasks
+export const DEFAULT_STATUS = {
+  active: "in progress",
+  queued: "next",
+  backlog: "backlog",
+} as const;
+
 interface TaskWithContext {
   id: string;
   name: string;
@@ -23,6 +38,7 @@ interface ClientPipeline {
   active: TaskWithContext[];
   queued: TaskWithContext[];
   backlog: TaskWithContext[];
+  done: TaskWithContext[];
   issues: string[];
 }
 
@@ -87,6 +103,41 @@ export const pipelineTools = [
       required: ["task_id", "target"],
     },
   },
+  {
+    name: "set_task_status",
+    description: "Set a task's status to any value. Use this to move tasks through pipeline stages or mark them done.",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "The task ID" },
+        status: { type: "string", description: "The new status (e.g., 'in progress', 'next', 'backlog', 'complete')" },
+      },
+      required: ["task_id", "status"],
+    },
+  },
+  {
+    name: "demote_task",
+    description: "Move a task backwards in the pipeline (active to queued, or queued to backlog)",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "The task ID" },
+        target: { type: "string", enum: ["next", "backlog"], description: "Where to move the task" },
+      },
+      required: ["task_id", "target"],
+    },
+  },
+  {
+    name: "complete_task",
+    description: "Mark a task as complete/done",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "The task ID" },
+      },
+      required: ["task_id"],
+    },
+  },
 ];
 
 async function getClientLists(): Promise<{ clientName: string; listId: string }[]> {
@@ -109,14 +160,17 @@ async function getClientLists(): Promise<{ clientName: string; listId: string }[
   return clientLists;
 }
 
-function categorizeTask(task: any): "active" | "queued" | "backlog" {
+function categorizeTask(task: any): "active" | "queued" | "backlog" | "done" {
   const status = task.status?.status?.toLowerCase() || "";
   
-  if (status === "in progress" || status === "today" || status === "active") {
+  if (PIPELINE_STATUSES.active.some(s => status.includes(s))) {
     return "active";
   }
-  if (status === "next" || status === "queued" || status === "ready") {
+  if (PIPELINE_STATUSES.queued.some(s => status.includes(s))) {
     return "queued";
+  }
+  if (PIPELINE_STATUSES.done.some(s => status.includes(s))) {
+    return "done";
   }
   return "backlog";
 }
@@ -177,6 +231,7 @@ async function runPipelineAudit(shouldCheckActionability: boolean = true): Promi
         active: [],
         queued: [],
         backlog: [],
+        done: [],
         issues: [],
       };
       
@@ -260,6 +315,7 @@ async function getClientPipeline(clientName: string): Promise<ClientPipeline | n
     active: [],
     queued: [],
     backlog: [],
+    done: [],
     issues: [],
   };
   
@@ -308,7 +364,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
     
     case "promote_task": {
       const target = args.target as "today" | "next";
-      const newStatus = target === "today" ? "in progress" : "next";
+      const newStatus = target === "today" ? DEFAULT_STATUS.active : DEFAULT_STATUS.queued;
       
       const result = await clickupApi.updateTask(args.task_id as string, {
         status: newStatus,
@@ -319,6 +375,50 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         task: result.name,
         newStatus,
         message: `Moved "${result.name}" to ${target === "today" ? "Today (Active)" : "Next (Queued)"}`,
+      };
+    }
+    
+    case "set_task_status": {
+      const newStatus = args.status as string;
+      
+      const result = await clickupApi.updateTask(args.task_id as string, {
+        status: newStatus,
+      });
+      
+      return {
+        success: true,
+        task: result.name,
+        newStatus,
+        message: `Updated "${result.name}" status to "${newStatus}"`,
+      };
+    }
+    
+    case "demote_task": {
+      const target = args.target as "next" | "backlog";
+      const newStatus = target === "next" ? DEFAULT_STATUS.queued : DEFAULT_STATUS.backlog;
+      
+      const result = await clickupApi.updateTask(args.task_id as string, {
+        status: newStatus,
+      });
+      
+      return {
+        success: true,
+        task: result.name,
+        newStatus,
+        message: `Moved "${result.name}" to ${target === "next" ? "Next (Queued)" : "Backlog"}`,
+      };
+    }
+    
+    case "complete_task": {
+      const result = await clickupApi.updateTask(args.task_id as string, {
+        status: "complete",
+      });
+      
+      return {
+        success: true,
+        task: result.name,
+        newStatus: "complete",
+        message: `Marked "${result.name}" as complete`,
       };
     }
     
