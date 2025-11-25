@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { syncCompletedTasks, getLastSyncTime, isSyncRunning } from "./sync-service";
+import { syncCompletedTasks, getLastSyncTime, isSyncRunning, excludeTasksFromSync } from "./sync-service";
 
 export const memoryTools = [
   {
@@ -381,6 +381,9 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
       // Remove from daily log
       const removedCount = await storage.removeCompletedMoves(today, toRemove);
       
+      // Exclude these tasks from future syncs (even if ClickUp delete fails)
+      excludeTasksFromSync(toRemove);
+      
       // Delete from ClickUp if requested
       const deleted: string[] = [];
       const failed: string[] = [];
@@ -391,7 +394,9 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
           try {
             await executeClickUpTool("delete_task", { task_id: taskId });
             deleted.push(taskId);
-          } catch (err) {
+            console.log(`[Cleanup] Deleted task ${taskId} from ClickUp`);
+          } catch (err: any) {
+            console.error(`[Cleanup] Failed to delete task ${taskId}:`, err?.message || err);
             failed.push(taskId);
           }
         }

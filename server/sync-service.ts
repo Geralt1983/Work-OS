@@ -14,6 +14,18 @@ interface SyncResult {
 
 let syncInterval: NodeJS.Timeout | null = null;
 let lastSyncTime: Date | null = null;
+const excludedTaskIds = new Set<string>();
+
+export function excludeTasksFromSync(taskIds: string[]): void {
+  for (const id of taskIds) {
+    excludedTaskIds.add(id);
+  }
+  console.log(`[Sync] Added ${taskIds.length} tasks to exclusion list`);
+}
+
+export function getExcludedTaskIds(): string[] {
+  return Array.from(excludedTaskIds);
+}
 
 export async function syncCompletedTasks(): Promise<SyncResult> {
   const result: SyncResult = {
@@ -33,6 +45,11 @@ export async function syncCompletedTasks(): Promise<SyncResult> {
 
     // Process each completed task
     for (const task of completedTasks) {
+      // Skip excluded tasks
+      if (excludedTaskIds.has(task.id)) {
+        continue;
+      }
+      
       // Extract client name from list name or tags
       const clientName = task.list?.name || 
         task.tags?.find(t => t.name)?.name || 

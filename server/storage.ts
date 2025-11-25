@@ -270,7 +270,7 @@ class DatabaseStorage implements IStorage {
 
     if (removedCount > 0) {
       // Recalculate clients touched from remaining moves
-      const clientsTouched = [...new Set(filtered.map(m => m.clientName))];
+      const clientsTouched = Array.from(new Set(filtered.map(m => m.clientName)));
       
       await this.updateDailyLog(date, {
         completedMoves: filtered as unknown as string[],
