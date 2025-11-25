@@ -165,14 +165,31 @@ class ClickUpAPI {
     const tierField = task.custom_fields.find(f => f.name.toLowerCase() === "tier");
     if (!tierField || tierField.value === null || tierField.value === undefined) return null;
     
-    // Handle dropdown type - value is the option index, need to get option name
+    // Handle dropdown type - value is the option ID (string), need to get option name
     if (tierField.type === "drop_down" && tierField.type_config?.options) {
-      const optionIndex = typeof tierField.value === "number" ? tierField.value : parseInt(String(tierField.value));
-      const option = tierField.type_config.options.find(o => o.orderindex === optionIndex);
+      const optionId = String(tierField.value);
+      const option = tierField.type_config.options.find(o => o.id === optionId);
       return option?.name?.toLowerCase() || null;
     }
     
     return String(tierField.value).toLowerCase();
+  }
+
+  async getTierFieldWithOptions(listId: string): Promise<{ fieldId: string; options: Map<string, string> } | null> {
+    const fields = await this.getListCustomFields(listId);
+    const tierField = fields.find(f => f.name.toLowerCase() === "tier");
+    
+    if (!tierField) return null;
+    
+    const options = new Map<string, string>();
+    if (tierField.type_config?.options) {
+      for (const opt of tierField.type_config.options) {
+        // Map tier name (lowercase) to option ID
+        options.set(opt.name.toLowerCase(), opt.id);
+      }
+    }
+    
+    return { fieldId: tierField.id, options };
   }
 
   async getAllWorkspaceTasks(options?: {

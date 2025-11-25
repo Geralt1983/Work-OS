@@ -21,8 +21,12 @@ export const DEFAULT_TIER = {
   backlog: "backlog",
 } as const;
 
-// Cache for tier field IDs per list (avoids repeated API calls)
-const tierFieldIdCache: Map<string, string | null> = new Map();
+// Cache for tier field info per list (avoids repeated API calls)
+interface TierFieldCache {
+  fieldId: string;
+  options: Map<string, string>; // tier name -> option ID
+}
+const tierFieldCache: Map<string, TierFieldCache | null> = new Map();
 
 interface TaskWithContext {
   id: string;
@@ -186,23 +190,37 @@ function categorizeTaskByTier(task: any): "active" | "queued" | "backlog" | "don
   return "backlog";
 }
 
-async function getTierFieldId(listId: string): Promise<string | null> {
-  if (tierFieldIdCache.has(listId)) {
-    return tierFieldIdCache.get(listId) || null;
+async function getTierFieldInfo(listId: string): Promise<TierFieldCache | null> {
+  if (tierFieldCache.has(listId)) {
+    return tierFieldCache.get(listId) || null;
   }
   
-  const fieldId = await clickupApi.findTierFieldId(listId);
-  tierFieldIdCache.set(listId, fieldId);
-  return fieldId;
+  const fieldInfo = await clickupApi.getTierFieldWithOptions(listId);
+  tierFieldCache.set(listId, fieldInfo);
+  return fieldInfo;
 }
 
 async function setTaskTier(taskId: string, listId: string, tier: string): Promise<void> {
-  const fieldId = await getTierFieldId(listId);
-  if (!fieldId) {
+  const fieldInfo = await getTierFieldInfo(listId);
+  if (!fieldInfo) {
     throw new Error(`No "tier" custom field found for list ${listId}. Please add a dropdown custom field named "tier" with options: active, next, backlog`);
   }
   
-  await clickupApi.setCustomFieldValue(taskId, fieldId, tier);
+  // For dropdown fields, we need to send the option ID, not the tier name
+  const tierLower = tier.toLowerCase();
+  const optionId = fieldInfo.options.get(tierLower);
+  
+  if (optionId) {
+    // Dropdown field - send option ID
+    await clickupApi.setCustomFieldValue(taskId, fieldInfo.fieldId, optionId);
+  } else if (fieldInfo.options.size === 0) {
+    // Text field - send tier name directly
+    await clickupApi.setCustomFieldValue(taskId, fieldInfo.fieldId, tier);
+  } else {
+    // Dropdown field but tier option not found
+    const availableOptions = Array.from(fieldInfo.options.keys()).join(", ");
+    throw new Error(`Tier "${tier}" not found in dropdown options. Available: ${availableOptions}`);
+  }
 }
 
 async function checkActionability(taskName: string, taskDescription?: string): Promise<{ actionable: boolean; reason: string }> {
