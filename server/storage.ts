@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, backlogEntries } from "@shared/schema";
-import { eq, desc, and, gte, isNull, sql } from "drizzle-orm";
+import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, backlogEntries, clients, moves } from "@shared/schema";
+import { eq, desc, and, gte, isNull, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { 
   Session, InsertSession, 
@@ -9,7 +9,10 @@ import type {
   DailyLog, InsertDailyLog,
   UserPattern, InsertUserPattern,
   TaskSignal, InsertTaskSignal,
-  BacklogEntry, InsertBacklogEntry
+  BacklogEntry, InsertBacklogEntry,
+  Client, InsertClient,
+  Move, InsertMove,
+  MoveStatus
 } from "@shared/schema";
 
 export interface IStorage {
@@ -91,6 +94,27 @@ export interface IStorage {
     importance: string;
     tier: string;
   }>>;
+
+  // ============ CLIENTS (first-class entity) ============
+  createClient(client: InsertClient): Promise<Client>;
+  getClient(id: number): Promise<Client | undefined>;
+  getClientByName(name: string): Promise<Client | undefined>;
+  getAllClientsEntity(): Promise<Client[]>;
+  updateClient(id: number, updates: Partial<InsertClient>): Promise<Client | undefined>;
+  archiveClient(id: number): Promise<void>;
+
+  // ============ MOVES (core work unit) ============
+  createMove(move: InsertMove): Promise<Move>;
+  getMove(id: number): Promise<Move | undefined>;
+  getMovesByStatus(status: MoveStatus): Promise<Move[]>;
+  getMovesByClient(clientId: number): Promise<Move[]>;
+  getAllMoves(filters?: { status?: MoveStatus; clientId?: number; includeCompleted?: boolean }): Promise<Move[]>;
+  updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined>;
+  completeMove(id: number, effortActual?: number): Promise<Move | undefined>;
+  promoteMove(id: number): Promise<Move | undefined>;
+  demoteMove(id: number): Promise<Move | undefined>;
+  deleteMove(id: number): Promise<void>;
+  reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -691,6 +715,156 @@ class DatabaseStorage implements IStorage {
         tier: client.tier || "active",
       };
     });
+  }
+
+  // ============ CLIENTS (first-class entity) ============
+
+  async createClient(client: InsertClient): Promise<Client> {
+    const [created] = await db.insert(clients).values(client).returning();
+    return created;
+  }
+
+  async getClient(id: number): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+    return client;
+  }
+
+  async getClientByName(name: string): Promise<Client | undefined> {
+    const normalized = name.toLowerCase().trim();
+    const [client] = await db.select().from(clients)
+      .where(eq(clients.name, normalized));
+    return client;
+  }
+
+  async getAllClientsEntity(): Promise<Client[]> {
+    return db.select().from(clients)
+      .where(eq(clients.isActive, 1))
+      .orderBy(asc(clients.name));
+  }
+
+  async updateClient(id: number, updates: Partial<InsertClient>): Promise<Client | undefined> {
+    const [updated] = await db.update(clients)
+      .set(updates)
+      .where(eq(clients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async archiveClient(id: number): Promise<void> {
+    await db.update(clients)
+      .set({ isActive: 0 })
+      .where(eq(clients.id, id));
+  }
+
+  // ============ MOVES (core work unit) ============
+
+  async createMove(move: InsertMove): Promise<Move> {
+    const [created] = await db.insert(moves).values(move).returning();
+    return created;
+  }
+
+  async getMove(id: number): Promise<Move | undefined> {
+    const [move] = await db.select().from(moves).where(eq(moves.id, id));
+    return move;
+  }
+
+  async getMovesByStatus(status: MoveStatus): Promise<Move[]> {
+    return db.select().from(moves)
+      .where(eq(moves.status, status))
+      .orderBy(asc(moves.sortOrder), desc(moves.createdAt));
+  }
+
+  async getMovesByClient(clientId: number): Promise<Move[]> {
+    return db.select().from(moves)
+      .where(eq(moves.clientId, clientId))
+      .orderBy(desc(moves.createdAt));
+  }
+
+  async getAllMoves(filters?: { status?: MoveStatus; clientId?: number; includeCompleted?: boolean }): Promise<Move[]> {
+    const conditions: any[] = [];
+    
+    if (filters?.status) {
+      conditions.push(eq(moves.status, filters.status));
+    } else if (!filters?.includeCompleted) {
+      // By default, exclude completed moves unless explicitly asked
+      conditions.push(sql`${moves.status} != 'done'`);
+    }
+    
+    if (filters?.clientId) {
+      conditions.push(eq(moves.clientId, filters.clientId));
+    }
+    
+    if (conditions.length > 0) {
+      return db.select().from(moves)
+        .where(and(...conditions))
+        .orderBy(asc(moves.sortOrder), desc(moves.createdAt));
+    }
+    
+    return db.select().from(moves)
+      .orderBy(asc(moves.sortOrder), desc(moves.createdAt));
+  }
+
+  async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
+    const [updated] = await db.update(moves)
+      .set(updates)
+      .where(eq(moves.id, id))
+      .returning();
+    return updated;
+  }
+
+  async completeMove(id: number, effortActual?: number): Promise<Move | undefined> {
+    const [completed] = await db.update(moves)
+      .set({
+        status: "done",
+        completedAt: new Date(),
+        effortActual: effortActual,
+      })
+      .where(eq(moves.id, id))
+      .returning();
+    return completed;
+  }
+
+  async promoteMove(id: number): Promise<Move | undefined> {
+    const move = await this.getMove(id);
+    if (!move) return undefined;
+    
+    const statusOrder: MoveStatus[] = ["backlog", "queued", "active"];
+    const currentIndex = statusOrder.indexOf(move.status as MoveStatus);
+    
+    if (currentIndex < 0 || currentIndex >= statusOrder.length - 1) {
+      return move; // Already at top or invalid status
+    }
+    
+    const newStatus = statusOrder[currentIndex + 1];
+    return this.updateMove(id, { status: newStatus });
+  }
+
+  async demoteMove(id: number): Promise<Move | undefined> {
+    const move = await this.getMove(id);
+    if (!move) return undefined;
+    
+    const statusOrder: MoveStatus[] = ["backlog", "queued", "active"];
+    const currentIndex = statusOrder.indexOf(move.status as MoveStatus);
+    
+    if (currentIndex <= 0) {
+      return move; // Already at bottom or invalid status
+    }
+    
+    const newStatus = statusOrder[currentIndex - 1];
+    return this.updateMove(id, { status: newStatus });
+  }
+
+  async deleteMove(id: number): Promise<void> {
+    await db.delete(moves).where(eq(moves.id, id));
+  }
+
+  async reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void> {
+    // Update sort order based on position in array
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(moves)
+        .set({ sortOrder: i })
+        .where(eq(moves.id, orderedIds[i]));
+    }
   }
 }
 

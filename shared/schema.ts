@@ -1,6 +1,33 @@
-import { pgTable, text, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, integer, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// ============ CORE ENTITIES ============
+
+// Clients: First-class entity for tracking work relationships
+export const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  type: text("type").notNull().default("client"), // 'client' | 'internal'
+  color: text("color"), // hex color for UI
+  isActive: integer("is_active").notNull().default(1), // 1 = active, 0 = archived
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Moves: The core work unit (20-minute tasks)
+export const moves = pgTable("moves", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clients.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("backlog"), // 'active' | 'queued' | 'backlog' | 'done'
+  effortEstimate: integer("effort_estimate").default(2), // 1=quick, 2=standard, 3=chunky, 4=draining
+  effortActual: integer("effort_actual"), // filled after completion
+  drainType: text("drain_type"), // 'mental' | 'emotional' | 'physical' | 'easy' | null
+  sortOrder: integer("sort_order").default(0), // for manual ordering within status
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
 
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
@@ -91,6 +118,10 @@ export const taskCardSchema = z.object({
   dueDate: z.string().optional(),
 });
 
+// ============ INSERT SCHEMAS ============
+
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
+export const insertMoveSchema = createInsertSchema(moves).omit({ id: true, createdAt: true, completedAt: true });
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true, lastActiveAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true });
 export const insertClientMemorySchema = createInsertSchema(clientMemory).omit({ id: true, createdAt: true, updatedAt: true });
@@ -99,6 +130,12 @@ export const insertUserPatternSchema = createInsertSchema(userPatterns).omit({ i
 export const insertTaskSignalSchema = createInsertSchema(taskSignals).omit({ id: true, createdAt: true });
 export const insertBacklogEntrySchema = createInsertSchema(backlogEntries).omit({ id: true });
 
+// ============ TYPES ============
+
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type Move = typeof moves.$inferSelect;
+export type InsertMove = z.infer<typeof insertMoveSchema>;
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type Message = typeof messages.$inferSelect;
@@ -114,3 +151,21 @@ export type InsertTaskSignal = z.infer<typeof insertTaskSignalSchema>;
 export type BacklogEntry = typeof backlogEntries.$inferSelect;
 export type InsertBacklogEntry = z.infer<typeof insertBacklogEntrySchema>;
 export type TaskCard = z.infer<typeof taskCardSchema>;
+
+// ============ STATUS & EFFORT CONSTANTS ============
+
+export const MOVE_STATUSES = ["active", "queued", "backlog", "done"] as const;
+export type MoveStatus = typeof MOVE_STATUSES[number];
+
+export const EFFORT_LEVELS = [
+  { value: 1, label: "Quick", description: "< 10 min" },
+  { value: 2, label: "Standard", description: "~20 min" },
+  { value: 3, label: "Chunky", description: "30-45 min" },
+  { value: 4, label: "Draining", description: "45+ min or high effort" },
+] as const;
+
+export const DRAIN_TYPES = ["mental", "emotional", "physical", "easy"] as const;
+export type DrainType = typeof DRAIN_TYPES[number];
+
+export const CLIENT_TYPES = ["client", "internal"] as const;
+export type ClientType = typeof CLIENT_TYPES[number];

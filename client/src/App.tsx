@@ -6,12 +6,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import Chat from "@/pages/Chat";
 import Metrics from "@/pages/Metrics";
+import Moves from "@/pages/Moves";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Chat} />
+      <Route path="/moves" component={Moves} />
       <Route path="/metrics" component={Metrics} />
       <Route component={NotFound} />
     </Switch>

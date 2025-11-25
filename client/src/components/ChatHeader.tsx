@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Moon, Sun, BarChart3 } from "lucide-react";
+import { Trash2, Moon, Sun, BarChart3, ListTodo } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 
@@ -37,6 +37,17 @@ export default function ChatHeader({ onClearChat, isConnected = true }: ChatHead
         </div>
 
         <div className="flex items-center gap-3">
+          <Link href="/moves">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+              data-testid="button-moves"
+            >
+              <ListTodo className="h-4 w-4 mr-2" />
+              Moves
+            </Button>
+          </Link>
           <Link href="/metrics">
             <Button
               variant="ghost"
