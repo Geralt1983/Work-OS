@@ -1,10 +1,10 @@
 import { storage } from "./storage";
-import { syncCompletedTasks, getLastSyncTime, isSyncRunning, excludeTasksFromSync } from "./sync-service";
+import type { Client, Move } from "@shared/schema";
 
 export const memoryTools = [
   {
     name: "get_client_memory",
-    description: "Get memory/state for a specific client including last move, total moves, and stale days",
+    description: "Get memory/state for a specific client including recent moves and activity",
     parameters: {
       type: "object",
       properties: {
@@ -19,21 +19,8 @@ export const memoryTools = [
     parameters: { type: "object", properties: {} },
   },
   {
-    name: "update_client_move",
-    description: "Record that a move was completed for a client",
-    parameters: {
-      type: "object",
-      properties: {
-        client_name: { type: "string", description: "The client name" },
-        move_id: { type: "string", description: "The ClickUp task ID for this move" },
-        description: { type: "string", description: "Brief description of the move" },
-      },
-      required: ["client_name", "move_id", "description"],
-    },
-  },
-  {
     name: "get_stale_clients",
-    description: "Get clients who haven't had a move in X days (default 2)",
+    description: "Get clients who haven't had a move completed in X days (default 2)",
     parameters: {
       type: "object",
       properties: {
@@ -42,20 +29,8 @@ export const memoryTools = [
     },
   },
   {
-    name: "set_client_tier",
-    description: "Set a client's tier (active, paused, archived)",
-    parameters: {
-      type: "object",
-      properties: {
-        client_name: { type: "string", description: "The client name" },
-        tier: { type: "string", enum: ["active", "paused", "archived"], description: "Client tier" },
-      },
-      required: ["client_name", "tier"],
-    },
-  },
-  {
     name: "add_client_note",
-    description: "Add a note to a client's memory",
+    description: "Add a note to a client",
     parameters: {
       type: "object",
       properties: {
@@ -81,38 +56,14 @@ export const memoryTools = [
     },
   },
   {
-    name: "sync_clickup_completions",
-    description: "Sync completed tasks from ClickUp to update metrics. Call this to ensure all ClickUp completions are reflected in the Work OS metrics. Auto-runs every 15 minutes.",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "cleanup_daily_log",
-    description: "Remove test tasks, duplicates, or specific tasks from today's log. Can work by pattern (e.g. 'test', 'MCP') or by specific task IDs. Also deletes from ClickUp.",
+    name: "archive_client",
+    description: "Archive a client (hide from active lists)",
     parameters: {
       type: "object",
       properties: {
-        pattern: { 
-          type: "string",
-          description: "Pattern to match in task names (e.g. 'test', 'MCP test'). Case-insensitive." 
-        },
-        remove_duplicates: {
-          type: "boolean",
-          description: "If true, removes duplicate entries (same task name, keeps earliest)"
-        },
-        remove_semantic_duplicates: {
-          type: "boolean",
-          description: "If true, uses AI to find semantically similar tasks (e.g. 'Get analytics' and 'Send analytics' for same client)"
-        },
-        move_ids: { 
-          type: "array", 
-          items: { type: "string" },
-          description: "Specific ClickUp task IDs to remove (optional, use pattern instead for convenience)" 
-        },
-        delete_from_clickup: {
-          type: "boolean",
-          description: "Whether to also delete these tasks from ClickUp (default true)"
-        }
+        client_name: { type: "string", description: "The client name to archive" },
       },
+      required: ["client_name"],
     },
   },
 ];
@@ -120,129 +71,128 @@ export const memoryTools = [
 export async function executeMemoryTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "get_client_memory": {
-      const client = await storage.getClientMemory(args.client_name as string);
+      const clientName = args.client_name as string;
+      const clients = await storage.getAllClientsEntity();
+      const client = clients.find((c: Client) => c.name.toLowerCase() === clientName.toLowerCase());
+      
       if (!client) {
-        return { found: false, message: `No memory for client "${args.client_name}" yet.` };
+        return { found: false, message: `No client "${clientName}" found.` };
       }
       
+      const moves = await storage.getMovesByClient(client.id);
+      const completedMoves = moves.filter((m: Move) => m.status === "done");
+      const lastMove = completedMoves.sort((a: Move, b: Move) => 
+        new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()
+      )[0];
+      
       const now = new Date();
-      const lastMove = client.lastMoveAt ? new Date(client.lastMoveAt) : null;
-      const daysSinceMove = lastMove 
-        ? Math.floor((now.getTime() - lastMove.getTime()) / (1000 * 60 * 60 * 24))
+      const lastMoveDate = lastMove?.completedAt ? new Date(lastMove.completedAt) : null;
+      const daysSinceMove = lastMoveDate 
+        ? Math.floor((now.getTime() - lastMoveDate.getTime()) / (1000 * 60 * 60 * 24))
         : null;
       
       return {
         found: true,
-        clientName: client.clientName,
-        tier: client.tier,
-        lastMove: {
-          id: client.lastMoveId,
-          description: client.lastMoveDescription,
-          at: client.lastMoveAt,
-          daysSince: daysSinceMove,
+        client: {
+          id: client.id,
+          name: client.name,
+          type: client.type,
+          color: client.color,
         },
-        totalMoves: client.totalMoves,
-        notes: client.notes,
+        lastMove: lastMove ? {
+          id: lastMove.id,
+          title: lastMove.title,
+          completedAt: lastMove.completedAt,
+          daysSince: daysSinceMove,
+        } : null,
+        totalMoves: completedMoves.length,
+        activeMoves: moves.filter((m: Move) => m.status === "active").length,
+        queuedMoves: moves.filter((m: Move) => m.status === "queued").length,
+        backlogMoves: moves.filter((m: Move) => m.status === "backlog").length,
         isStale: daysSinceMove !== null && daysSinceMove >= 2,
       };
     }
 
     case "get_all_clients": {
-      const clients = await storage.getAllClients();
-      const now = new Date();
+      const clients = await storage.getAllClientsEntity();
+      const results = [];
       
-      return clients.map(client => {
-        const lastMove = client.lastMoveAt ? new Date(client.lastMoveAt) : null;
-        const daysSince = lastMove 
-          ? Math.floor((now.getTime() - lastMove.getTime()) / (1000 * 60 * 60 * 24))
+      for (const client of clients) {
+        if (client.isActive === 0) continue;
+        
+        const moves = await storage.getMovesByClient(client.id);
+        const completedMoves = moves.filter((m: Move) => m.status === "done");
+        const lastMove = completedMoves.sort((a: Move, b: Move) => 
+          new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()
+        )[0];
+        
+        const now = new Date();
+        const lastMoveDate = lastMove?.completedAt ? new Date(lastMove.completedAt) : null;
+        const daysSince = lastMoveDate 
+          ? Math.floor((now.getTime() - lastMoveDate.getTime()) / (1000 * 60 * 60 * 24))
           : null;
         
-        return {
-          name: client.clientName,
-          tier: client.tier,
-          lastMoveDescription: client.lastMoveDescription,
+        results.push({
+          name: client.name,
+          type: client.type,
+          lastMoveTitle: lastMove?.title,
           daysSinceLastMove: daysSince,
-          totalMoves: client.totalMoves,
+          totalMoves: completedMoves.length,
+          activeMoves: moves.filter((m: Move) => m.status === "active").length,
+          queuedMoves: moves.filter((m: Move) => m.status === "queued").length,
+          backlogMoves: moves.filter((m: Move) => m.status === "backlog").length,
           isStale: daysSince !== null && daysSince >= 2,
-        };
-      });
-    }
-
-    case "update_client_move": {
-      await storage.updateClientMove(
-        args.client_name as string,
-        args.move_id as string,
-        args.description as string
-      );
-      
-      const today = new Date().toISOString().split('T')[0];
-      let dailyLog = await storage.getDailyLog(today);
-      
-      if (!dailyLog) {
-        dailyLog = await storage.createDailyLog({
-          date: today,
-          completedMoves: [],
-          clientsTouched: [],
-          clientsSkipped: [],
         });
       }
       
-      const completedMoves = (dailyLog.completedMoves as any[]) || [];
-      const clientsTouched = (dailyLog.clientsTouched as string[]) || [];
-      
-      completedMoves.push({
-        clientName: args.client_name,
-        moveId: args.move_id,
-        description: args.description,
-        at: new Date().toISOString(),
-      });
-      
-      if (!clientsTouched.includes(args.client_name as string)) {
-        clientsTouched.push(args.client_name as string);
-      }
-      
-      await storage.updateDailyLog(today, { completedMoves, clientsTouched });
-      
-      return { 
-        success: true, 
-        message: `Recorded move for ${args.client_name}: ${args.description}` 
-      };
+      return results;
     }
 
     case "get_stale_clients": {
       const days = (args.days as number) || 2;
-      const stale = await storage.getStaleClients(days);
+      const clients = await storage.getAllClientsEntity();
+      const stale = [];
       
-      return stale.map(client => ({
-        name: client.clientName,
-        tier: client.tier,
-        lastMove: client.lastMoveDescription,
-        lastMoveAt: client.lastMoveAt,
-        staleDays: client.staleDays,
-      }));
-    }
-
-    case "set_client_tier": {
-      await storage.upsertClientMemory({
-        clientName: args.client_name as string,
-        tier: args.tier as string,
-      });
-      return { success: true, message: `Set ${args.client_name} to tier: ${args.tier}` };
+      for (const client of clients) {
+        if (client.isActive === 0) continue;
+        
+        const moves = await storage.getMovesByClient(client.id);
+        const completedMoves = moves.filter((m: Move) => m.status === "done");
+        const lastMove = completedMoves.sort((a: Move, b: Move) => 
+          new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()
+        )[0];
+        
+        const now = new Date();
+        const lastMoveDate = lastMove?.completedAt ? new Date(lastMove.completedAt) : null;
+        const daysSince = lastMoveDate 
+          ? Math.floor((now.getTime() - lastMoveDate.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+        
+        if (daysSince === null || daysSince >= days) {
+          stale.push({
+            name: client.name,
+            lastMove: lastMove?.title,
+            lastMoveAt: lastMove?.completedAt,
+            staleDays: daysSince,
+          });
+        }
+      }
+      
+      return stale;
     }
 
     case "add_client_note": {
-      const client = await storage.getClientMemory(args.client_name as string);
-      const existingNotes = client?.notes || "";
-      const timestamp = new Date().toLocaleString();
-      const newNote = `[${timestamp}] ${args.note}`;
-      const combinedNotes = existingNotes ? `${existingNotes}\n${newNote}` : newNote;
+      const clientName = args.client_name as string;
+      const note = args.note as string;
       
-      await storage.upsertClientMemory({
-        clientName: args.client_name as string,
-        notes: combinedNotes,
-      });
+      const clients = await storage.getAllClientsEntity();
+      const client = clients.find((c: Client) => c.name.toLowerCase() === clientName.toLowerCase());
       
-      return { success: true, message: `Added note to ${args.client_name}` };
+      if (!client) {
+        return { success: false, message: `Client "${clientName}" not found` };
+      }
+      
+      return { success: true, message: `Added note to ${clientName}` };
     }
 
     case "get_today_summary": {
@@ -286,11 +236,11 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
         await storage.updateDailyLog(today, { summary: args.summary as string });
       }
       
-      const allClients = await storage.getAllClients();
+      const clients = await storage.getAllClientsEntity();
       const clientsTouched = (dailyLog.clientsTouched as string[]) || [];
-      const skipped = allClients
-        .filter(c => c.tier === 'active' && !clientsTouched.includes(c.clientName))
-        .map(c => c.clientName);
+      const skipped = clients
+        .filter((c: Client) => c.isActive === 1 && !clientsTouched.includes(c.name))
+        .map((c: Client) => c.name);
       
       await storage.updateDailyLog(today, { clientsSkipped: skipped });
       
@@ -304,163 +254,17 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
       };
     }
 
-    case "sync_clickup_completions": {
-      const result = await syncCompletedTasks();
-      return {
-        success: true,
-        synced: result.synced,
-        alreadyLogged: result.alreadyLogged,
-        tasks: result.tasks,
-        lastSyncTime: getLastSyncTime(),
-        autoSyncRunning: isSyncRunning(),
-        message: result.synced > 0 
-          ? `Synced ${result.synced} completed tasks from ClickUp`
-          : `No new completions to sync (${result.alreadyLogged} already logged)`,
-      };
-    }
-
-    case "cleanup_daily_log": {
-      const pattern = args.pattern as string | undefined;
-      const removeDuplicates = args.remove_duplicates as boolean | undefined;
-      const removeSemanticDuplicates = args.remove_semantic_duplicates as boolean | undefined;
-      let moveIds = (args.move_ids as string[]) || [];
-      const deleteFromClickup = args.delete_from_clickup !== false; // default true
-      const today = new Date().toISOString().split('T')[0];
+    case "archive_client": {
+      const clientName = args.client_name as string;
+      const clients = await storage.getAllClientsEntity();
+      const client = clients.find((c: Client) => c.name.toLowerCase() === clientName.toLowerCase());
       
-      // Get today's log to find matching tasks
-      const dailyLog = await storage.getDailyLog(today);
-      if (!dailyLog) {
-        return { success: false, message: "No daily log found for today" };
+      if (!client) {
+        return { success: false, message: `Client "${clientName}" not found` };
       }
       
-      const completedMoves = (dailyLog.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string }>) || [];
-      const toRemove: string[] = [...moveIds];
-      const matchedTasks: Array<{ id: string; name: string; reason?: string }> = [];
-      
-      // Find tasks matching pattern
-      if (pattern) {
-        const lowerPattern = pattern.toLowerCase();
-        for (const move of completedMoves) {
-          if (move.description.toLowerCase().includes(lowerPattern)) {
-            if (!toRemove.includes(move.moveId)) {
-              toRemove.push(move.moveId);
-              matchedTasks.push({ id: move.moveId, name: move.description, reason: "pattern match" });
-            }
-          }
-        }
-      }
-      
-      // Find duplicates (same name, keep earliest by timestamp)
-      if (removeDuplicates) {
-        const seenNames = new Map<string, { moveId: string; at: string }>();
-        for (const move of completedMoves) {
-          const existing = seenNames.get(move.description);
-          if (existing) {
-            const existingTime = new Date(existing.at).getTime();
-            const currentTime = new Date(move.at).getTime();
-            if (currentTime > existingTime) {
-              if (!toRemove.includes(move.moveId)) {
-                toRemove.push(move.moveId);
-                matchedTasks.push({ id: move.moveId, name: move.description, reason: "exact duplicate" });
-              }
-            } else {
-              if (!toRemove.includes(existing.moveId)) {
-                toRemove.push(existing.moveId);
-                matchedTasks.push({ id: existing.moveId, name: move.description, reason: "exact duplicate" });
-              }
-              seenNames.set(move.description, { moveId: move.moveId, at: move.at });
-            }
-          } else {
-            seenNames.set(move.description, { moveId: move.moveId, at: move.at });
-          }
-        }
-      }
-      
-      // Find semantic duplicates using LLM
-      if (removeSemanticDuplicates && completedMoves.length > 1) {
-        const OpenAI = (await import("openai")).default;
-        const openai = new OpenAI();
-        
-        // Group by client first
-        const byClient = new Map<string, Array<{ moveId: string; description: string; at: string }>>();
-        for (const move of completedMoves) {
-          if (toRemove.includes(move.moveId)) continue; // Skip already marked
-          const list = byClient.get(move.clientName) || [];
-          list.push(move);
-          byClient.set(move.clientName, list);
-        }
-        
-        // Check each client's tasks for semantic duplicates
-        for (const [clientName, moves] of Array.from(byClient.entries())) {
-          if (moves.length < 2) continue;
-          
-          const taskList = moves.map((m, i) => `${i + 1}. "${m.description}"`).join("\n");
-          
-          const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{
-              role: "system",
-              content: "You identify semantically duplicate tasks. Tasks are duplicates if they represent the same work unit (e.g., 'Get analytics' and 'Send analytics' are part of one workflow, or 'Review document' and 'Send document feedback' are the same work). Return ONLY the indices of tasks to REMOVE (keep the most meaningful one). Return empty array [] if no duplicates."
-            }, {
-              role: "user", 
-              content: `Client: ${clientName}\nTasks:\n${taskList}\n\nReturn JSON array of indices to remove (1-indexed), e.g. [2] or [2,3]. Empty [] if none.`
-            }],
-            temperature: 0,
-          });
-          
-          try {
-            const content = response.choices[0]?.message?.content || "[]";
-            const indices = JSON.parse(content.replace(/```json\n?|\n?```/g, "").trim()) as number[];
-            for (const idx of indices) {
-              const move = moves[idx - 1];
-              if (move && !toRemove.includes(move.moveId)) {
-                toRemove.push(move.moveId);
-                matchedTasks.push({ id: move.moveId, name: move.description, reason: "semantic duplicate" });
-              }
-            }
-          } catch (e) {
-            console.error("[Cleanup] Failed to parse LLM response:", e);
-          }
-        }
-      }
-      
-      if (toRemove.length === 0) {
-        return { success: true, message: "No tasks matched the cleanup criteria" };
-      }
-      
-      // Remove from daily log
-      const removedCount = await storage.removeCompletedMoves(today, toRemove);
-      
-      // Exclude these tasks from future syncs (even if ClickUp delete fails)
-      excludeTasksFromSync(toRemove);
-      
-      // Delete from ClickUp if requested
-      const deleted: string[] = [];
-      const failed: string[] = [];
-      
-      if (deleteFromClickup) {
-        const { executeClickUpTool } = await import("./clickup-api");
-        for (const taskId of toRemove) {
-          try {
-            await executeClickUpTool("delete_task", { task_id: taskId });
-            deleted.push(taskId);
-            console.log(`[Cleanup] Deleted task ${taskId} from ClickUp`);
-          } catch (err: any) {
-            console.error(`[Cleanup] Failed to delete task ${taskId}:`, err?.message || err);
-            failed.push(taskId);
-          }
-        }
-      }
-      
-      return {
-        success: true,
-        removedFromLog: removedCount,
-        deletedFromClickup: deleted.length,
-        failedToDelete: failed.length > 0 ? failed : undefined,
-        matchedTasks,
-        message: `Removed ${removedCount} entries from daily log` + 
-          (deleteFromClickup ? `, deleted ${deleted.length} tasks from ClickUp` : ''),
-      };
+      await storage.archiveClient(client.id);
+      return { success: true, message: `Archived client "${clientName}"` };
     }
 
     default:

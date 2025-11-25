@@ -1,5 +1,4 @@
 import { storage } from "./storage";
-import { clickupApi } from "./clickup-api";
 import OpenAI from "openai";
 
 const openai = new OpenAI();
@@ -25,7 +24,7 @@ export const backlogToolDefinitions: OpenAI.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_aging_backlog",
-      description: "Get all backlog tasks that have been sitting for 7+ days. These are at risk of becoming forgotten. Returns task details with days in backlog.",
+      description: "Get all backlog moves that have been sitting for 7+ days. These are at risk of becoming forgotten. Returns move details with days in backlog.",
       parameters: {
         type: "object",
         properties: {
@@ -42,7 +41,7 @@ export const backlogToolDefinitions: OpenAI.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "auto_promote_stale_backlog",
-      description: "Automatically promote backlog tasks that have been sitting for 10+ days to Queued tier. Prevents backlog rot by forcing stale tasks back into view. Returns list of promoted tasks.",
+      description: "Automatically promote backlog moves that have been sitting for 10+ days to Queued status. Prevents backlog rot by forcing stale moves back into view. Returns list of promoted moves.",
       parameters: {
         type: "object",
         properties: {
@@ -63,7 +62,7 @@ export const backlogToolDefinitions: OpenAI.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "should_pull_from_backlog",
-      description: "Check if it's time to pull a task from backlog based on recent move patterns. Uses 'one from the back' rule - after 5 moves from active/queued without touching backlog, suggests pulling from backlog.",
+      description: "Check if it's time to pull a move from backlog based on recent move patterns. Uses 'one from the back' rule - after 5 moves from active/queued without touching backlog, suggests pulling from backlog.",
       parameters: {
         type: "object",
         properties: {},
@@ -75,7 +74,7 @@ export const backlogToolDefinitions: OpenAI.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "run_backlog_triage",
-      description: "Run a backlog triage session - reviews aging backlog tasks, suggests which to promote/delete/rewrite, and provides an overall backlog health summary. Good to run weekly or when backlog feels overwhelming.",
+      description: "Run a backlog triage session - reviews aging backlog moves, suggests which to promote/delete/rewrite, and provides an overall backlog health summary. Good to run weekly or when backlog feels overwhelming.",
       parameters: {
         type: "object",
         properties: {
@@ -85,22 +84,6 @@ export const backlogToolDefinitions: OpenAI.ChatCompletionTool[] = [
           },
         },
         required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "record_backlog_task",
-      description: "Record a task entering backlog for age tracking. Called automatically when tasks are set to backlog tier.",
-      parameters: {
-        type: "object",
-        properties: {
-          task_id: { type: "string", description: "ClickUp task ID" },
-          task_name: { type: "string", description: "Task name" },
-          client_name: { type: "string", description: "Client/list name" },
-        },
-        required: ["task_id", "task_name", "client_name"],
       },
     },
   },
@@ -116,7 +99,7 @@ export async function getBacklogHealth(): Promise<{
   if (health.length === 0) {
     return {
       clients: [],
-      summary: "No backlog tasks being tracked. Consider recording backlog entries when tasks are created.",
+      summary: "No backlog moves being tracked.",
       overallHealth: "healthy",
     };
   }
@@ -131,7 +114,7 @@ export async function getBacklogHealth(): Promise<{
     overallHealth = "warning";
   }
   
-  const summary = `${health.length} clients with backlog. ${totalAging} tasks aging (7+ days). Oldest task: ${maxAge} days.`;
+  const summary = `${health.length} clients with backlog. ${totalAging} moves aging (7+ days). Oldest move: ${maxAge} days.`;
   
   return { clients: health, summary, overallHealth };
 }
@@ -152,13 +135,13 @@ export async function getAgingBacklog(daysThreshold: number = AGING_THRESHOLD_DA
   
   let recommendation = "";
   if (tasks.length === 0) {
-    recommendation = "No aging backlog tasks - backlog is fresh!";
+    recommendation = "No aging backlog moves - backlog is fresh!";
   } else if (tasks.length <= 2) {
-    recommendation = `${tasks.length} aging tasks - consider promoting one to Queued today.`;
+    recommendation = `${tasks.length} aging moves - consider promoting one to Queued today.`;
   } else if (tasks.length <= 5) {
-    recommendation = `${tasks.length} aging tasks - schedule a 10-minute backlog triage.`;
+    recommendation = `${tasks.length} aging moves - schedule a 10-minute backlog triage.`;
   } else {
-    recommendation = `${tasks.length} aging tasks - backlog is getting stale! Recommend a dedicated triage session.`;
+    recommendation = `${tasks.length} aging moves - backlog is getting stale! Recommend a dedicated triage session.`;
   }
   
   return { tasks, count: tasks.length, recommendation };
@@ -176,7 +159,7 @@ export async function autoPromoteStaleBacklog(
   if (aging.length === 0) {
     return {
       promoted: [],
-      message: `No tasks have been in backlog for ${daysThreshold}+ days. Backlog is healthy!`,
+      message: `No moves have been in backlog for ${daysThreshold}+ days. Backlog is healthy!`,
     };
   }
   
@@ -185,30 +168,14 @@ export async function autoPromoteStaleBacklog(
   for (const entry of aging) {
     if (!dryRun) {
       try {
-        // Get task to find list ID and tier field
-        const task = await clickupApi.getTask(entry.taskId);
-        
-        // Find the tier field
-        const tierField = task.custom_fields?.find(
-          (f: any) => f.name && f.name.toLowerCase().includes("tier")
-        );
-        
-        if (tierField) {
-          // Find the "next" (queued) option
-          const nextOption = tierField.type_config?.options?.find(
-            (o: any) => o.name?.toLowerCase() === "next" || o.name?.toLowerCase() === "queued"
-          );
-          
-          if (nextOption) {
-            // Use setCustomFieldValue to update the tier
-            await clickupApi.setCustomFieldValue(entry.taskId, tierField.id, nextOption.orderindex);
-          }
+        // Promote the move using local storage
+        const moveId = parseInt(entry.taskId);
+        if (!isNaN(moveId)) {
+          await storage.updateMove(moveId, { status: "queued" });
+          await storage.markBacklogPromoted(entry.taskId, true);
         }
-        
-        // Mark as promoted in our tracking
-        await storage.markBacklogPromoted(entry.taskId, true);
       } catch (error) {
-        console.error(`Failed to promote task ${entry.taskId}:`, error);
+        console.error(`Failed to promote move ${entry.taskId}:`, error);
         continue;
       }
     }
@@ -224,7 +191,7 @@ export async function autoPromoteStaleBacklog(
   const action = dryRun ? "would be" : "have been";
   return {
     promoted,
-    message: `${promoted.length} tasks ${action} auto-promoted from backlog to Queued after ${daysThreshold}+ days.`,
+    message: `${promoted.length} moves ${action} auto-promoted from backlog to Queued after ${daysThreshold}+ days.`,
   };
 }
 
@@ -237,11 +204,9 @@ export async function shouldPullFromBacklog(): Promise<{
   const stats = await storage.getBacklogMoveStats(14);
   const health = await storage.getBacklogHealth();
   
-  // Calculate consecutive non-backlog moves
   const totalMoves = stats.backlogMoves + stats.nonBacklogMoves;
   const backlogRatio = totalMoves > 0 ? stats.backlogMoves / totalMoves : 0;
   
-  // Simple heuristic: if more than 5 non-backlog moves without a backlog move
   const movesSinceBacklog = stats.nonBacklogMoves - (stats.backlogMoves * ONE_FROM_BACK_THRESHOLD);
   const shouldPull = movesSinceBacklog >= ONE_FROM_BACK_THRESHOLD || (backlogRatio < 0.1 && totalMoves >= 5);
   
@@ -251,8 +216,7 @@ export async function shouldPullFromBacklog(): Promise<{
   if (shouldPull) {
     reason = `You've completed ${stats.nonBacklogMoves} moves from active/queued vs only ${stats.backlogMoves} from backlog. Time to pull from the back!`;
     
-    // Get oldest aging task as suggestion
-    const aging = await storage.getAgingBacklogTasks(1); // Any backlog task
+    const aging = await storage.getAgingBacklogTasks(1);
     if (aging.length > 0) {
       const oldest = aging[0];
       suggestion = `"${oldest.taskName}" for ${oldest.clientName} (${oldest.daysInBacklog} days in backlog)`;
@@ -273,7 +237,6 @@ export async function runBacklogTriage(clientName?: string): Promise<{
   const allAging = await storage.getAgingBacklogTasks(AGING_THRESHOLD_DAYS);
   const health = await storage.getBacklogHealth();
   
-  // Filter by client if specified
   const aging = clientName 
     ? allAging.filter(t => t.clientName.toLowerCase() === clientName.toLowerCase())
     : allAging;
@@ -282,7 +245,6 @@ export async function runBacklogTriage(clientName?: string): Promise<{
     ? health.filter(h => h.clientName.toLowerCase() === clientName.toLowerCase())
     : health;
   
-  // Generate recommendations for each aging task
   const agingWithRecs = await Promise.all(aging.map(async (entry) => {
     let recommendation = "";
     const days = entry.daysInBacklog || 0;
@@ -304,17 +266,16 @@ export async function runBacklogTriage(clientName?: string): Promise<{
     };
   }));
   
-  // Generate action items
   const actionItems: string[] = [];
   
   const criticalCount = agingWithRecs.filter(t => t.daysInBacklog >= AUTO_PROMOTE_THRESHOLD_DAYS).length;
   if (criticalCount > 0) {
-    actionItems.push(`Auto-promote ${criticalCount} tasks stuck for 10+ days`);
+    actionItems.push(`Auto-promote ${criticalCount} moves stuck for 10+ days`);
   }
   
   const reviewCount = agingWithRecs.filter(t => t.daysInBacklog >= 14).length;
   if (reviewCount > 0) {
-    actionItems.push(`Review ${reviewCount} tasks for deletion/rewrite (14+ days old)`);
+    actionItems.push(`Review ${reviewCount} moves for deletion/rewrite (14+ days old)`);
   }
   
   const stalClients = clientHealth.filter(c => c.agingCount >= 3);
@@ -327,36 +288,10 @@ export async function runBacklogTriage(clientName?: string): Promise<{
   }
   
   const summary = clientName
-    ? `${clientName} backlog triage: ${aging.length} aging tasks, ${clientHealth[0]?.totalCount || 0} total backlog`
-    : `Backlog triage: ${aging.length} aging tasks across ${clientHealth.length} clients`;
+    ? `${clientName} backlog triage: ${aging.length} aging moves, ${clientHealth[0]?.totalCount || 0} total backlog`
+    : `Backlog triage: ${aging.length} aging moves across ${clientHealth.length} clients`;
   
   return { aging: agingWithRecs, health: clientHealth, summary, actionItems };
-}
-
-export async function recordBacklogTask(
-  taskId: string,
-  taskName: string,
-  clientName: string
-): Promise<{ success: boolean; message: string }> {
-  try {
-    await storage.recordBacklogEntry({
-      taskId,
-      taskName,
-      clientName: clientName.toLowerCase(),
-      enteredAt: new Date(),
-    });
-    
-    return {
-      success: true,
-      message: `Tracking "${taskName}" in ${clientName}'s backlog`,
-    };
-  } catch (error) {
-    console.error("Failed to record backlog entry:", error);
-    return {
-      success: false,
-      message: "Failed to record backlog entry",
-    };
-  }
 }
 
 export async function executeBacklogTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -378,13 +313,6 @@ export async function executeBacklogTool(name: string, args: Record<string, unkn
     
     case "run_backlog_triage":
       return runBacklogTriage(args.client_name as string | undefined);
-    
-    case "record_backlog_task":
-      return recordBacklogTask(
-        args.task_id as string,
-        args.task_name as string,
-        args.client_name as string
-      );
     
     default:
       throw new Error(`Unknown backlog tool: ${name}`);

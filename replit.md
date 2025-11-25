@@ -2,9 +2,9 @@
 
 ## Overview
 
-Work OS is a task management application with a custom Moves board and optional AI chat interface. The system operates on the principle of **one move per client per day** — where a "move" is a 20-minute or less task that advances client work. Tasks are managed through a visual kanban-style board with status columns (Active, Queued, Backlog).
+Work OS is a task management application with a custom Moves board and AI chat interface. The system operates on the principle of **one move per client per day** — where a "move" is a 20-minute or less task that advances client work. Tasks are managed through a visual kanban-style board with status columns (Active, Queued, Backlog).
 
-**Architecture Evolution**: Originally built around ClickUp integration, the system now uses a custom frontend Moves board as the primary task management interface. ClickUp sync remains available as an optional import feature but is no longer the source of truth.
+**Primary Interface**: The Moves board is the main task management interface. The AI chat provides natural language task management and intelligent recommendations.
 
 ## User Preferences
 
@@ -46,22 +46,6 @@ Prevents backlog stagnation through multiple mechanics:
 - Recommends promotions based on priority/age
 - Surfaces tasks that may need to be deleted/archived
 
-## ClickUp Sync
-
-The system automatically syncs completed tasks from ClickUp every 15 minutes to ensure metrics stay accurate even when tasks are completed directly in ClickUp (not through Work OS chat).
-
-**How it works:**
-- Background sync runs every 15 minutes
-- Fetches tasks completed today from ClickUp
-- Compares against what's already logged in Work OS
-- Adds any missing completions to the daily log
-- Updates client memory and metrics accordingly
-
-**Manual sync:**
-- Use `sync_clickup_completions` tool in chat
-- Or call POST `/api/sync` endpoint
-- Check sync status via GET `/api/sync/status`
-
 ## System Architecture
 
 ### Frontend Architecture
@@ -96,27 +80,40 @@ The system automatically syncs completed tasks from ClickUp every 15 minutes to 
 - PostgreSQL (Neon serverless) for persistent state
 - Drizzle ORM for database operations
 - OpenAI GPT-4o with function calling
-- Direct ClickUp API integration
 
 **API Endpoints:**
 - POST `/api/chat`: Process chat with AI + tools
 - POST `/api/sessions`: Create new session
 - GET `/api/sessions/:id/messages`: Get conversation history
-- GET `/api/health`: Check ClickUp configuration
+- GET `/api/health`: Check system status
 - GET `/api/metrics/today`: Today's pacing metrics (moves, time, target)
 - GET `/api/metrics/weekly`: Weekly trends (last 7 days)
 - GET `/api/metrics/clients`: Per-client activity metrics
 
+**Moves API:**
+- GET `/api/moves`: List moves (filter by status, client)
+- POST `/api/moves`: Create move
+- PATCH `/api/moves/:id`: Update move
+- POST `/api/moves/:id/complete`: Mark as done
+- POST `/api/moves/:id/promote`: Move up pipeline (backlog→queued→active)
+- POST `/api/moves/:id/demote`: Move down pipeline
+- DELETE `/api/moves/:id`: Delete move
+
+**Clients API:**
+- GET `/api/clients`: List all clients
+- POST `/api/clients`: Create client
+- PATCH `/api/clients/:id`: Update client
+- DELETE `/api/clients/:id`: Archive client
+
 ### Database Schema
 
-**Core Tables (Custom Task Management):**
-- `clients`: Client entities (id, name, type: client|internal, color, isArchived)
+**Core Tables:**
+- `clients`: Client entities (id, name, type: client|internal, color, isActive)
 - `moves`: Tasks/moves (id, clientId, title, description, status: active|queued|backlog|done, effortEstimate: 1-4, effortActual, drainType: mental|emotional|physical|easy, createdAt, completedAt)
 
 **Session & Memory Tables:**
 - `sessions`: Chat session tracking
 - `messages`: Conversation history with task cards
-- `client_memory`: Legacy ClickUp client tracking (being phased out)
 - `daily_log`: Completed moves, clients touched/skipped per day, backlog moves count
 
 **Learning System Tables:**
@@ -127,35 +124,24 @@ The system automatically syncs completed tasks from ClickUp every 15 minutes to 
 
 ### AI Tools
 
-**ClickUp Tools:**
-- get_hierarchy: Full workspace structure (spaces/folders/lists)
-- get_spaces, get_folders, get_lists, get_folderless_lists
-- get_tasks, get_all_tasks, search_tasks
-- create_task: Create new task (auto-tags with client name for dashboard compatibility)
-- update_task, delete_task, get_task
-- batch_tag_list: Tag all tasks in a list with client name for ClickUp dashboard filtering
-- add_tag_to_task: Add a tag to an existing task
-
-**Memory Tools:**
-- get_client_memory: Get client state
-- get_all_clients: List all tracked clients
-- update_client_move: Record completed move
-- get_stale_clients: Find inactive clients (2+ days)
-- set_client_tier: Set client to active/paused/archived
-- add_client_note: Add notes to client memory
-- get_today_summary: Get daily activity summary
-- log_daily_reset: End of day logging
-
 **Pipeline Tools:**
 - run_pipeline_audit: Check all clients have active/queued/backlog
 - get_client_pipeline: Get specific client's pipeline status
 - get_all_client_pipelines: Get pipelines for ALL clients at once
 - check_task_actionable: AI evaluates if task is actionable
-- promote_task: Move task from backlog→queued or queued→active (updates tier field)
-- demote_task: Move task backwards (active→queued or queued→backlog)
-- set_task_tier: Set any tier value on a task
-- complete_task: Mark a task as complete (auto-promotes next task to fill pipeline gaps with full cascade)
-- quick_complete: Complete any task without tier requirements or cascade (for ad-hoc work)
+- create_move: Create new move with client, status, effort, drain
+- promote_move: Move task up in pipeline (backlog→queued→active)
+- demote_move: Move task down in pipeline (active→queued→backlog)
+- complete_move: Mark a task as complete
+
+**Memory Tools:**
+- get_client_memory: Get client state
+- get_all_clients: List all tracked clients
+- get_stale_clients: Find inactive clients (2+ days)
+- add_client_note: Add notes to client
+- get_today_summary: Get daily activity summary
+- log_daily_reset: End of day logging
+- archive_client: Archive a client
 
 **Daily Planning Tools:**
 - suggest_next_move: AI-powered task recommendation based on user context
@@ -180,18 +166,12 @@ The system automatically syncs completed tasks from ClickUp every 15 minutes to 
 - should_pull_from_backlog: Check if "one from the back" rule is triggered (5 moves without backlog)
 - run_backlog_triage: Comprehensive backlog review with promotion recommendations
 
-**Tier Custom Field (ClickUp):**
-- Tasks are categorized by the "⛰️ Tier" dropdown field (not statuses)
-- Tier values: active, next, backlog (dropdown options)
-- Field name matching supports emoji prefixes
-- Value reading handles both option IDs and orderindex
-
 ### System Prompt Behavior
 
 The AI operates in YOLO mode:
 1. **Execute immediately** — No confirmations, just action
-2. **Interpret intent** — Natural language to ClickUp operations
-3. **Track clients** — Auto-update memory when creating/completing tasks
+2. **Interpret intent** — Natural language to move operations
+3. **Track clients** — Auto-update memory when creating/completing moves
 4. **Surface stale clients** — Proactively mention 2+ day inactive clients
 5. **Check pipelines** — Ensure every client has active/queued/backlog
 6. **Flag non-actionable** — Identify vague tasks that need rewriting
@@ -199,8 +179,6 @@ The AI operates in YOLO mode:
 
 ## Environment Variables
 
-- `CLICKUP_API_KEY`: ClickUp API authentication
-- `CLICKUP_TEAM_ID`: Target ClickUp workspace
 - `OPENAI_API_KEY`: OpenAI API authentication
 - `DATABASE_URL`: PostgreSQL connection string
 
@@ -213,8 +191,6 @@ The AI operates in YOLO mode:
 - "Run daily check" (pipeline audit)
 - "Show me Raleigh's pipeline"
 - "Push the Memphis invoice through"
-- "Show me all my tasks"
-- "Show me the full ClickUp structure"
 
 **Daily Planning:**
 - "I have 45 minutes and low energy, what should I work on?"

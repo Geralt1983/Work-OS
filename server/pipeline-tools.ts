@@ -1,51 +1,28 @@
 import OpenAI from "openai";
-import { clickupApi } from "./clickup-api";
 import { storage } from "./storage";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Tier custom field values - these match the dropdown options in ClickUp
-export const TIER_VALUES = {
-  active: ["active", "today", "current"],
-  queued: ["next", "queued", "upcoming"],
-  backlog: ["backlog", "later", "someday"],
-  done: ["done", "complete", "completed"],
-} as const;
-
-// Default tier values to set when promoting/demoting tasks
-export const DEFAULT_TIER = {
-  active: "active",
-  queued: "next",
-  backlog: "backlog",
-} as const;
-
-// Cache for tier field info per list (avoids repeated API calls)
-interface TierFieldCache {
-  fieldId: string;
-  options: Map<string, string>; // tier name -> option ID
-}
-const tierFieldCache: Map<string, TierFieldCache | null> = new Map();
-
-interface TaskWithContext {
-  id: string;
-  name: string;
-  description?: string;
+interface MoveWithContext {
+  id: number;
+  title: string;
+  description?: string | null;
   status: string;
-  listName: string;
-  listId: string;
-  dueDate?: string;
-  priority?: string;
+  clientName: string;
+  clientId: number | null;
+  effortEstimate: number | null;
+  drainType?: string | null;
+  createdAt: Date;
 }
 
 interface ClientPipeline {
   clientName: string;
-  listId: string;
-  active: TaskWithContext[];
-  queued: TaskWithContext[];
-  backlog: TaskWithContext[];
-  done: TaskWithContext[];
+  clientId: number;
+  active: MoveWithContext[];
+  queued: MoveWithContext[];
+  backlog: MoveWithContext[];
   issues: string[];
 }
 
@@ -58,26 +35,26 @@ interface PipelineAuditResult {
     healthyClients: number;
     clientsNeedingAttention: ClientPipeline[];
   };
-  nonActionableTasks: { task: TaskWithContext; reason: string }[];
+  nonActionableMoves: { move: MoveWithContext; reason: string }[];
 }
 
 export const pipelineTools = [
   {
     name: "run_pipeline_audit",
-    description: "Run daily pipeline audit. Checks every client has: 1 active task (Today), 1 queued task (Next), and backlog items. Also checks tasks are actionable.",
+    description: "Run daily pipeline audit. Checks every client has: 1 active move (Today), 1 queued move (Next), and backlog items. Also checks moves are actionable.",
     parameters: { 
       type: "object", 
       properties: {
         check_actionability: { 
           type: "boolean", 
-          description: "Whether to use AI to check if tasks are actionable (default true)" 
+          description: "Whether to use AI to check if moves are actionable (default true)" 
         }
       }
     },
   },
   {
     name: "get_client_pipeline",
-    description: "Get the current pipeline status for a specific client (active/queued/backlog tasks)",
+    description: "Get the current pipeline status for a specific client (active/queued/backlog moves)",
     parameters: {
       type: "object",
       properties: {
@@ -88,78 +65,70 @@ export const pipelineTools = [
   },
   {
     name: "check_task_actionable",
-    description: "Check if a specific task is actionable (has clear, concrete next step)",
+    description: "Check if a specific move is actionable (has clear, concrete next step)",
     parameters: {
       type: "object",
       properties: {
-        task_name: { type: "string", description: "The task name" },
-        task_description: { type: "string", description: "The task description" },
+        task_name: { type: "string", description: "The move title" },
+        task_description: { type: "string", description: "The move description" },
       },
       required: ["task_name"],
     },
   },
   {
-    name: "promote_task",
-    description: "Move a task from backlog to queued (Next) or from queued to active (Today)",
+    name: "promote_move",
+    description: "Move a move from backlog to queued (Next) or from queued to active (Today)",
     parameters: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "The task ID" },
-        target: { type: "string", enum: ["today", "next"], description: "Where to move the task" },
+        move_id: { type: "number", description: "The move ID" },
+        target: { type: "string", enum: ["active", "queued"], description: "Where to move it" },
       },
-      required: ["task_id", "target"],
+      required: ["move_id", "target"],
     },
   },
   {
-    name: "set_task_tier",
-    description: "Set a task's tier custom field to any value. Use this to move tasks through pipeline stages.",
+    name: "demote_move",
+    description: "Move a move backwards in the pipeline (active to queued, or queued to backlog)",
     parameters: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "The task ID" },
-        tier: { type: "string", description: "The new tier (e.g., 'active', 'next', 'backlog')" },
+        move_id: { type: "number", description: "The move ID" },
+        target: { type: "string", enum: ["queued", "backlog"], description: "Where to move it" },
       },
-      required: ["task_id", "tier"],
+      required: ["move_id", "target"],
     },
   },
   {
-    name: "demote_task",
-    description: "Move a task backwards in the pipeline (active to queued, or queued to backlog)",
+    name: "complete_move",
+    description: "Mark a move as complete/done. Auto-promotes next moves to fill pipeline gaps.",
     parameters: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "The task ID" },
-        target: { type: "string", enum: ["next", "backlog"], description: "Where to move the task" },
+        move_id: { type: "number", description: "The move ID" },
       },
-      required: ["task_id", "target"],
+      required: ["move_id"],
     },
   },
   {
-    name: "complete_task",
-    description: "Mark a task as complete/done. Auto-promotes next tasks to fill pipeline gaps.",
+    name: "create_move",
+    description: "Create a new move for a client. Moves are 20-minute tasks that advance client work.",
     parameters: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "The task ID" },
+        title: { type: "string", description: "Move title - should be actionable and specific" },
+        client_name: { type: "string", description: "Client name (optional - can be internal work)" },
+        description: { type: "string", description: "Optional description with more details" },
+        status: { type: "string", enum: ["active", "queued", "backlog"], description: "Initial status (default: backlog)" },
+        effort_estimate: { type: "number", enum: [1, 2, 3, 4], description: "Effort level: 1=quick, 2=standard 20min, 3=chunky, 4=draining" },
+        drain_type: { type: "string", enum: ["mental", "emotional", "physical", "easy"], description: "Type of energy this move drains" },
       },
-      required: ["task_id"],
-    },
-  },
-  {
-    name: "quick_complete",
-    description: "Quick-complete any task without tier requirements or pipeline cascading. Use for ad-hoc work that doesn't fit the normal tier workflow. Still logs the move and updates client memory.",
-    parameters: {
-      type: "object",
-      properties: {
-        task_id: { type: "string", description: "The task ID" },
-        note: { type: "string", description: "Optional note about what was done" },
-      },
-      required: ["task_id"],
+      required: ["title"],
     },
   },
   {
     name: "get_all_client_pipelines",
-    description: "Get pipeline status for ALL clients at once. Returns active/queued/backlog tasks for every client. Useful for daily planning and seeing all available work.",
+    description: "Get pipeline status for ALL clients at once. Returns active/queued/backlog moves for every client. Useful for daily planning and seeing all available work.",
     parameters: {
       type: "object",
       properties: {},
@@ -167,7 +136,7 @@ export const pipelineTools = [
   },
   {
     name: "suggest_next_move",
-    description: "Suggest the best task to work on based on user's current context. Takes into account time available, energy level, client priorities, and recent activity.",
+    description: "Suggest the best move to work on based on user's current context. Takes into account time available, energy level, client priorities, and recent activity.",
     parameters: {
       type: "object",
       properties: {
@@ -182,7 +151,7 @@ export const pipelineTools = [
         },
         context: { 
           type: "string", 
-          description: "Any additional context from the user (e.g., 'just finished a call with Raleigh', 'need a quick win', 'want to tackle something meaty')" 
+          description: "Any additional context from the user (e.g., 'just finished a call with Raleigh', 'need a quick win')" 
         },
         prefer_client: {
           type: "string",
@@ -193,115 +162,77 @@ export const pipelineTools = [
   },
 ];
 
-async function getClientLists(): Promise<{ clientName: string; listId: string }[]> {
-  const hierarchy = await clickupApi.getFullHierarchy();
-  const clientLists: { clientName: string; listId: string }[] = [];
+async function getClientsWithPipelines(): Promise<ClientPipeline[]> {
+  const clients = await storage.getAllClientsEntity();
+  const pipelines: ClientPipeline[] = [];
   
-  for (const space of hierarchy.spaces) {
-    for (const folder of space.folders) {
-      if (folder.name.toLowerCase() === "clients") {
-        for (const list of folder.lists) {
-          clientLists.push({
-            clientName: list.name,
-            listId: list.id,
-          });
-        }
+  for (const client of clients) {
+    if (client.isActive === 0) continue;
+    
+    const moves = await storage.getMovesByClient(client.id);
+    
+    const pipeline: ClientPipeline = {
+      clientName: client.name,
+      clientId: client.id,
+      active: [],
+      queued: [],
+      backlog: [],
+      issues: [],
+    };
+    
+    for (const move of moves) {
+      const moveWithContext: MoveWithContext = {
+        id: move.id,
+        title: move.title,
+        description: move.description,
+        status: move.status,
+        clientName: client.name,
+        clientId: move.clientId,
+        effortEstimate: move.effortEstimate,
+        drainType: move.drainType,
+        createdAt: move.createdAt,
+      };
+      
+      if (move.status === "active") {
+        pipeline.active.push(moveWithContext);
+      } else if (move.status === "queued") {
+        pipeline.queued.push(moveWithContext);
+      } else if (move.status === "backlog") {
+        pipeline.backlog.push(moveWithContext);
       }
     }
+    
+    if (pipeline.active.length === 0) {
+      pipeline.issues.push("No active move (Today)");
+    }
+    if (pipeline.queued.length === 0) {
+      pipeline.issues.push("No queued move (Next)");
+    }
+    if (pipeline.backlog.length === 0) {
+      pipeline.issues.push("Empty backlog");
+    }
+    
+    pipelines.push(pipeline);
   }
   
-  return clientLists;
+  return pipelines;
 }
 
-function categorizeTaskByTier(task: any): "active" | "queued" | "backlog" | "done" {
-  // Get tier value from custom field
-  const tierValue = clickupApi.getTierValueFromTask(task);
-  
-  if (tierValue) {
-    if (TIER_VALUES.active.some(v => tierValue.includes(v))) {
-      return "active";
-    }
-    if (TIER_VALUES.queued.some(v => tierValue.includes(v))) {
-      return "queued";
-    }
-    if (TIER_VALUES.done.some(v => tierValue.includes(v))) {
-      return "done";
-    }
-    if (TIER_VALUES.backlog.some(v => tierValue.includes(v))) {
-      return "backlog";
-    }
-  }
-  
-  // If no tier set, default to backlog
-  return "backlog";
-}
-
-async function getTierFieldInfo(listId: string): Promise<TierFieldCache | null> {
-  if (tierFieldCache.has(listId)) {
-    return tierFieldCache.get(listId) || null;
-  }
-  
-  const fieldInfo = await clickupApi.getTierFieldWithOptions(listId);
-  tierFieldCache.set(listId, fieldInfo);
-  return fieldInfo;
-}
-
-async function setTaskTier(taskId: string, listId: string, tier: string, taskName?: string, clientName?: string): Promise<void> {
-  const fieldInfo = await getTierFieldInfo(listId);
-  if (!fieldInfo) {
-    throw new Error(`No "tier" custom field found for list ${listId}. Please add a dropdown custom field named "tier" with options: active, next, backlog`);
-  }
-  
-  // For dropdown fields, we need to send the option ID, not the tier name
-  const tierLower = tier.toLowerCase();
-  const optionId = fieldInfo.options.get(tierLower);
-  
-  if (optionId) {
-    // Dropdown field - send option ID
-    await clickupApi.setCustomFieldValue(taskId, fieldInfo.fieldId, optionId);
-  } else if (fieldInfo.options.size === 0) {
-    // Text field - send tier name directly
-    await clickupApi.setCustomFieldValue(taskId, fieldInfo.fieldId, tier);
-  } else {
-    // Dropdown field but tier option not found
-    const availableOptions = Array.from(fieldInfo.options.keys()).join(", ");
-    throw new Error(`Tier "${tier}" not found in dropdown options. Available: ${availableOptions}`);
-  }
-  
-  // Track backlog entries for resurfacing
-  const isBacklog = TIER_VALUES.backlog.some(v => tierLower.includes(v));
-  const isActive = TIER_VALUES.active.some(v => tierLower.includes(v));
-  const isQueued = TIER_VALUES.queued.some(v => tierLower.includes(v));
-  
-  if (isBacklog && taskName && clientName) {
-    // Task entering backlog - record for age tracking
-    await storage.recordBacklogEntry({
-      taskId,
-      taskName,
-      clientName: clientName.toLowerCase(),
-      enteredAt: new Date(),
-    });
-  } else if ((isActive || isQueued) && !isBacklog) {
-    // Task leaving backlog - mark as promoted
-    await storage.markBacklogPromoted(taskId, false);
-  }
-}
-
-async function checkActionability(taskName: string, taskDescription?: string): Promise<{ actionable: boolean; reason: string }> {
+async function checkActionability(moveName: string, moveDescription?: string): Promise<{ actionable: boolean; reason: string }> {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are evaluating if a task is "actionable" - meaning it has a clear, concrete next step that can be done in 20 minutes or less.
+          content: `You are evaluating if a move is "actionable" - meaning it has a clear, concrete next step that can be done in 20 minutes or less.
 
-ACTIONABLE tasks:
+ACTIONABLE moves:
 - "Send Q4 invoice PDF to Memphis" ✓
 - "Review and comment on Raleigh's proposal doc" ✓  
 - "Schedule 15-min call with Orlando about timeline" ✓
 
-NON-ACTIONABLE tasks:
+NON-ACTIONABLE moves:
 - "Follow up" ✗ (vague - follow up how? about what?)
 - "Check on project" ✗ (no clear action)
 - "Memphis stuff" ✗ (too vague)
@@ -311,7 +242,7 @@ Respond with JSON: { "actionable": true/false, "reason": "brief explanation" }`
         },
         {
           role: "user",
-          content: `Task: "${taskName}"${taskDescription ? `\nDescription: "${taskDescription}"` : ""}`
+          content: `Move: "${moveName}"${moveDescription ? `\nDescription: "${moveDescription}"` : ""}`
         }
       ],
       response_format: { type: "json_object" },
@@ -329,124 +260,80 @@ Respond with JSON: { "actionable": true/false, "reason": "brief explanation" }`
 }
 
 async function runPipelineAudit(shouldCheckActionability: boolean = true): Promise<PipelineAuditResult> {
-  const clientLists = await getClientLists();
-  const clients: ClientPipeline[] = [];
-  const nonActionableTasks: { task: TaskWithContext; reason: string }[] = [];
+  const pipelines = await getClientsWithPipelines();
+  const nonActionableMoves: { move: MoveWithContext; reason: string }[] = [];
   
-  for (const { clientName, listId } of clientLists) {
-    try {
-      const tasks = await clickupApi.getTasks(listId);
-      
-      const pipeline: ClientPipeline = {
-        clientName,
-        listId,
-        active: [],
-        queued: [],
-        backlog: [],
-        done: [],
-        issues: [],
-      };
-      
-      for (const task of tasks) {
-        const category = categorizeTaskByTier(task);
-        const taskWithContext: TaskWithContext = {
-          id: task.id,
-          name: task.name,
-          description: task.description,
-          status: task.status?.status || "Unknown",
-          listName: clientName,
-          listId,
-          dueDate: task.due_date ? new Date(parseInt(task.due_date)).toLocaleDateString() : undefined,
-          priority: task.priority?.priority,
-        };
-        
-        pipeline[category].push(taskWithContext);
-        
-        if (shouldCheckActionability && (category === "active" || category === "queued")) {
-          const actionCheck = await checkActionability(task.name, task.description);
-          if (!actionCheck.actionable) {
-            nonActionableTasks.push({ task: taskWithContext, reason: actionCheck.reason });
-          }
+  if (shouldCheckActionability) {
+    for (const pipeline of pipelines) {
+      for (const move of [...pipeline.active, ...pipeline.queued]) {
+        const actionCheck = await checkActionability(move.title, move.description || undefined);
+        if (!actionCheck.actionable) {
+          nonActionableMoves.push({ move, reason: actionCheck.reason });
         }
       }
-      
-      if (pipeline.active.length === 0) {
-        pipeline.issues.push("No active task (Today)");
-      }
-      if (pipeline.queued.length === 0) {
-        pipeline.issues.push("No queued task (Next)");
-      }
-      if (pipeline.backlog.length === 0) {
-        pipeline.issues.push("Empty backlog");
-      }
-      
-      clients.push(pipeline);
-      
-      const existingClient = await storage.getClientMemory(clientName);
-      if (!existingClient) {
-        await storage.upsertClientMemory({
-          clientName,
-          tier: "active",
-        });
-      }
-    } catch (error) {
-      console.error(`Error auditing client ${clientName}:`, error);
     }
   }
   
-  const clientsNeedingAttention = clients.filter(c => c.issues.length > 0);
+  const clientsNeedingAttention = pipelines.filter(c => c.issues.length > 0);
   
   return {
     audited: true,
     date: new Date().toISOString().split('T')[0],
-    clients,
+    clients: pipelines,
     summary: {
-      totalClients: clients.length,
-      healthyClients: clients.length - clientsNeedingAttention.length,
+      totalClients: pipelines.length,
+      healthyClients: pipelines.length - clientsNeedingAttention.length,
       clientsNeedingAttention,
     },
-    nonActionableTasks,
+    nonActionableMoves,
   };
 }
 
 async function getClientPipeline(clientName: string): Promise<ClientPipeline | null> {
-  const clientLists = await getClientLists();
-  const client = clientLists.find(c => 
-    c.clientName.toLowerCase() === clientName.toLowerCase()
+  const clients = await storage.getAllClientsEntity();
+  const client = clients.find((c: { name: string }) => 
+    c.name.toLowerCase() === clientName.toLowerCase()
   );
   
   if (!client) {
     return null;
   }
   
-  const tasks = await clickupApi.getTasks(client.listId);
+  const moves = await storage.getMovesByClient(client.id);
   
   const pipeline: ClientPipeline = {
-    clientName: client.clientName,
-    listId: client.listId,
+    clientName: client.name,
+    clientId: client.id,
     active: [],
     queued: [],
     backlog: [],
-    done: [],
     issues: [],
   };
   
-  for (const task of tasks) {
-    const category = categorizeTaskByTier(task);
-    pipeline[category].push({
-      id: task.id,
-      name: task.name,
-      description: task.description,
-      status: task.status?.status || "Unknown",
-      listName: client.clientName,
-      listId: client.listId,
-      dueDate: task.due_date ? new Date(parseInt(task.due_date)).toLocaleDateString() : undefined,
-      priority: task.priority?.priority,
-    });
+  for (const move of moves) {
+    const moveWithContext: MoveWithContext = {
+      id: move.id,
+      title: move.title,
+      description: move.description,
+      status: move.status,
+      clientName: client.name,
+      clientId: move.clientId,
+      effortEstimate: move.effortEstimate,
+      drainType: move.drainType,
+      createdAt: move.createdAt,
+    };
+    
+    if (move.status === "active") {
+      pipeline.active.push(moveWithContext);
+    } else if (move.status === "queued") {
+      pipeline.queued.push(moveWithContext);
+    } else if (move.status === "backlog") {
+      pipeline.backlog.push(moveWithContext);
+    }
   }
   
-  if (pipeline.active.length === 0) pipeline.issues.push("No active task");
-  if (pipeline.queued.length === 0) pipeline.issues.push("No queued task");
+  if (pipeline.active.length === 0) pipeline.issues.push("No active move");
+  if (pipeline.queued.length === 0) pipeline.issues.push("No queued move");
   if (pipeline.backlog.length === 0) pipeline.issues.push("Empty backlog");
   
   return pipeline;
@@ -458,36 +345,26 @@ async function getAllClientPipelines(): Promise<{
     totalActive: number;
     totalQueued: number;
     totalBacklog: number;
-    staleClients: string[];
   };
 }> {
-  const clientLists = await getClientLists();
-  const clients: ClientPipeline[] = [];
+  const pipelines = await getClientsWithPipelines();
   
   let totalActive = 0;
   let totalQueued = 0;
   let totalBacklog = 0;
   
-  for (const client of clientLists) {
-    const pipeline = await getClientPipeline(client.clientName);
-    if (pipeline) {
-      clients.push(pipeline);
-      totalActive += pipeline.active.length;
-      totalQueued += pipeline.queued.length;
-      totalBacklog += pipeline.backlog.length;
-    }
+  for (const pipeline of pipelines) {
+    totalActive += pipeline.active.length;
+    totalQueued += pipeline.queued.length;
+    totalBacklog += pipeline.backlog.length;
   }
   
-  // Get stale clients from memory
-  const staleClients = await storage.getStaleClients(2);
-  
   return {
-    clients,
+    clients: pipelines,
     summary: {
       totalActive,
       totalQueued,
       totalBacklog,
-      staleClients: staleClients.map(c => c.clientName),
     },
   };
 }
@@ -501,149 +378,44 @@ interface SuggestMoveArgs {
 
 async function suggestNextMove(args: SuggestMoveArgs): Promise<{
   recommendation: string;
-  suggestedTask: TaskWithContext | null;
+  suggestedMove: MoveWithContext | null;
   reasoning: string;
-  alternativeTasks: TaskWithContext[];
-  backlogAlert?: { shouldPull: boolean; reason: string; agingCount: number };
+  alternativeMoves: MoveWithContext[];
 }> {
-  // Get all client pipelines
   const { clients, summary } = await getAllClientPipelines();
   
-  // Check backlog health and "one from the back" rule
-  const backlogMoveStats = await storage.getBacklogMoveStats(7);
-  const agingBacklog = await storage.getAgingBacklogTasks(7);
-  
-  // More sophisticated "one from the back" check:
-  // - Triggers if 5+ non-backlog moves with 0 backlog moves
-  // - OR if ratio of backlog moves is less than 10% with at least 5 total moves
-  const totalMoves = backlogMoveStats.backlogMoves + backlogMoveStats.nonBacklogMoves;
-  const backlogRatio = totalMoves > 0 ? backlogMoveStats.backlogMoves / totalMoves : 1;
-  const shouldPullFromBacklog = 
-    (backlogMoveStats.nonBacklogMoves >= 5 && backlogMoveStats.backlogMoves === 0) ||
-    (backlogRatio < 0.1 && totalMoves >= 5);
-  
-  // Collect all available tasks (active first, then queued, then backlog for surfacing)
-  const availableTasks: (TaskWithContext & { tier: string; fromBacklog?: boolean })[] = [];
+  const availableMoves: (MoveWithContext & { tier: string })[] = [];
   
   for (const client of clients) {
-    for (const task of client.active) {
-      availableTasks.push({ ...task, tier: "active" });
+    for (const move of client.active) {
+      availableMoves.push({ ...move, tier: "active" });
     }
-    for (const task of client.queued) {
-      availableTasks.push({ ...task, tier: "queued" });
+    for (const move of client.queued) {
+      availableMoves.push({ ...move, tier: "queued" });
     }
-    // Include backlog tasks if we should pull from backlog or have aging tasks
-    if (shouldPullFromBacklog || agingBacklog.length > 0) {
-      for (const task of client.backlog.slice(0, 2)) { // Limit to 2 per client
-        availableTasks.push({ ...task, tier: "backlog", fromBacklog: true });
-      }
+    for (const move of client.backlog.slice(0, 2)) {
+      availableMoves.push({ ...move, tier: "backlog" });
     }
   }
   
-  // Guard against empty task lists - return structured response instead of hallucinating
-  if (availableTasks.length === 0) {
-    const staleInfo = summary.staleClients.length > 0
-      ? `You have stale clients (${summary.staleClients.join(", ")}) that need attention.`
-      : "";
-    
+  if (availableMoves.length === 0) {
     return {
-      recommendation: "No active or queued tasks found. Consider checking your backlog or creating new tasks.",
-      suggestedTask: null,
-      reasoning: `No tasks are currently in the Active or Queued tiers across your clients. ${staleInfo} You may need to promote tasks from your backlog or create new moves.`,
-      alternativeTasks: [],
+      recommendation: "No active or queued moves found. Consider creating new moves or promoting from backlog.",
+      suggestedMove: null,
+      reasoning: "No moves are currently in the Active or Queued status. Create new moves to get started.",
+      alternativeMoves: [],
     };
   }
   
-  // Get recent client activity from memory (includes learned patterns)
-  const allClients = await storage.getAllClients();
-  const clientActivity = allClients.reduce((acc: Record<string, { lastMove: Date | null; staleDays: number; sentiment: string | null; importance: string | null; avoidanceScore: number }>, c) => {
-    acc[c.clientName] = {
-      lastMove: c.lastMoveAt,
-      staleDays: c.staleDays || 0,
-      sentiment: c.sentiment,
-      importance: c.importance,
-      avoidanceScore: c.avoidanceScore || 0,
-    };
-    return acc;
-  }, {} as Record<string, { lastMove: Date | null; staleDays: number; sentiment: string | null; importance: string | null; avoidanceScore: number }>);
-  
-  // Get avoided tasks from learning memory
-  const avoidedTasks = await storage.getAvoidedTasks(14);
-  const avoidedTaskIds = new Set(avoidedTasks.map(t => t.taskId));
-  
-  // Get productivity insights
-  const productivityStats = await storage.getProductivityByHour();
-  const currentHour = new Date().getHours();
-  const currentHourStats = productivityStats.find(p => p.hour === currentHour);
-  const isProductiveHour = currentHourStats && currentHourStats.completions > currentHourStats.deferrals;
-  
-  // Get learned patterns
-  const patterns = await storage.getPatterns();
-  const patternSummary = patterns.length > 0 
-    ? patterns.slice(0, 5).map(p => `${p.patternKey}: confidence ${p.confidence}`).join(", ")
-    : "No patterns learned yet";
-  
-  // Build context for AI
-  const taskList = availableTasks.map((t, i) => {
-    const clientInfo = clientActivity[t.listName.toLowerCase()];
-    const isAvoided = avoidedTaskIds.has(t.id);
-    const flags: string[] = [];
-    
-    if (isAvoided) flags.push("AVOIDED");
-    if (clientInfo?.importance === "high") flags.push("HIGH-PRIORITY-CLIENT");
-    if (clientInfo?.sentiment === "negative") flags.push("DIFFICULT-CLIENT");
-    if (clientInfo?.avoidanceScore && clientInfo.avoidanceScore > 2) flags.push("CLIENT-OFTEN-DEFERRED");
-    
-    // Add backlog flags
-    if (t.tier === "backlog") {
-      flags.push("BACKLOG");
-      // Check if this task is aging
-      const agingEntry = agingBacklog.find(e => e.taskId === t.id);
-      if (agingEntry && agingEntry.daysInBacklog) {
-        flags.push(`AGING-${agingEntry.daysInBacklog}-DAYS`);
-      }
-    }
-    
-    const flagStr = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
-    return `${i + 1}. [${t.tier.toUpperCase()}] ${t.listName}: "${t.name}"${t.priority ? ` (${t.priority})` : ""}${t.dueDate ? ` - due ${t.dueDate}` : ""}${flagStr}`;
+  const moveList = availableMoves.map((m, i) => {
+    const effortLabel = m.effortEstimate === 1 ? "quick" : m.effortEstimate === 2 ? "standard" : m.effortEstimate === 3 ? "chunky" : "draining";
+    const drainLabel = m.drainType ? ` [${m.drainType}]` : "";
+    return `${i + 1}. [${m.tier.toUpperCase()}] ${m.clientName}: "${m.title}" (effort: ${effortLabel}${drainLabel})`;
   }).join("\n");
   
-  const staleInfo = summary.staleClients.length > 0 
-    ? `Stale clients (2+ days without moves): ${summary.staleClients.join(", ")}`
-    : "No stale clients.";
-  
-  // Client insights summary
-  const clientInsights = Object.entries(clientActivity)
-    .filter(([_, info]) => info.importance === "high" || info.sentiment)
-    .map(([name, info]) => {
-      const parts = [];
-      if (info.importance === "high") parts.push("HIGH PRIORITY");
-      if (info.sentiment) parts.push(`sentiment: ${info.sentiment}`);
-      return `${name}: ${parts.join(", ")}`;
-    })
-    .join("\n");
-  
-  const productivityHint = isProductiveHour 
-    ? "This is historically a productive hour for you."
-    : currentHourStats && (currentHourStats.completions + currentHourStats.deferrals > 2)
-      ? "This is historically NOT a productive hour - consider easier tasks."
-      : "";
-  
-  // Backlog surfacing info
-  const backlogInfo = shouldPullFromBacklog
-    ? `\nBACKLOG ALERT: You've done ${backlogMoveStats.nonBacklogMoves} moves without touching backlog. Time to pull "one from the back"!`
-    : agingBacklog.length > 0
-      ? `\nBacklog health: ${agingBacklog.length} tasks aging (7+ days in backlog).`
-      : "";
-  
-  const prompt = `You are helping prioritize work for today. Here are all available tasks:
+  const prompt = `You are helping prioritize work for today. Here are all available moves:
 
-${taskList}
-
-${staleInfo}
-${clientInsights ? `\nClient insights:\n${clientInsights}` : ""}
-${productivityHint ? `\nProductivity note: ${productivityHint}` : ""}
-${backlogInfo}
+${moveList}
 
 User context:
 - Time available: ${args.time_available_minutes ? `${args.time_available_minutes} minutes` : "not specified"}
@@ -651,95 +423,48 @@ User context:
 - Preferred client: ${args.prefer_client || "none"}
 - Additional context: ${args.context || "none"}
 
-Task flags explained:
-- [AVOIDED]: User has deferred this task multiple times - only suggest if explicitly addressing avoidance
-- [HIGH-PRIORITY-CLIENT]: VIP client, prioritize their work
-- [DIFFICULT-CLIENT]: User has negative feelings about this client - be mindful when suggesting
-- [CLIENT-OFTEN-DEFERRED]: Work for this client tends to get postponed
-- [BACKLOG]: Task is in backlog tier - include in recommendations if backlog surfacing is triggered
-- [AGING-X-DAYS]: Task has been in backlog for X days - prioritize if aging
+Based on this context, recommend the BEST move to work on right now.
 
-Core principles:
-- Each task is a "move" (~20 minutes of focused work)
-- One move per client per day is the goal
-- Stale clients should be prioritized to maintain momentum
-- Active tasks are already committed to today
-- Queued tasks are ready to be pulled into active
-- Respect user's learned patterns and preferences
-- During low energy, suggest easier/quicker wins from positive clients
-- Don't stack multiple difficult clients together
-- BACKLOG SURFACING: If backlog alert is triggered, strongly consider suggesting a backlog task to prevent stagnation
-- Aging backlog tasks (7+ days) need attention before they become forgotten
-
-Based on this, recommend the BEST task to work on right now. Consider:
-1. User's available time and energy
-2. Stale clients that need attention
-3. Task priority and due dates
-4. Client sentiment and importance (high priority clients matter more)
-5. Avoided tasks (don't suggest unless user is ready to tackle them)
-6. Any context the user provided
+Rules:
+1. Active moves should generally be prioritized over queued
+2. Match effort level to energy and time available
+3. Consider drain type vs current energy
+4. If client preference is given, prioritize that client's moves
 
 Respond with JSON:
 {
-  "recommendedTaskIndex": <1-based index from the list above, or 0 if no good match>,
-  "reasoning": "<brief explanation of why this task is the best choice, mentioning any patterns considered>",
-  "alternativeIndices": [<up to 2 alternative task indices>]
+  "recommended_index": <1-based index of best move>,
+  "reasoning": "<brief explanation of why this is the best choice>",
+  "alternative_indices": [<1-based indices of 1-2 backup options>]
 }`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a productivity assistant helping prioritize tasks based on context. Respond only with valid JSON." },
-        { role: "user", content: prompt }
-      ],
+      messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
-    
-    const suggestedTask = result.recommendedTaskIndex > 0 && result.recommendedTaskIndex <= availableTasks.length
-      ? availableTasks[result.recommendedTaskIndex - 1]
-      : null;
-    
-    const alternativeTasks = (result.alternativeIndices || [])
-      .filter((i: number) => i > 0 && i <= availableTasks.length)
-      .map((i: number) => availableTasks[i - 1]);
-    
-    const backlogAlert = shouldPullFromBacklog || agingBacklog.length > 0 ? {
-      shouldPull: shouldPullFromBacklog,
-      reason: shouldPullFromBacklog 
-        ? `${backlogMoveStats.nonBacklogMoves} moves without touching backlog - time for "one from the back"!`
-        : `${agingBacklog.length} backlog tasks aging (7+ days)`,
-      agingCount: agingBacklog.length,
-    } : undefined;
-    
+    const suggestedMove = availableMoves[result.recommended_index - 1] || null;
+    const alternativeMoves = (result.alternative_indices || [])
+      .map((i: number) => availableMoves[i - 1])
+      .filter(Boolean);
+
     return {
-      recommendation: suggestedTask 
-        ? `Work on "${suggestedTask.name}" for ${suggestedTask.listName}`
-        : "No suitable task found based on your context",
-      suggestedTask,
-      reasoning: result.reasoning || "No specific reasoning provided",
-      alternativeTasks,
-      backlogAlert,
+      recommendation: suggestedMove ? `Work on: ${suggestedMove.title} (${suggestedMove.clientName})` : "No recommendation available",
+      suggestedMove,
+      reasoning: result.reasoning || "Based on current context",
+      alternativeMoves,
     };
   } catch (error) {
-    console.error("Error suggesting next move:", error);
-    
-    // Fallback: return first active or queued task
-    const fallbackTask = availableTasks[0] || null;
+    console.error("Error suggesting move:", error);
+    const firstMove = availableMoves[0];
     return {
-      recommendation: fallbackTask 
-        ? `Work on "${fallbackTask.name}" for ${fallbackTask.listName}`
-        : "No tasks available",
-      suggestedTask: fallbackTask,
-      reasoning: "AI suggestion unavailable, showing first available task",
-      alternativeTasks: availableTasks.slice(1, 3),
-      backlogAlert: shouldPullFromBacklog || agingBacklog.length > 0 ? {
-        shouldPull: shouldPullFromBacklog,
-        reason: `${agingBacklog.length} aging backlog tasks need attention`,
-        agingCount: agingBacklog.length,
-      } : undefined,
+      recommendation: firstMove ? `Work on: ${firstMove.title}` : "No moves available",
+      suggestedMove: firstMove || null,
+      reasoning: "Default suggestion (AI analysis failed)",
+      alternativeMoves: availableMoves.slice(1, 3),
     };
   }
 }
@@ -747,231 +472,150 @@ Respond with JSON:
 export async function executePipelineTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "run_pipeline_audit": {
-      const checkAction = args.check_actionability !== false;
-      return runPipelineAudit(checkAction);
+      const shouldCheck = args.check_actionability !== false;
+      return runPipelineAudit(shouldCheck);
     }
     
     case "get_client_pipeline": {
-      const pipeline = await getClientPipeline(args.client_name as string);
+      const clientName = args.client_name as string;
+      const pipeline = await getClientPipeline(clientName);
       if (!pipeline) {
-        return { found: false, message: `No client list found for "${args.client_name}"` };
+        return { error: `Client "${clientName}" not found` };
       }
-      return { found: true, ...pipeline };
+      return pipeline;
     }
     
     case "check_task_actionable": {
       return checkActionability(
-        args.task_name as string, 
+        args.task_name as string,
         args.task_description as string | undefined
       );
     }
     
-    case "promote_task": {
-      const target = args.target as "today" | "next";
-      const newTier = target === "today" ? DEFAULT_TIER.active : DEFAULT_TIER.queued;
+    case "promote_move": {
+      const moveId = args.move_id as number;
+      const target = args.target as "active" | "queued";
       
-      // Get task first to find its list ID
-      const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
-      
-      // Track move source (promoted from backlog or from queued)
-      const wasBacklog = args.from_backlog === true;
-      const today = new Date().toISOString().split("T")[0];
-      await storage.incrementBacklogMoveCount(today, wasBacklog);
-      
-      return {
-        success: true,
-        task: task.name,
-        newTier,
-        message: `Moved "${task.name}" to ${target === "today" ? "Today (Active)" : "Next (Queued)"}`,
-      };
-    }
-    
-    case "set_task_tier": {
-      const newTier = args.tier as string;
-      
-      // Get task first to find its list ID
-      const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
-      
-      return {
-        success: true,
-        task: task.name,
-        newTier,
-        message: `Updated "${task.name}" tier to "${newTier}"`,
-      };
-    }
-    
-    case "demote_task": {
-      const target = args.target as "next" | "backlog";
-      const newTier = target === "next" ? DEFAULT_TIER.queued : DEFAULT_TIER.backlog;
-      
-      // Get task first to find its list ID
-      const task = await clickupApi.getTask(args.task_id as string);
-      await setTaskTier(args.task_id as string, task.list.id, newTier, task.name, task.list.name);
-      
-      return {
-        success: true,
-        task: task.name,
-        newTier,
-        message: `Moved "${task.name}" to ${target === "next" ? "Next (Queued)" : "Backlog"}`,
-      };
-    }
-    
-    case "complete_task": {
-      // Get task first to find its list ID, then set tier to done
-      const task = await clickupApi.getTask(args.task_id as string);
-      const completedTier = categorizeTaskByTier(task);
-      const clientName = task.list.name;
-      
-      try {
-        await setTaskTier(args.task_id as string, task.list.id, "done", task.name, clientName);
-      } catch (e) {
-        // If "done" tier doesn't exist, fall back to setting status
-        await clickupApi.updateTask(args.task_id as string, { status: "complete" });
+      const move = await storage.getMove(moveId);
+      if (!move) {
+        return { error: `Move ${moveId} not found` };
       }
       
-      // Mark task as no longer in backlog
-      await storage.markBacklogPromoted(args.task_id as string, false);
+      await storage.updateMove(moveId, { status: target });
+      return { 
+        success: true, 
+        message: `Promoted "${move.title}" to ${target}`,
+        move: { ...move, status: target }
+      };
+    }
+    
+    case "demote_move": {
+      const moveId = args.move_id as number;
+      const target = args.target as "queued" | "backlog";
       
-      // Auto-promote: Fill gaps in the pipeline with full cascade
-      const promotions: { name: string; from: string; to: string }[] = [];
+      const move = await storage.getMove(moveId);
+      if (!move) {
+        return { error: `Move ${moveId} not found` };
+      }
       
-      // Get client's pipeline to find tasks to promote
-      const clientPipeline = await getClientPipeline(clientName);
+      await storage.updateMove(moveId, { status: target });
+      return { 
+        success: true, 
+        message: `Demoted "${move.title}" to ${target}`,
+        move: { ...move, status: target }
+      };
+    }
+    
+    case "complete_move": {
+      const moveId = args.move_id as number;
       
-      if (completedTier === "active" && clientPipeline) {
-        // Completed an active task - full cascade: queued → active, then backlog → queued
-        if (clientPipeline.queued.length > 0) {
-          const queuedTask = clientPipeline.queued[0];
-          try {
-            await setTaskTier(queuedTask.id, task.list.id, DEFAULT_TIER.active, queuedTask.name, clientName);
-            promotions.push({ name: queuedTask.name, from: "queued", to: "active" });
-            
-            // Now fill the queued slot from backlog
-            if (clientPipeline.backlog.length > 0) {
-              const backlogTask = clientPipeline.backlog[0];
-              try {
-                await setTaskTier(backlogTask.id, task.list.id, DEFAULT_TIER.queued, backlogTask.name, clientName);
-                promotions.push({ name: backlogTask.name, from: "backlog", to: "queued" });
-                await storage.markBacklogPromoted(backlogTask.id, false);
-              } catch (promoteError) {
-                console.error("Failed to auto-promote backlog task to queued:", promoteError);
-              }
-            }
-          } catch (promoteError) {
-            console.error("Failed to auto-promote queued task:", promoteError);
-          }
-        } else if (clientPipeline.backlog.length > 0) {
-          // No queued tasks - pull from backlog to both active AND queued if possible
-          const firstBacklogTask = clientPipeline.backlog[0];
-          try {
-            await setTaskTier(firstBacklogTask.id, task.list.id, DEFAULT_TIER.active, firstBacklogTask.name, clientName);
-            promotions.push({ name: firstBacklogTask.name, from: "backlog", to: "active" });
-            await storage.markBacklogPromoted(firstBacklogTask.id, false);
-            
-            // If there's a second backlog task, promote it to queued
-            if (clientPipeline.backlog.length > 1) {
-              const secondBacklogTask = clientPipeline.backlog[1];
-              try {
-                await setTaskTier(secondBacklogTask.id, task.list.id, DEFAULT_TIER.queued, secondBacklogTask.name, clientName);
-                promotions.push({ name: secondBacklogTask.name, from: "backlog", to: "queued" });
-                await storage.markBacklogPromoted(secondBacklogTask.id, false);
-              } catch (promoteError) {
-                console.error("Failed to auto-promote second backlog task to queued:", promoteError);
-              }
-            }
-          } catch (promoteError) {
-            console.error("Failed to auto-promote backlog task:", promoteError);
-          }
-        }
-      } else if (completedTier === "queued" && clientPipeline) {
-        // Completed a queued task - promote backlog → queued
-        if (clientPipeline.backlog.length > 0) {
-          const backlogTask = clientPipeline.backlog[0];
-          try {
-            await setTaskTier(backlogTask.id, task.list.id, DEFAULT_TIER.queued, backlogTask.name, clientName);
-            promotions.push({ name: backlogTask.name, from: "backlog", to: "queued" });
-            await storage.markBacklogPromoted(backlogTask.id, false);
-          } catch (promoteError) {
-            console.error("Failed to auto-promote backlog task:", promoteError);
-          }
+      const move = await storage.getMove(moveId);
+      if (!move) {
+        return { error: `Move ${moveId} not found` };
+      }
+      
+      await storage.completeMove(moveId);
+      
+      let clientName = "Unknown";
+      if (move.clientId) {
+        const client = await storage.getClient(move.clientId);
+        if (client) {
+          clientName = client.name;
         }
       }
       
-      let message = `Marked "${task.name}" as complete`;
-      if (promotions.length > 0) {
-        const promotionMsgs = promotions.map(p => `"${p.name}" (${p.from} → ${p.to})`);
-        message += `. Auto-promoted: ${promotionMsgs.join(", ")}.`;
-      }
+      const today = new Date().toISOString().split('T')[0];
+      let dailyLog = await storage.getDailyLog(today);
       
-      return {
-        success: true,
-        task: task.name,
-        newTier: "done",
-        message,
-        autoPromoted: promotions,
-      };
-    }
-    
-    case "quick_complete": {
-      // Quick complete - no tier requirements, no cascade, just mark done and log
-      const task = await clickupApi.getTask(args.task_id as string);
-      const clientName = task.list?.name || "unknown";
-      const note = args.note as string | undefined;
-      
-      // Mark as complete via status (most lists have a "complete" status)
-      try {
-        await clickupApi.updateTask(args.task_id as string, { status: "complete" });
-      } catch (e) {
-        // If status update fails, try to set tier to done
-        try {
-          await setTaskTier(args.task_id as string, task.list.id, "done", task.name, clientName);
-        } catch (tierError) {
-          console.error("Failed to mark task as done:", tierError);
-        }
-      }
-      
-      // Update client memory with the move
-      await storage.updateClientMove(clientName, task.id, note || task.name);
-      
-      // Log to daily log with proper tracking
-      const today = new Date().toISOString().split("T")[0];
-      const existingLog = await storage.getDailyLog(today);
-      const completedMoves = (existingLog?.completedMoves as string[] || []);
-      completedMoves.push(task.name);
-      
-      // Update clientsTouched
-      const clientsTouched = (existingLog?.clientsTouched as string[] || []);
-      const normalizedClient = clientName.toLowerCase().trim();
-      if (!clientsTouched.includes(normalizedClient)) {
-        clientsTouched.push(normalizedClient);
-      }
-      
-      if (existingLog) {
-        await storage.updateDailyLog(today, { 
-          completedMoves,
-          clientsTouched,
-          nonBacklogMovesCount: (existingLog.nonBacklogMovesCount || 0) + 1
-        });
-      } else {
-        await storage.createDailyLog({
+      if (!dailyLog) {
+        dailyLog = await storage.createDailyLog({
           date: today,
-          completedMoves,
-          clientsTouched,
-          nonBacklogMovesCount: 1
+          completedMoves: [],
+          clientsTouched: [],
+          clientsSkipped: [],
         });
       }
       
-      // Also update via incrementBacklogMoveCount for consistency
-      await storage.incrementBacklogMoveCount(today, false);
+      const completedMoves = (dailyLog.completedMoves as any[]) || [];
+      const clientsTouched = (dailyLog.clientsTouched as string[]) || [];
+      
+      completedMoves.push({
+        clientName,
+        moveId: moveId.toString(),
+        description: move.title,
+        at: new Date().toISOString(),
+      });
+      
+      if (!clientsTouched.includes(clientName)) {
+        clientsTouched.push(clientName);
+      }
+      
+      await storage.updateDailyLog(today, { completedMoves, clientsTouched });
+      
+      return { 
+        success: true, 
+        message: `Completed "${move.title}"`,
+        move: { ...move, status: "done" }
+      };
+    }
+    
+    case "create_move": {
+      const title = args.title as string;
+      const clientName = args.client_name as string | undefined;
+      const description = args.description as string | undefined;
+      const status = (args.status as string) || "backlog";
+      const effortEstimate = (args.effort_estimate as number) || 2;
+      const drainType = args.drain_type as string | undefined;
+      
+      let clientId: number | null = null;
+      
+      if (clientName) {
+        const clients = await storage.getAllClientsEntity();
+        let client = clients.find((c: { name: string }) => c.name.toLowerCase() === clientName.toLowerCase());
+        
+        if (!client) {
+          client = await storage.createClient({
+            name: clientName,
+            type: "client",
+          });
+        }
+        
+        clientId = client.id;
+      }
+      
+      const move = await storage.createMove({
+        title,
+        description: description || null,
+        clientId,
+        status,
+        effortEstimate,
+        drainType: drainType || null,
+      });
       
       return {
         success: true,
-        task: task.name,
-        client: clientName,
-        message: `Quick-completed "${task.name}" for ${clientName}${note ? ` (${note})` : ""}. No pipeline cascade triggered.`,
-        cascaded: false,
+        message: `Created move "${title}"${clientName ? ` for ${clientName}` : ""}`,
+        move,
       };
     }
     
@@ -980,12 +624,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
     }
     
     case "suggest_next_move": {
-      return suggestNextMove({
-        time_available_minutes: args.time_available_minutes as number | undefined,
-        energy_level: args.energy_level as "high" | "medium" | "low" | undefined,
-        context: args.context as string | undefined,
-        prefer_client: args.prefer_client as string | undefined,
-      });
+      return suggestNextMove(args as SuggestMoveArgs);
     }
     
     default:
