@@ -26,6 +26,24 @@ interface ClickUpFolder {
   lists: ClickUpList[];
 }
 
+interface FolderHierarchy {
+  id: string;
+  name: string;
+  lists: ClickUpList[];
+}
+
+interface SpaceHierarchy {
+  id: string;
+  name: string;
+  folders: FolderHierarchy[];
+  folderlessLists: ClickUpList[];
+}
+
+interface WorkspaceHierarchy {
+  teamId: string;
+  spaces: SpaceHierarchy[];
+}
+
 class ClickUpAPI {
   private apiKey: string;
   private teamId: string;
@@ -141,15 +159,83 @@ class ClickUpAPI {
       (task.description && task.description.toLowerCase().includes(lowerQuery))
     );
   }
+
+  async getFullHierarchy(): Promise<WorkspaceHierarchy> {
+    const spaces = await this.getSpaces();
+    const hierarchy: WorkspaceHierarchy = {
+      teamId: this.teamId,
+      spaces: [],
+    };
+
+    for (const space of spaces) {
+      const spaceData: SpaceHierarchy = {
+        id: space.id,
+        name: space.name,
+        folders: [],
+        folderlessLists: [],
+      };
+
+      try {
+        const folders = await this.getFolders(space.id);
+        for (const folder of folders) {
+          const folderData: FolderHierarchy = {
+            id: folder.id,
+            name: folder.name,
+            lists: folder.lists || [],
+          };
+          
+          if (!folder.lists || folder.lists.length === 0) {
+            try {
+              const lists = await this.getLists(folder.id);
+              folderData.lists = lists;
+            } catch (e) {
+              console.error(`Error fetching lists for folder ${folder.id}:`, e);
+            }
+          }
+          
+          spaceData.folders.push(folderData);
+        }
+      } catch (e) {
+        console.error(`Error fetching folders for space ${space.id}:`, e);
+      }
+
+      try {
+        const folderlessLists = await this.getFolderlessLists(space.id);
+        spaceData.folderlessLists = folderlessLists;
+      } catch (e) {
+        console.error(`Error fetching folderless lists for space ${space.id}:`, e);
+      }
+
+      hierarchy.spaces.push(spaceData);
+    }
+
+    return hierarchy;
+  }
 }
 
 export const clickupApi = new ClickUpAPI();
 
 export const clickupTools = [
   {
+    name: "get_hierarchy",
+    description: "Get the complete workspace hierarchy: all spaces, their folders, and all lists. Use this to understand the full structure of ClickUp.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
     name: "get_spaces",
     description: "Get all spaces in the ClickUp workspace",
     parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "get_folders",
+    description: "Get all folders in a space",
+    parameters: {
+      type: "object",
+      properties: {
+        space_id: { type: "string", description: "The space ID" },
+      },
+      required: ["space_id"],
+    },
   },
   {
     name: "get_lists",
@@ -160,6 +246,17 @@ export const clickupTools = [
         folder_id: { type: "string", description: "The folder ID" },
       },
       required: ["folder_id"],
+    },
+  },
+  {
+    name: "get_folderless_lists",
+    description: "Get lists that are directly in a space (not in any folder)",
+    parameters: {
+      type: "object",
+      properties: {
+        space_id: { type: "string", description: "The space ID" },
+      },
+      required: ["space_id"],
     },
   },
   {
@@ -251,6 +348,9 @@ export const clickupTools = [
 
 export async function executeClickUpTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
+    case "get_hierarchy":
+      return clickupApi.getFullHierarchy();
+    
     case "get_spaces":
       return clickupApi.getSpaces();
     
@@ -259,6 +359,9 @@ export async function executeClickUpTool(name: string, args: Record<string, unkn
     
     case "get_lists":
       return clickupApi.getLists(args.folder_id as string);
+    
+    case "get_folderless_lists":
+      return clickupApi.getFolderlessLists(args.space_id as string);
     
     case "get_tasks":
       return clickupApi.getTasks(args.list_id as string);
