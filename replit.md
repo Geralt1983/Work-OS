@@ -24,6 +24,26 @@ The daily audit checks:
 2. Tasks are actionable (clear, concrete next steps)
 3. Stale clients are surfaced (2+ days without moves)
 
+## Backlog Resurfacing
+
+Prevents backlog stagnation through multiple mechanics:
+
+**"One From The Back" Rule**: After 5 moves from active/queued without touching backlog, the system triggers a reminder to pull from backlog.
+
+**Backlog Aging**: Tasks are tracked when they enter backlog:
+- 7+ days in backlog = "aging" (flagged in suggestions)
+- 10+ days = eligible for auto-promotion to Queued
+
+**Backlog Health Scoring**: Per-client metrics include:
+- Oldest task age in backlog
+- Count of aging tasks (7+ days)
+- Average backlog age
+
+**Backlog Triage**: Weekly or on-demand review that:
+- Lists all aging backlog tasks
+- Recommends promotions based on priority/age
+- Surfaces tasks that may need to be deleted/archived
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -63,7 +83,11 @@ The daily audit checks:
 - `sessions`: Chat session tracking
 - `messages`: Conversation history with task cards
 - `client_memory`: Tracks last move, tier, stale days, notes per client
-- `daily_log`: Completed moves, clients touched/skipped per day
+- `daily_log`: Completed moves, clients touched/skipped per day, backlog moves count
+- `task_signals`: Learning signals (deferred, avoided, completed_fast, etc.)
+- `learned_patterns`: Productivity patterns, preferences, avoidance detection
+- `client_insights`: Sentiment and importance per client
+- `backlog_entries`: Tracks when tasks enter/exit backlog tier for aging analysis
 
 ### AI Tools
 
@@ -109,6 +133,13 @@ The daily audit checks:
 - get_productivity_insights: Analyze productivity by time of day
 - get_client_insights: Get sentiment/importance for all clients
 
+**Backlog Resurfacing Tools:**
+- get_backlog_health: Per-client backlog age stats (oldest task age, aging count, avg age)
+- get_aging_backlog: List tasks that have been in backlog 7+ days
+- auto_promote_stale_backlog: Auto-promote tasks 10+ days old to Queued tier
+- should_pull_from_backlog: Check if "one from the back" rule is triggered (5 moves without backlog)
+- run_backlog_triage: Comprehensive backlog review with promotion recommendations
+
 **Tier Custom Field (ClickUp):**
 - Tasks are categorized by the "⛰️ Tier" dropdown field (not statuses)
 - Tier values: active, next, backlog (dropdown options)
@@ -151,3 +182,10 @@ The AI operates in YOLO mode:
 - "Need a quick win before my meeting"
 - "Show me all my options across clients"
 - "What's the best move right now?"
+
+**Backlog Management:**
+- "Check my backlog health"
+- "Show me aging backlog tasks"
+- "Run backlog triage"
+- "Auto-promote stale backlog tasks"
+- "Should I pull from backlog?"

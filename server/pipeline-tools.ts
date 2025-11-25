@@ -500,7 +500,15 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
   // Check backlog health and "one from the back" rule
   const backlogMoveStats = await storage.getBacklogMoveStats(7);
   const agingBacklog = await storage.getAgingBacklogTasks(7);
-  const shouldPullFromBacklog = backlogMoveStats.nonBacklogMoves >= 5 && backlogMoveStats.backlogMoves === 0;
+  
+  // More sophisticated "one from the back" check:
+  // - Triggers if 5+ non-backlog moves with 0 backlog moves
+  // - OR if ratio of backlog moves is less than 10% with at least 5 total moves
+  const totalMoves = backlogMoveStats.backlogMoves + backlogMoveStats.nonBacklogMoves;
+  const backlogRatio = totalMoves > 0 ? backlogMoveStats.backlogMoves / totalMoves : 1;
+  const shouldPullFromBacklog = 
+    (backlogMoveStats.nonBacklogMoves >= 5 && backlogMoveStats.backlogMoves === 0) ||
+    (backlogRatio < 0.1 && totalMoves >= 5);
   
   // Collect all available tasks (active first, then queued, then backlog for surfacing)
   const availableTasks: (TaskWithContext & { tier: string; fromBacklog?: boolean })[] = [];
