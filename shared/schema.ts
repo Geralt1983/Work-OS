@@ -43,6 +43,8 @@ export const dailyLog = pgTable("daily_log", {
   clientsTouched: jsonb("clients_touched").default([]),
   clientsSkipped: jsonb("clients_skipped").default([]),
   summary: text("summary"),
+  backlogMovesCount: integer("backlog_moves_count").default(0), // moves pulled from backlog
+  nonBacklogMovesCount: integer("non_backlog_moves_count").default(0), // moves from active/queued
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -70,6 +72,18 @@ export const taskSignals = pgTable("task_signals", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Backlog resurfacing: tracks when tasks enter backlog to prevent stagnation
+export const backlogEntries = pgTable("backlog_entries", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull(), // ClickUp task ID
+  taskName: text("task_name").notNull(),
+  clientName: text("client_name").notNull(),
+  enteredAt: timestamp("entered_at").defaultNow().notNull(), // when task entered backlog
+  promotedAt: timestamp("promoted_at"), // when task was promoted out of backlog (null if still there)
+  daysInBacklog: integer("days_in_backlog").default(0), // calculated field updated periodically
+  autoPromoted: integer("auto_promoted").default(0), // 1 if auto-promoted due to aging
+});
+
 export const taskCardSchema = z.object({
   title: z.string(),
   taskId: z.string(),
@@ -83,6 +97,7 @@ export const insertClientMemorySchema = createInsertSchema(clientMemory).omit({ 
 export const insertDailyLogSchema = createInsertSchema(dailyLog).omit({ id: true, createdAt: true });
 export const insertUserPatternSchema = createInsertSchema(userPatterns).omit({ id: true, createdAt: true, lastObserved: true });
 export const insertTaskSignalSchema = createInsertSchema(taskSignals).omit({ id: true, createdAt: true });
+export const insertBacklogEntrySchema = createInsertSchema(backlogEntries).omit({ id: true });
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
@@ -96,4 +111,6 @@ export type UserPattern = typeof userPatterns.$inferSelect;
 export type InsertUserPattern = z.infer<typeof insertUserPatternSchema>;
 export type TaskSignal = typeof taskSignals.$inferSelect;
 export type InsertTaskSignal = z.infer<typeof insertTaskSignalSchema>;
+export type BacklogEntry = typeof backlogEntries.$inferSelect;
+export type InsertBacklogEntry = z.infer<typeof insertBacklogEntrySchema>;
 export type TaskCard = z.infer<typeof taskCardSchema>;
