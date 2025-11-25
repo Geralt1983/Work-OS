@@ -5,7 +5,7 @@ import { processChat } from "./openai-service";
 import { z } from "zod";
 
 const sendMessageSchema = z.object({
-  sessionId: z.string().optional(),
+  sessionId: z.string().optional().nullable(),
   message: z.string().min(1),
 });
 

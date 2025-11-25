@@ -55,10 +55,11 @@ export default function Chat() {
     setIsTyping(true);
 
     try {
-      const response = await apiRequest("/api/chat", "POST", {
-        sessionId,
+      const res = await apiRequest("POST", "/api/chat", {
+        ...(sessionId && { sessionId }),
         message: content,
-      }) as unknown as { sessionId: string; assistantMessage: { content: string; timestamp: string; taskCard?: any } };
+      });
+      const response = await res.json() as { sessionId: string; assistantMessage: { content: string; timestamp: string; taskCard?: any } };
 
       if (!sessionId) {
         setSessionId(response.sessionId);
