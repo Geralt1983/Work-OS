@@ -97,6 +97,17 @@ The daily audit checks:
 - suggest_next_move: AI-powered task recommendation based on user context
   - Takes: time_available_minutes, energy_level, context, prefer_client
   - Returns: recommended task, reasoning, and alternatives
+  - Factors in: learned patterns, avoided tasks, client sentiment, productivity times
+
+**Learning Memory Tools:**
+- record_signal: Capture task behaviors (deferred, avoided, completed_fast, struggled, excited)
+- record_pattern: Store learned patterns (productivity times, preferences, avoidance)
+- set_client_sentiment: Track feelings about clients (positive, neutral, negative, complicated)
+- set_client_importance: Set client priority (high, medium, low)
+- get_learned_patterns: Retrieve all patterns to personalize recommendations
+- get_avoided_tasks: Find repeatedly deferred tasks
+- get_productivity_insights: Analyze productivity by time of day
+- get_client_insights: Get sentiment/importance for all clients
 
 **Tier Custom Field (ClickUp):**
 - Tasks are categorized by the "⛰️ Tier" dropdown field (not statuses)
