@@ -44,8 +44,8 @@ export default function ChatInput({
   }, [message]);
 
   return (
-    <div className="border-t bg-background p-4">
-      <div className="max-w-3xl mx-auto flex gap-2 items-end">
+    <div className="border-t bg-background/95 backdrop-blur-lg p-6">
+      <div className="max-w-4xl mx-auto flex gap-3 items-end">
         <Textarea
           ref={textareaRef}
           value={message}
@@ -53,7 +53,7 @@ export default function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          className="min-h-[44px] max-h-[200px] resize-none"
+          className="min-h-[48px] max-h-[200px] resize-none rounded-xl text-[15px] leading-relaxed"
           rows={1}
           data-testid="input-message"
         />
@@ -61,9 +61,10 @@ export default function ChatInput({
           onClick={handleSubmit}
           disabled={disabled || !message.trim()}
           size="icon"
+          className="rounded-full h-12 w-12"
           data-testid="button-send"
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-[18px] w-[18px]" />
         </Button>
       </div>
     </div>

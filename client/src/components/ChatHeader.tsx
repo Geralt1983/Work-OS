@@ -24,38 +24,32 @@ export default function ChatHeader({ onClearChat, isConnected = true }: ChatHead
   };
 
   return (
-    <header className="border-b bg-background px-4 py-3" data-testid="header-chat">
-      <div className="max-w-3xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <header className="border-b bg-background/95 backdrop-blur-lg px-6 py-4" data-testid="header-chat">
+      <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-lg font-semibold" data-testid="text-app-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-app-title">
               ClickUp Assistant
             </h1>
             <p className="text-sm text-muted-foreground">Manage tasks naturally</p>
           </div>
-          <Badge
-            variant={isConnected ? "default" : "destructive"}
-            className="text-xs"
-            data-testid="badge-connection-status"
-          >
-            <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-            {isConnected ? "Connected" : "Disconnected"}
-          </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
+            className="rounded-full"
             data-testid="button-theme-toggle"
           >
-            {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            {theme === "light" ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onClearChat}
+            className="rounded-full"
             data-testid="button-clear-chat"
           >
             <Trash2 className="h-4 w-4 mr-2" />

@@ -2,14 +2,15 @@
 
 ## Design Approach
 
-**Selected Approach:** Design System (Linear + Slack-inspired)
+**Selected Approach:** Apple-inspired minimalist design
 
-**Justification:** This is a utility-focused productivity tool where efficiency and clarity are paramount. Drawing inspiration from Linear's clean aesthetic and Slack's proven chat patterns.
+**Justification:** Clean, sophisticated aesthetic that prioritizes clarity and elegance. Inspired by Apple's design language with generous white space, subtle shadows, and refined typography.
 
 **Core Principles:**
-- Clarity over decoration
-- Conversation-first layout
-- Immediate task feedback visibility
+- Simplicity and clarity above all
+- Generous white space and breathing room
+- Subtle, elegant interactions
+- System-native feeling
 - Distraction-free focus
 
 ---
@@ -17,11 +18,11 @@
 ## Typography
 
 **Font Family:**
-- Primary: Inter (via Google Fonts CDN)
-- Monospace: 'JetBrains Mono' for task IDs and technical details
+- Primary: SF Pro Display / system-ui fallback
+- Monospace: SF Mono / ui-monospace for task IDs
 
 **Hierarchy:**
-- App title/header: text-lg font-semibold
+- App title/header: text-xl font-semibold tracking-tight
 - Message text: text-base font-normal
 - Task confirmations: text-sm font-medium
 - Timestamps: text-xs
