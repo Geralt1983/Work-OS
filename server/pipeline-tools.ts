@@ -504,30 +504,78 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
     };
   }
   
-  // Get recent client activity from memory
+  // Get recent client activity from memory (includes learned patterns)
   const allClients = await storage.getAllClients();
-  const clientActivity = allClients.reduce((acc: Record<string, { lastMove: Date | null; staleDays: number }>, c) => {
+  const clientActivity = allClients.reduce((acc: Record<string, { lastMove: Date | null; staleDays: number; sentiment: string | null; importance: string | null; avoidanceScore: number }>, c) => {
     acc[c.clientName] = {
       lastMove: c.lastMoveAt,
       staleDays: c.staleDays || 0,
+      sentiment: c.sentiment,
+      importance: c.importance,
+      avoidanceScore: c.avoidanceScore || 0,
     };
     return acc;
-  }, {} as Record<string, { lastMove: Date | null; staleDays: number }>);
+  }, {} as Record<string, { lastMove: Date | null; staleDays: number; sentiment: string | null; importance: string | null; avoidanceScore: number }>);
+  
+  // Get avoided tasks from learning memory
+  const avoidedTasks = await storage.getAvoidedTasks(14);
+  const avoidedTaskIds = new Set(avoidedTasks.map(t => t.taskId));
+  
+  // Get productivity insights
+  const productivityStats = await storage.getProductivityByHour();
+  const currentHour = new Date().getHours();
+  const currentHourStats = productivityStats.find(p => p.hour === currentHour);
+  const isProductiveHour = currentHourStats && currentHourStats.completions > currentHourStats.deferrals;
+  
+  // Get learned patterns
+  const patterns = await storage.getPatterns();
+  const patternSummary = patterns.length > 0 
+    ? patterns.slice(0, 5).map(p => `${p.patternKey}: confidence ${p.confidence}`).join(", ")
+    : "No patterns learned yet";
   
   // Build context for AI
-  const taskList = availableTasks.map((t, i) => 
-    `${i + 1}. [${t.tier.toUpperCase()}] ${t.listName}: "${t.name}"${t.priority ? ` (${t.priority})` : ""}${t.dueDate ? ` - due ${t.dueDate}` : ""}`
-  ).join("\n");
+  const taskList = availableTasks.map((t, i) => {
+    const clientInfo = clientActivity[t.listName.toLowerCase()];
+    const isAvoided = avoidedTaskIds.has(t.id);
+    const flags: string[] = [];
+    
+    if (isAvoided) flags.push("AVOIDED");
+    if (clientInfo?.importance === "high") flags.push("HIGH-PRIORITY-CLIENT");
+    if (clientInfo?.sentiment === "negative") flags.push("DIFFICULT-CLIENT");
+    if (clientInfo?.avoidanceScore && clientInfo.avoidanceScore > 2) flags.push("CLIENT-OFTEN-DEFERRED");
+    
+    const flagStr = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
+    return `${i + 1}. [${t.tier.toUpperCase()}] ${t.listName}: "${t.name}"${t.priority ? ` (${t.priority})` : ""}${t.dueDate ? ` - due ${t.dueDate}` : ""}${flagStr}`;
+  }).join("\n");
   
   const staleInfo = summary.staleClients.length > 0 
     ? `Stale clients (2+ days without moves): ${summary.staleClients.join(", ")}`
     : "No stale clients.";
+  
+  // Client insights summary
+  const clientInsights = Object.entries(clientActivity)
+    .filter(([_, info]) => info.importance === "high" || info.sentiment)
+    .map(([name, info]) => {
+      const parts = [];
+      if (info.importance === "high") parts.push("HIGH PRIORITY");
+      if (info.sentiment) parts.push(`sentiment: ${info.sentiment}`);
+      return `${name}: ${parts.join(", ")}`;
+    })
+    .join("\n");
+  
+  const productivityHint = isProductiveHour 
+    ? "This is historically a productive hour for you."
+    : currentHourStats && (currentHourStats.completions + currentHourStats.deferrals > 2)
+      ? "This is historically NOT a productive hour - consider easier tasks."
+      : "";
   
   const prompt = `You are helping prioritize work for today. Here are all available tasks:
 
 ${taskList}
 
 ${staleInfo}
+${clientInsights ? `\nClient insights:\n${clientInsights}` : ""}
+${productivityHint ? `\nProductivity note: ${productivityHint}` : ""}
 
 User context:
 - Time available: ${args.time_available_minutes ? `${args.time_available_minutes} minutes` : "not specified"}
@@ -535,23 +583,34 @@ User context:
 - Preferred client: ${args.prefer_client || "none"}
 - Additional context: ${args.context || "none"}
 
+Task flags explained:
+- [AVOIDED]: User has deferred this task multiple times - only suggest if explicitly addressing avoidance
+- [HIGH-PRIORITY-CLIENT]: VIP client, prioritize their work
+- [DIFFICULT-CLIENT]: User has negative feelings about this client - be mindful when suggesting
+- [CLIENT-OFTEN-DEFERRED]: Work for this client tends to get postponed
+
 Core principles:
 - Each task is a "move" (~20 minutes of focused work)
 - One move per client per day is the goal
 - Stale clients should be prioritized to maintain momentum
 - Active tasks are already committed to today
 - Queued tasks are ready to be pulled into active
+- Respect user's learned patterns and preferences
+- During low energy, suggest easier/quicker wins from positive clients
+- Don't stack multiple difficult clients together
 
 Based on this, recommend the BEST task to work on right now. Consider:
 1. User's available time and energy
 2. Stale clients that need attention
 3. Task priority and due dates
-4. Any context the user provided
+4. Client sentiment and importance (high priority clients matter more)
+5. Avoided tasks (don't suggest unless user is ready to tackle them)
+6. Any context the user provided
 
 Respond with JSON:
 {
   "recommendedTaskIndex": <1-based index from the list above, or 0 if no good match>,
-  "reasoning": "<brief explanation of why this task is the best choice>",
+  "reasoning": "<brief explanation of why this task is the best choice, mentioning any patterns considered>",
   "alternativeIndices": [<up to 2 alternative task indices>]
 }`;
 

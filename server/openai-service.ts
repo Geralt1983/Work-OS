@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { clickupTools, executeClickUpTool } from "./clickup-api";
 import { memoryTools, executeMemoryTool } from "./memory-tools";
 import { pipelineTools, executePipelineTool } from "./pipeline-tools";
+import { LEARNING_TOOL_DEFINITIONS, executeLearningTool } from "./learning-tools";
 import type { Message } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -81,6 +82,31 @@ Bad tasks are vague:
 - Format task lists cleanly
 - When showing pipeline: Active → Queued → Backlog
 
+## LEARNING MEMORY
+
+You learn and remember patterns over time:
+
+**What to capture:**
+- When Jeremy defers a task → record_signal with "deferred"
+- When he completes something quickly → record_signal with "completed_fast"  
+- When he avoids certain work → record_signal with "avoided"
+- When he expresses feelings about a client → set_client_sentiment
+- When he indicates client priority → set_client_importance
+- When you notice productivity patterns → record_pattern
+
+**How to use learned patterns:**
+- Check get_learned_patterns before daily planning
+- Use get_avoided_tasks to NOT suggest tasks he's been avoiding (unless specifically addressing avoidance)
+- Use get_productivity_insights to recommend tasks at optimal times
+- Factor client sentiment into suggestions (don't stack negative clients)
+- Prioritize high-importance clients
+
+**Examples:**
+- "Ugh, I hate dealing with Memphis invoices" → set_client_sentiment(memphis, negative)
+- "Orlando is my biggest client" → set_client_importance(orlando, high)
+- "I'll do that Memphis task later" (3rd time) → record_signal(deferred) + notice avoidance pattern
+- "What should I work on?" → check learned patterns + productivity insights + suggest optimal task
+
 ## TOOLS AVAILABLE
 
 You have:
@@ -88,6 +114,7 @@ You have:
 - **Memory tools**: client tracking, daily logs
 - **Pipeline tools**: audit all clients, check actionability, promote/demote tasks
 - **Planning tools**: get_all_client_pipelines (see all work), suggest_next_move (AI-powered task recommendation)
+- **Learning tools**: record patterns, get insights, track client sentiment/importance
 
 When creating a task, always:
 1. Create the task in ClickUp
@@ -98,7 +125,13 @@ When running daily check:
 1. Audit all client pipelines
 2. Report clients missing active/queued/backlog
 3. Flag non-actionable tasks
-4. Suggest fixes`;
+4. Suggest fixes
+
+When suggesting tasks:
+1. Check learned patterns and productivity insights
+2. Consider client sentiment and importance
+3. Avoid repeatedly suggesting avoided tasks
+4. Factor in current time of day and energy patterns`;
 
 export async function processChat(
   messages: Message[],
@@ -112,8 +145,8 @@ export async function processChat(
     })),
   ];
 
-  const allTools = [...clickupTools, ...memoryTools, ...pipelineTools];
-  const openaiTools: OpenAI.ChatCompletionTool[] = allTools.map((tool) => ({
+  const legacyTools = [...clickupTools, ...memoryTools, ...pipelineTools];
+  const legacyOpenaiTools: OpenAI.ChatCompletionTool[] = legacyTools.map((tool) => ({
     type: "function" as const,
     function: {
       name: tool.name,
@@ -121,6 +154,8 @@ export async function processChat(
       parameters: tool.parameters,
     },
   }));
+  
+  const openaiTools = [...legacyOpenaiTools, ...LEARNING_TOOL_DEFINITIONS];
 
   let response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -146,10 +181,16 @@ export async function processChat(
       try {
         let result: unknown;
         
+        const learningToolNames = LEARNING_TOOL_DEFINITIONS.map(t => 
+          t.type === 'function' ? t.function.name : ''
+        );
+        
         if (clickupTools.some(t => t.name === toolName)) {
           result = await executeClickUpTool(toolName, toolArgs);
         } else if (pipelineTools.some(t => t.name === toolName)) {
           result = await executePipelineTool(toolName, toolArgs);
+        } else if (learningToolNames.includes(toolName)) {
+          result = await executeLearningTool(toolName, toolArgs);
         } else {
           result = await executeMemoryTool(toolName, toolArgs);
         }

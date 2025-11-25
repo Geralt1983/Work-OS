@@ -1,12 +1,14 @@
 import { db } from "./db";
-import { sessions, messages, clientMemory, dailyLog } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals } from "@shared/schema";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { 
   Session, InsertSession, 
   Message, InsertMessage,
   ClientMemory, InsertClientMemory,
-  DailyLog, InsertDailyLog
+  DailyLog, InsertDailyLog,
+  UserPattern, InsertUserPattern,
+  TaskSignal, InsertTaskSignal
 } from "@shared/schema";
 
 export interface IStorage {
@@ -27,6 +29,17 @@ export interface IStorage {
   createDailyLog(log: InsertDailyLog): Promise<DailyLog>;
   getDailyLog(date: string): Promise<DailyLog | undefined>;
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
+  
+  // Learning memory: patterns
+  recordPattern(pattern: InsertUserPattern): Promise<UserPattern>;
+  getPatterns(patternType?: string): Promise<UserPattern[]>;
+  updatePatternConfidence(patternKey: string, increment: number): Promise<void>;
+  
+  // Learning memory: task signals
+  recordSignal(signal: InsertTaskSignal): Promise<TaskSignal>;
+  getTaskSignals(taskId?: string, clientName?: string, signalType?: string, daysBack?: number): Promise<TaskSignal[]>;
+  getAvoidedTasks(daysBack?: number): Promise<{ taskId: string; taskName: string; clientName: string; count: number }[]>;
+  getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -149,6 +162,160 @@ class DatabaseStorage implements IStorage {
 
   async updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void> {
     await db.update(dailyLog).set(updates).where(eq(dailyLog.date, date));
+  }
+
+  // Learning memory: patterns
+  async recordPattern(pattern: InsertUserPattern): Promise<UserPattern> {
+    const existing = await db.select().from(userPatterns)
+      .where(eq(userPatterns.patternKey, pattern.patternKey));
+    
+    if (existing.length > 0) {
+      const [updated] = await db.update(userPatterns)
+        .set({ 
+          patternValue: pattern.patternValue,
+          confidence: (existing[0].confidence || 1) + 1,
+          lastObserved: new Date()
+        })
+        .where(eq(userPatterns.patternKey, pattern.patternKey))
+        .returning();
+      return updated;
+    }
+    
+    const id = randomUUID();
+    const [created] = await db.insert(userPatterns)
+      .values({ ...pattern, id })
+      .returning();
+    return created;
+  }
+
+  async getPatterns(patternType?: string): Promise<UserPattern[]> {
+    if (patternType) {
+      return db.select().from(userPatterns)
+        .where(eq(userPatterns.patternType, patternType))
+        .orderBy(desc(userPatterns.confidence));
+    }
+    return db.select().from(userPatterns).orderBy(desc(userPatterns.confidence));
+  }
+
+  async updatePatternConfidence(patternKey: string, increment: number): Promise<void> {
+    const [existing] = await db.select().from(userPatterns)
+      .where(eq(userPatterns.patternKey, patternKey));
+    
+    if (existing) {
+      await db.update(userPatterns)
+        .set({ 
+          confidence: (existing.confidence || 1) + increment,
+          lastObserved: new Date()
+        })
+        .where(eq(userPatterns.patternKey, patternKey));
+    }
+  }
+
+  // Learning memory: task signals
+  async recordSignal(signal: InsertTaskSignal): Promise<TaskSignal> {
+    const id = randomUUID();
+    const now = new Date();
+    const [created] = await db.insert(taskSignals)
+      .values({ 
+        ...signal, 
+        id,
+        hourOfDay: signal.hourOfDay ?? now.getHours(),
+        dayOfWeek: signal.dayOfWeek ?? now.getDay()
+      })
+      .returning();
+    
+    // Update client avoidance score if this is a deferral
+    if (signal.signalType === 'deferred' || signal.signalType === 'avoided') {
+      if (signal.clientName) {
+        const client = await this.getClientMemory(signal.clientName);
+        if (client) {
+          await this.upsertClientMemory({
+            clientName: signal.clientName,
+            avoidanceScore: (client.avoidanceScore || 0) + 1
+          });
+        }
+      }
+    }
+    
+    return created;
+  }
+
+  async getTaskSignals(taskId?: string, clientName?: string, signalType?: string, daysBack?: number): Promise<TaskSignal[]> {
+    let query = db.select().from(taskSignals);
+    const conditions: any[] = [];
+    
+    if (taskId) conditions.push(eq(taskSignals.taskId, taskId));
+    if (clientName) conditions.push(eq(taskSignals.clientName, clientName.toLowerCase().trim()));
+    if (signalType) conditions.push(eq(taskSignals.signalType, signalType));
+    if (daysBack) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - daysBack);
+      conditions.push(gte(taskSignals.createdAt, cutoff));
+    }
+    
+    if (conditions.length > 0) {
+      return db.select().from(taskSignals)
+        .where(and(...conditions))
+        .orderBy(desc(taskSignals.createdAt));
+    }
+    
+    return db.select().from(taskSignals).orderBy(desc(taskSignals.createdAt));
+  }
+
+  async getAvoidedTasks(daysBack: number = 14): Promise<{ taskId: string; taskName: string; clientName: string; count: number }[]> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - daysBack);
+    
+    const signals = await db.select().from(taskSignals)
+      .where(and(
+        gte(taskSignals.createdAt, cutoff),
+        eq(taskSignals.signalType, 'deferred')
+      ));
+    
+    // Aggregate by taskId
+    const counts = new Map<string, { taskName: string; clientName: string; count: number }>();
+    for (const signal of signals) {
+      if (signal.taskId) {
+        const key = signal.taskId;
+        const existing = counts.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          counts.set(key, { 
+            taskName: signal.taskName || 'Unknown',
+            clientName: signal.clientName || 'Unknown',
+            count: 1 
+          });
+        }
+      }
+    }
+    
+    return Array.from(counts.entries())
+      .map(([taskId, data]) => ({ taskId, ...data }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  async getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]> {
+    const signals = await db.select().from(taskSignals);
+    
+    const hourStats = new Map<number, { completions: number; deferrals: number }>();
+    for (let h = 0; h < 24; h++) {
+      hourStats.set(h, { completions: 0, deferrals: 0 });
+    }
+    
+    for (const signal of signals) {
+      if (signal.hourOfDay !== null && signal.hourOfDay !== undefined) {
+        const stats = hourStats.get(signal.hourOfDay)!;
+        if (signal.signalType === 'completed_fast' || signal.signalType === 'excited') {
+          stats.completions++;
+        } else if (signal.signalType === 'deferred' || signal.signalType === 'avoided') {
+          stats.deferrals++;
+        }
+      }
+    }
+    
+    return Array.from(hourStats.entries())
+      .map(([hour, stats]) => ({ hour, ...stats }));
   }
 }
 
