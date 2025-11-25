@@ -31,6 +31,7 @@ export interface IStorage {
   getDailyLog(date: string): Promise<DailyLog | undefined>;
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
   addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean>;
+  removeCompletedMoves(date: string, moveIds: string[]): Promise<number>;
   
   // Learning memory: patterns
   recordPattern(pattern: InsertUserPattern): Promise<UserPattern>;
@@ -253,6 +254,31 @@ class DatabaseStorage implements IStorage {
     });
     
     return true; // Successfully added
+  }
+
+  async removeCompletedMoves(date: string, moveIds: string[]): Promise<number> {
+    const existing = await this.getDailyLog(date);
+    if (!existing) return 0;
+
+    const completedMoves = Array.isArray(existing.completedMoves) 
+      ? (existing.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string; source?: string }>)
+      : [];
+    
+    const originalCount = completedMoves.length;
+    const filtered = completedMoves.filter(m => !moveIds.includes(m.moveId));
+    const removedCount = originalCount - filtered.length;
+
+    if (removedCount > 0) {
+      // Recalculate clients touched from remaining moves
+      const clientsTouched = [...new Set(filtered.map(m => m.clientName))];
+      
+      await this.updateDailyLog(date, {
+        completedMoves: filtered as unknown as string[],
+        clientsTouched,
+      });
+    }
+
+    return removedCount;
   }
 
   // Learning memory: patterns

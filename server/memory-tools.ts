@@ -85,6 +85,25 @@ export const memoryTools = [
     description: "Sync completed tasks from ClickUp to update metrics. Call this to ensure all ClickUp completions are reflected in the Work OS metrics. Auto-runs every 15 minutes.",
     parameters: { type: "object", properties: {} },
   },
+  {
+    name: "cleanup_daily_log",
+    description: "Remove specific task entries from today's daily log. Use this to clean up test tasks, duplicates, or incorrectly logged moves. Also deletes the tasks from ClickUp.",
+    parameters: {
+      type: "object",
+      properties: {
+        move_ids: { 
+          type: "array", 
+          items: { type: "string" },
+          description: "Array of ClickUp task IDs to remove from the log and delete from ClickUp" 
+        },
+        delete_from_clickup: {
+          type: "boolean",
+          description: "Whether to also delete these tasks from ClickUp (default true)"
+        }
+      },
+      required: ["move_ids"],
+    },
+  },
 ];
 
 export async function executeMemoryTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -286,6 +305,40 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
         message: result.synced > 0 
           ? `Synced ${result.synced} completed tasks from ClickUp`
           : `No new completions to sync (${result.alreadyLogged} already logged)`,
+      };
+    }
+
+    case "cleanup_daily_log": {
+      const moveIds = args.move_ids as string[];
+      const deleteFromClickup = args.delete_from_clickup !== false; // default true
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Remove from daily log
+      const removedCount = await storage.removeCompletedMoves(today, moveIds);
+      
+      // Delete from ClickUp if requested
+      const deleted: string[] = [];
+      const failed: string[] = [];
+      
+      if (deleteFromClickup) {
+        const { executeClickUpTool } = await import("./clickup-api");
+        for (const taskId of moveIds) {
+          try {
+            await executeClickUpTool("delete_task", { task_id: taskId });
+            deleted.push(taskId);
+          } catch (err) {
+            failed.push(taskId);
+          }
+        }
+      }
+      
+      return {
+        success: true,
+        removedFromLog: removedCount,
+        deletedFromClickup: deleted.length,
+        failedToDelete: failed,
+        message: `Removed ${removedCount} entries from daily log` + 
+          (deleteFromClickup ? `, deleted ${deleted.length} tasks from ClickUp` : ''),
       };
     }
 
