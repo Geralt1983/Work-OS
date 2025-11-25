@@ -2,7 +2,9 @@
 
 ## Overview
 
-Work OS is a conversational AI application that manages ClickUp tasks through natural language with "YOLO mode" execution. The system operates on the principle of **one move per client per day** — where a "move" is a 20-minute or less task that advances client work. The AI executes immediately without confirmations, tracks client state, and surfaces stale clients proactively.
+Work OS is a task management application with a custom Moves board and optional AI chat interface. The system operates on the principle of **one move per client per day** — where a "move" is a 20-minute or less task that advances client work. Tasks are managed through a visual kanban-style board with status columns (Active, Queued, Backlog).
+
+**Architecture Evolution**: Originally built around ClickUp integration, the system now uses a custom frontend Moves board as the primary task management interface. ClickUp sync remains available as an optional import feature but is no longer the source of truth.
 
 ## User Preferences
 
@@ -72,11 +74,20 @@ The system automatically syncs completed tasks from ClickUp every 15 minutes to 
 - Shadcn/ui component library
 - Tailwind CSS with Apple-inspired design
 
+**Key Pages:**
+- **Moves Board** (`/moves`): Primary task management interface
+  - Three status columns: Active, Queued, Backlog
+  - Client filter dropdown
+  - Move cards with promote/demote/complete actions
+  - Create move dialog with effort estimate and drain type
+- **Chat** (`/`): AI assistant for natural language task management
+- **Metrics** (`/metrics`): Daily pacing and weekly trends
+
 **Key Components:**
-- ChatHeader: "Work OS" branding with theme toggle
+- ChatHeader: "Work OS" branding with theme toggle and navigation
+- MoveForm: Create/edit moves with effort estimate (1-4) and drain type
 - ChatInput: Message input with Enter to send
 - ChatMessage: User/assistant messages with TaskCard support
-- EmptyState: Example prompts for Work OS workflow
 
 ### Backend Architecture
 
@@ -98,11 +109,17 @@ The system automatically syncs completed tasks from ClickUp every 15 minutes to 
 
 ### Database Schema
 
-**Tables:**
+**Core Tables (Custom Task Management):**
+- `clients`: Client entities (id, name, type: client|internal, color, isArchived)
+- `moves`: Tasks/moves (id, clientId, title, description, status: active|queued|backlog|done, effortEstimate: 1-4, effortActual, drainType: mental|emotional|physical|easy, createdAt, completedAt)
+
+**Session & Memory Tables:**
 - `sessions`: Chat session tracking
 - `messages`: Conversation history with task cards
-- `client_memory`: Tracks last move, tier, stale days, notes per client
+- `client_memory`: Legacy ClickUp client tracking (being phased out)
 - `daily_log`: Completed moves, clients touched/skipped per day, backlog moves count
+
+**Learning System Tables:**
 - `task_signals`: Learning signals (deferred, avoided, completed_fast, etc.)
 - `learned_patterns`: Productivity patterns, preferences, avoidance detection
 - `client_insights`: Sentiment and importance per client
