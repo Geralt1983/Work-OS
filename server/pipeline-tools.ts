@@ -809,9 +809,11 @@ export async function executePipelineTool(name: string, args: Record<string, unk
     case "complete_task": {
       // Get task first to find its list ID, then set tier to done
       const task = await clickupApi.getTask(args.task_id as string);
+      const completedTier = categorizeTaskByTier(task);
+      const clientName = task.list.name;
       
       try {
-        await setTaskTier(args.task_id as string, task.list.id, "done", task.name, task.list.name);
+        await setTaskTier(args.task_id as string, task.list.id, "done", task.name, clientName);
       } catch (e) {
         // If "done" tier doesn't exist, fall back to setting status
         await clickupApi.updateTask(args.task_id as string, { status: "complete" });
@@ -820,11 +822,58 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       // Mark task as no longer in backlog
       await storage.markBacklogPromoted(args.task_id as string, false);
       
+      // Auto-promote: Fill gaps in the pipeline automatically
+      let promotedTask: { name: string; from: string; to: string } | null = null;
+      
+      // Get client's pipeline to find next task to promote
+      const clientPipeline = await getClientPipeline(clientName);
+      
+      if (completedTier === "active" && clientPipeline) {
+        // Completed an active task - promote queued → active
+        if (clientPipeline.queued.length > 0) {
+          const nextTask = clientPipeline.queued[0];
+          try {
+            await setTaskTier(nextTask.id, task.list.id, DEFAULT_TIER.active, nextTask.name, clientName);
+            promotedTask = { name: nextTask.name, from: "queued", to: "active" };
+          } catch (promoteError) {
+            console.error("Failed to auto-promote queued task:", promoteError);
+          }
+        } else if (clientPipeline.backlog.length > 0) {
+          // No queued tasks, pull from backlog to active
+          const nextTask = clientPipeline.backlog[0];
+          try {
+            await setTaskTier(nextTask.id, task.list.id, DEFAULT_TIER.active, nextTask.name, clientName);
+            promotedTask = { name: nextTask.name, from: "backlog", to: "active" };
+            await storage.markBacklogPromoted(nextTask.id, false);
+          } catch (promoteError) {
+            console.error("Failed to auto-promote backlog task:", promoteError);
+          }
+        }
+      } else if (completedTier === "queued" && clientPipeline) {
+        // Completed a queued task - promote backlog → queued
+        if (clientPipeline.backlog.length > 0) {
+          const nextTask = clientPipeline.backlog[0];
+          try {
+            await setTaskTier(nextTask.id, task.list.id, DEFAULT_TIER.queued, nextTask.name, clientName);
+            promotedTask = { name: nextTask.name, from: "backlog", to: "queued" };
+            await storage.markBacklogPromoted(nextTask.id, false);
+          } catch (promoteError) {
+            console.error("Failed to auto-promote backlog task:", promoteError);
+          }
+        }
+      }
+      
+      let message = `Marked "${task.name}" as complete`;
+      if (promotedTask) {
+        message += `. Auto-promoted "${promotedTask.name}" from ${promotedTask.from} to ${promotedTask.to}.`;
+      }
+      
       return {
         success: true,
         task: task.name,
         newTier: "done",
-        message: `Marked "${task.name}" as complete`,
+        message,
+        autoPromoted: promotedTask,
       };
     }
     

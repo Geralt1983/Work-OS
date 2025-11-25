@@ -115,7 +115,7 @@ Prevents backlog stagnation through multiple mechanics:
 - promote_task: Move task from backlog→queued or queued→active (updates tier field)
 - demote_task: Move task backwards (active→queued or queued→backlog)
 - set_task_tier: Set any tier value on a task
-- complete_task: Mark a task as complete
+- complete_task: Mark a task as complete (auto-promotes next task to fill the gap)
 
 **Daily Planning Tools:**
 - suggest_next_move: AI-powered task recommendation based on user context
