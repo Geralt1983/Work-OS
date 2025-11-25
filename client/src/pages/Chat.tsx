@@ -34,7 +34,7 @@ export default function Chat() {
       try {
         const response = await fetch("/api/health");
         const data = await response.json();
-        setIsConnected(data.mcpConnected);
+        setIsConnected(data.clickupConfigured);
       } catch (error) {
         setIsConnected(false);
       }
@@ -58,7 +58,7 @@ export default function Chat() {
       const response = await apiRequest("/api/chat", "POST", {
         sessionId,
         message: content,
-      });
+      }) as unknown as { sessionId: string; assistantMessage: { content: string; timestamp: string; taskCard?: any } };
 
       if (!sessionId) {
         setSessionId(response.sessionId);

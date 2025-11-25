@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { mcpClient } from "./mcp-client";
+import { clickupTools, executeClickUpTool } from "./clickup-api";
 import type { Message } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -15,24 +15,24 @@ export async function processChat(
   messages: Message[],
   onToolCall?: (toolName: string) => void
 ): Promise<{ content: string; taskCard?: any }> {
-  const tools = await mcpClient.listTools();
-  
-  const openaiMessages: ChatCompletionMessage[] = [
+  const openaiMessages: Array<OpenAI.ChatCompletionMessageParam> = [
     {
       role: "system",
-      content: `You are a helpful AI assistant for managing ClickUp tasks through natural conversation. 
-      
+      content: `You are a helpful AI assistant for managing ClickUp tasks through natural conversation.
+
 You have access to various ClickUp tools to help users:
-- Create, update, and delete tasks
-- Manage task dependencies
-- Add tags and comments
-- Set due dates and priorities
-- View task information
+- View spaces, folders, and lists
+- Get and search for tasks
+- Create new tasks
+- Update existing tasks (status, name, description, due date, priority)
+- Delete tasks
 
 When users ask about their tasks, use the available tools to help them. Be conversational and helpful.
 When you successfully perform an action (like creating a task), provide clear confirmation with the task details.
 
-Available tools: ${tools.map((t) => t.name).join(", ")}`,
+If the user wants to create a task but doesn't specify a list, first use get_spaces to find available spaces, then help them choose where to create the task.
+
+Always format task information clearly and include relevant details like status, due date, and priority when available.`,
     },
     ...messages.map((msg) => ({
       role: msg.role as "user" | "assistant",
@@ -40,19 +40,19 @@ Available tools: ${tools.map((t) => t.name).join(", ")}`,
     })),
   ];
 
-  const openaiTools = tools.map((tool) => ({
+  const openaiTools: OpenAI.ChatCompletionTool[] = clickupTools.map((tool) => ({
     type: "function" as const,
     function: {
       name: tool.name,
-      description: tool.description || "",
-      parameters: tool.inputSchema || { type: "object", properties: {} },
+      description: tool.description,
+      parameters: tool.parameters,
     },
   }));
 
   let response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: openaiMessages,
-    tools: openaiTools.length > 0 ? openaiTools : undefined,
+    tools: openaiTools,
     tool_choice: "auto",
   });
 
@@ -60,16 +60,10 @@ Available tools: ${tools.map((t) => t.name).join(", ")}`,
   let taskCard: any = undefined;
 
   while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-    const toolCalls = assistantMessage.tool_calls;
+    openaiMessages.push(assistantMessage);
 
-    openaiMessages.push({
-      role: "assistant",
-      content: assistantMessage.content || "",
-    });
-
-    for (const toolCall of toolCalls) {
+    for (const toolCall of assistantMessage.tool_calls) {
       if (toolCall.type !== "function") continue;
-      
       const toolName = toolCall.function.name;
       const toolArgs = JSON.parse(toolCall.function.arguments);
 
@@ -77,38 +71,35 @@ Available tools: ${tools.map((t) => t.name).join(", ")}`,
       onToolCall?.(toolName);
 
       try {
-        const result = await mcpClient.callTool(toolName, toolArgs);
-        
-        if (toolName.includes("create_task") && Array.isArray(result.content) && result.content[0]) {
-          const firstContent = result.content[0];
-          if ('text' in firstContent && firstContent.text) {
-            try {
-              const taskData = JSON.parse(firstContent.text);
-              if (taskData.id && taskData.name) {
-                taskCard = {
-                  title: taskData.name,
-                  taskId: taskData.id,
-                  status: taskData.status?.status || "To Do",
-                  dueDate: taskData.due_date
-                    ? new Date(parseInt(taskData.due_date)).toLocaleDateString()
-                    : undefined,
-                };
-              }
-            } catch (e) {
-              console.error("Failed to parse task data:", e);
-            }
+        const result = await executeClickUpTool(toolName, toolArgs);
+
+        if (toolName === "create_task" && result && typeof result === "object") {
+          const taskData = result as any;
+          if (taskData.id && taskData.name) {
+            taskCard = {
+              title: taskData.name,
+              taskId: taskData.id,
+              status: taskData.status?.status || "To Do",
+              dueDate: taskData.due_date
+                ? new Date(parseInt(taskData.due_date)).toLocaleDateString()
+                : undefined,
+            };
           }
         }
 
         openaiMessages.push({
-          role: "user",
-          content: `Tool ${toolName} result: ${JSON.stringify(result.content)}`,
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result),
         });
       } catch (error) {
         console.error(`Error calling tool ${toolName}:`, error);
         openaiMessages.push({
-          role: "user",
-          content: `Tool ${toolName} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ 
+            error: error instanceof Error ? error.message : "Unknown error" 
+          }),
         });
       }
     }
@@ -116,7 +107,7 @@ Available tools: ${tools.map((t) => t.name).join(", ")}`,
     response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: openaiMessages,
-      tools: openaiTools.length > 0 ? openaiTools : undefined,
+      tools: openaiTools,
       tool_choice: "auto",
     });
 

@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { mcpClient } from "./mcp-client";
 import { processChat } from "./openai-service";
 import { z } from "zod";
 
@@ -11,7 +10,6 @@ const sendMessageSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  await mcpClient.connect();
 
   app.post("/api/sessions", async (req, res) => {
     try {
@@ -76,9 +74,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/health", async (req, res) => {
+    const hasClickUpConfig = !!(process.env.CLICKUP_API_KEY && process.env.CLICKUP_TEAM_ID);
     res.json({
       status: "ok",
-      mcpConnected: mcpClient.isReady(),
+      clickupConfigured: hasClickUpConfig,
     });
   });
 
