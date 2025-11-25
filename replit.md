@@ -1,142 +1,96 @@
-# ClickUp Assistant - AI Task Management Chat Interface
+# Work OS - AI-Powered Task Management
 
 ## Overview
 
-ClickUp Assistant is a conversational AI application that enables users to manage their ClickUp tasks through natural language interactions. The application provides a chat-based interface where users can create, update, search, and organize tasks by simply describing what they want to do. Built with a modern React frontend and Express backend, it integrates with the ClickUp API and OpenAI to provide an intelligent, user-friendly task management experience.
+Work OS is a conversational AI application that manages ClickUp tasks through natural language with "YOLO mode" execution. The system operates on the principle of **one move per client per day** — where a "move" is a 20-minute or less task that advances client work. The AI executes immediately without confirmations, tracks client state, and surfaces stale clients proactively.
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+- **YOLO mode**: No confirmations, immediate execution
+- **Moves**: All work decomposed into 20-minute tasks
+- **One move per client per day**: Core operational principle
+- **No guilt-based decisions**: System adapts, never scolds
+- **Natural language intent**: "Make a Raleigh move" → creates task
 
 ## System Architecture
 
 ### Frontend Architecture
 
 **Technology Stack:**
-- React with TypeScript for type-safe component development
-- Vite as the build tool and development server
-- Wouter for lightweight client-side routing
-- TanStack Query for server state management and caching
-- Shadcn/ui component library built on Radix UI primitives
-- Tailwind CSS for styling with custom design tokens
+- React with TypeScript
+- Vite as the build tool
+- Wouter for routing
+- TanStack Query for server state
+- Shadcn/ui component library
+- Tailwind CSS with Apple-inspired design
 
-**Design Philosophy:**
-- Apple-inspired minimalist design approach
-- Clean, sophisticated aesthetic prioritizing clarity and elegance
-- Generous white space and subtle interactions
-- System-native feeling with distraction-free focus
-- Custom color system supporting light and dark modes
-
-**Component Structure:**
-- Chat-based UI with header, message area, and input components
-- Reusable UI primitives from Shadcn/ui (buttons, cards, dialogs, etc.)
-- Custom chat components (ChatHeader, ChatMessage, ChatInput, EmptyState, TypingIndicator)
-- Task card displays for showing task details within conversations
-- Responsive layout with mobile-first approach
-
-**State Management:**
-- React Query for API data fetching and caching
-- Local component state for UI interactions
-- Session-based conversation management
-- Toast notifications for user feedback
+**Key Components:**
+- ChatHeader: "Work OS" branding with theme toggle
+- ChatInput: Message input with Enter to send
+- ChatMessage: User/assistant messages with TaskCard support
+- EmptyState: Example prompts for Work OS workflow
 
 ### Backend Architecture
 
 **Technology Stack:**
-- Node.js with Express for the REST API server
-- TypeScript throughout for type safety
-- In-memory storage for sessions and messages (MemStorage class)
-- OpenAI API for natural language processing
-- ClickUp API for task management operations
+- Node.js with Express
+- PostgreSQL (Neon serverless) for persistent state
+- Drizzle ORM for database operations
+- OpenAI GPT-4o with function calling
+- Direct ClickUp API integration
 
-**API Design:**
-- RESTful endpoints for session and chat management
-- POST `/api/sessions` - Create new chat session
-- GET `/api/sessions/:id/messages` - Retrieve conversation history
-- POST `/api/chat` - Send message and receive AI response
-- Health check endpoint for monitoring ClickUp configuration
+**API Endpoints:**
+- POST `/api/chat`: Process chat with AI + tools
+- POST `/api/sessions`: Create new session
+- GET `/api/sessions/:id/messages`: Get conversation history
+- GET `/api/health`: Check ClickUp configuration
 
-**AI Integration:**
-- OpenAI GPT models for natural language understanding
-- Function calling (tool use) to execute ClickUp operations
-- System prompt defines AI assistant behavior and capabilities
-- Context-aware responses based on conversation history
+### Database Schema
 
-**ClickUp Integration:**
-- Custom wrapper around ClickUp API v2
-- Tool-based architecture for discrete task operations:
-  - Workspace navigation (spaces, folders, lists)
-  - Task retrieval and searching
-  - Task creation with configurable properties
-  - Task updates (status, name, description, due date, priority)
-  - Task deletion
-- Error handling and API response validation
+**Tables:**
+- `sessions`: Chat session tracking
+- `messages`: Conversation history with task cards
+- `client_memory`: Tracks last move, tier, stale days, notes per client
+- `daily_log`: Completed moves, clients touched/skipped per day
 
-**Data Flow:**
-1. User sends message through chat interface
-2. Frontend creates/retrieves session and posts message
-3. Backend stores user message and conversation history
-4. OpenAI processes message with available tools context
-5. AI determines appropriate ClickUp operations
-6. Backend executes ClickUp API calls via tool functions
-7. AI generates natural language response with results
-8. Backend stores assistant message and returns to frontend
-9. Frontend displays response with optional task cards
+### AI Tools
 
-### Data Storage
+**ClickUp Tools:**
+- get_spaces, get_folders, get_lists
+- get_tasks, get_all_tasks, search_tasks
+- create_task, update_task, delete_task, get_task
 
-**Current Implementation:**
-- In-memory storage using Map data structures
-- Session tracking with created/last active timestamps
-- Message history with role, content, and optional task cards
-- No persistent database (data lost on server restart)
+**Memory Tools:**
+- get_client_memory: Get client state
+- get_all_clients: List all tracked clients
+- update_client_move: Record completed move
+- get_stale_clients: Find inactive clients (2+ days)
+- set_client_tier: Set client to active/paused/archived
+- add_client_note: Add notes to client memory
+- get_today_summary: Get daily activity summary
+- log_daily_reset: End of day logging
 
-**Schema Design:**
-- Session: id, createdAt, lastActiveAt
-- Message: id, sessionId, role, content, timestamp, taskCard (optional)
-- TaskCard: title, taskId, status, dueDate (optional)
-- Zod schemas for runtime validation
+### System Prompt Behavior
 
-**Future Database Support:**
-- Drizzle ORM configured for PostgreSQL
-- Database connection setup with Neon serverless PostgreSQL
-- Migration system ready via drizzle-kit
-- Schema definitions exist but not yet used in production
+The AI operates in YOLO mode:
+1. **Execute immediately** — No confirmations, just action
+2. **Interpret intent** — Natural language to ClickUp operations
+3. **Track clients** — Auto-update memory when creating/completing tasks
+4. **Surface stale clients** — Proactively mention 2+ day inactive clients
+5. **No guilt** — Shrink moves if overwhelmed, maintain momentum
 
-### External Dependencies
+## Environment Variables
 
-**ClickUp API:**
-- RESTful API v2 for task management operations
-- Requires API key and Team ID for authentication
-- Supports workspace hierarchy (teams, spaces, folders, lists)
-- Task CRUD operations with rich metadata (status, priority, due dates, etc.)
+- `CLICKUP_API_KEY`: ClickUp API authentication
+- `CLICKUP_TEAM_ID`: Target ClickUp workspace
+- `OPENAI_API_KEY`: OpenAI API authentication
+- `DATABASE_URL`: PostgreSQL connection string
 
-**OpenAI API:**
-- GPT models for conversational AI
-- Function calling for structured tool execution
-- Streaming responses not currently implemented
-- Requires API key for authentication
+## Example Commands
 
-**Model Context Protocol (MCP):**
-- Integration point prepared for ClickUp MCP server
-- StdioClientTransport for process communication
-- Not actively used in current implementation
-- Provides alternative integration path for ClickUp operations
-
-**UI Dependencies:**
-- Radix UI primitives for accessible component foundation
-- Lucide React for icon library
-- React Hook Form with Zod resolvers for form handling
-- date-fns for date formatting and manipulation
-
-**Build and Development:**
-- Vite plugins for development experience (error overlay, banner)
-- Replit-specific tooling for deployment environment
-- ESBuild for production bundling
-- PostCSS with Tailwind for CSS processing
-
-**Environment Configuration:**
-- `CLICKUP_API_KEY` - ClickUp API authentication
-- `CLICKUP_TEAM_ID` - Target ClickUp workspace
-- `OPENAI_API_KEY` - OpenAI API authentication
-- `DATABASE_URL` - PostgreSQL connection (prepared but unused)
+- "Make a Raleigh move to review their backlog"
+- "Summarize Memphis"
+- "What did I do today?"
+- "Which clients are stale?"
+- "Push the Memphis invoice through"
+- "Show me all my tasks"
