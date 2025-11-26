@@ -46,65 +46,57 @@ export default function ChatHeader({ onClearChat, onTriageClick, isConnected = t
   };
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur-lg px-6 py-4" data-testid="header-chat">
-      <div className="max-w-4xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <header className="border-b bg-background/95 backdrop-blur-lg px-3 sm:px-6 py-3 sm:py-4" data-testid="header-chat">
+      <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-app-title">
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight whitespace-nowrap" data-testid="text-app-title">
               Work OS
             </h1>
-            <p className="text-sm text-muted-foreground">Move clients forward, daily</p>
+            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Move clients forward, daily</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
+          {/* Nav links - single Link per destination with responsive content */}
           <Link href="/moves">
             <Button
               variant="ghost"
-              size="sm"
-              className="rounded-full"
+              className="rounded-full h-9 w-9 sm:w-auto sm:px-3"
               data-testid="button-moves"
+              title="Moves"
             >
-              <ListTodo className="h-4 w-4 mr-2" />
-              Moves
+              <ListTodo className="h-[18px] w-[18px] sm:mr-2" />
+              <span className="hidden sm:inline">Moves</span>
             </Button>
           </Link>
           <Link href="/metrics">
             <Button
               variant="ghost"
-              size="sm"
-              className="rounded-full"
+              className="rounded-full h-9 w-9 sm:w-auto sm:px-3"
               data-testid="button-metrics"
+              title="Metrics"
             >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Metrics
+              <BarChart3 className="h-[18px] w-[18px] sm:mr-2" />
+              <span className="hidden sm:inline">Metrics</span>
             </Button>
           </Link>
+          
+          {/* Triage button - single button with responsive content */}
           {onTriageClick && (
             <Button
               variant="ghost"
-              size="icon"
               onClick={onTriageClick}
-              className="rounded-full sm:hidden"
-              data-testid="button-triage-mobile"
-              title="Run Triage"
-            >
-              <MagnetoIcon className="h-[18px] w-[18px]" />
-            </Button>
-          )}
-          {onTriageClick && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onTriageClick}
-              className="rounded-full hidden sm:flex"
+              className="rounded-full h-9 w-9 sm:w-auto sm:px-3"
               data-testid="button-triage"
               title="Run Triage"
             >
-              <MagnetoIcon className="h-4 w-4 mr-2" />
-              Triage
+              <MagnetoIcon className="h-[18px] w-[18px] sm:mr-2" />
+              <span className="hidden sm:inline">Triage</span>
             </Button>
           )}
+          
+          {/* Theme toggle - always icon */}
           <Button
             variant="ghost"
             size="icon"
@@ -114,15 +106,17 @@ export default function ChatHeader({ onClearChat, onTriageClick, isConnected = t
           >
             {theme === "light" ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
           </Button>
+          
+          {/* Clear - single button with responsive content */}
           <Button
             variant="ghost"
-            size="sm"
             onClick={onClearChat}
-            className="rounded-full"
+            className="rounded-full h-9 w-9 sm:w-auto sm:px-3"
             data-testid="button-clear-chat"
+            title="Clear chat"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear
+            <Trash2 className="h-[18px] w-[18px] sm:mr-2" />
+            <span className="hidden sm:inline">Clear</span>
           </Button>
         </div>
       </div>
