@@ -142,20 +142,20 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
       }
       onOpenChange(newOpen);
     }}>
-      <DialogContent className="max-w-2xl h-[85vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-2xl w-full sm:w-auto h-[85vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-wrap">
-              <DialogTitle className="text-xl">Daily Triage</DialogTitle>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <DialogTitle className="text-lg sm:text-xl">Daily Triage</DialogTitle>
               {triage && !isLoading && (
                 <Badge 
                   variant={isHealthy ? "default" : hasAutoActions ? "default" : "destructive"}
-                  className={isHealthy ? "bg-green-500" : hasAutoActions ? "bg-blue-500" : ""}
+                  className={`shrink-0 ${isHealthy ? "bg-green-500" : hasAutoActions ? "bg-blue-500" : ""}`}
                 >
                   {isHealthy ? (
                     <><CheckCircle2 className="w-3 h-3 mr-1" /> All Clear</>
                   ) : hasAutoActions ? (
-                    <><Sparkles className="w-3 h-3 mr-1" /> {autoActions.length} Auto-Fixed</>
+                    <><Sparkles className="w-3 h-3 mr-1" /> {autoActions.length} Fixed</>
                   ) : (
                     <><AlertTriangle className="w-3 h-3 mr-1" /> {triage.summary.totalIssues} Issues</>
                   )}
@@ -167,6 +167,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               variant="ghost" 
               onClick={handleRefresh}
               disabled={isFetching}
+              className="shrink-0"
               data-testid="button-triage-refresh"
             >
               {isFetching ? (
@@ -176,7 +177,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               )}
             </Button>
           </div>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             {hasAutoActions 
               ? "Auto-balanced pipelines and filled missing fields"
               : "Pipeline health check, actionability scan, and field validation"
@@ -196,13 +197,13 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
             <div className="space-y-4">
               {promotions.length > 0 && (
                 <Card className="border-blue-500/50 bg-blue-500/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                      <ArrowUpCircle className="w-4 h-4" />
-                      Tasks Promoted ({promotions.length})
+                  <CardHeader className="pb-2 px-3 sm:px-6">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <ArrowUpCircle className="w-4 h-4 shrink-0" />
+                      <span>Promoted ({promotions.length})</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-3 sm:px-6">
                     <div className="space-y-2">
                       {promotions.map((action, idx) => (
                         <div 
@@ -212,14 +213,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         >
                           <ArrowUpCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium truncate">"{action.moveTitle}"</span>
-                              <Badge variant="outline" className="text-xs shrink-0">{action.clientName}</Badge>
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                              <span className="font-medium text-sm truncate">"{action.moveTitle}"</span>
+                              <Badge variant="outline" className="text-xs shrink-0 w-fit">{action.clientName}</Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-1">
+                            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                               {action.from} → <span className="font-medium text-blue-600">{action.to}</span>
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1 italic">{action.reasoning}</p>
+                            <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">{action.reasoning}</p>
                           </div>
                         </div>
                       ))}
@@ -230,15 +231,15 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
 
               {fieldFills.length > 0 && (
                 <Card className="border-green-500/50 bg-green-500/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2 text-green-600 dark:text-green-400">
-                      <Sparkles className="w-4 h-4" />
-                      Fields Auto-Filled ({fieldFills.length})
+                  <CardHeader className="pb-2 px-3 sm:px-6">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-green-600 dark:text-green-400">
+                      <Sparkles className="w-4 h-4 shrink-0" />
+                      <span>Fields Filled ({fieldFills.length})</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-3 sm:px-6">
                     <div className="space-y-2">
-                      {fieldFills.slice(0, 8).map((action, idx) => (
+                      {fieldFills.slice(0, 6).map((action, idx) => (
                         <div 
                           key={idx} 
                           className="flex items-start gap-2 p-2 rounded-md bg-green-500/10"
@@ -246,18 +247,18 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         >
                           <Sparkles className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium truncate">"{action.moveTitle}"</span>
-                              <Badge variant="secondary" className="text-xs shrink-0">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                              <span className="font-medium text-sm truncate">"{action.moveTitle}"</span>
+                              <Badge variant="secondary" className="text-xs shrink-0 w-fit">
                                 {action.field}: {action.value}
                               </Badge>
                             </div>
                           </div>
                         </div>
                       ))}
-                      {fieldFills.length > 8 && (
-                        <p className="text-sm text-muted-foreground pl-6">
-                          ...and {fieldFills.length - 8} more fields filled
+                      {fieldFills.length > 6 && (
+                        <p className="text-xs text-muted-foreground pl-6">
+                          +{fieldFills.length - 6} more
                         </p>
                       )}
                     </div>
@@ -266,13 +267,13 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               )}
 
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Pipeline Health
+                <CardHeader className="pb-2 px-3 sm:px-6">
+                  <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                    <Users className="w-4 h-4 shrink-0" />
+                    <span>Pipeline Health</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 sm:px-6">
                   <div className="flex items-center gap-4 mb-3">
                     <div className="text-2xl font-bold text-green-600">
                       {triage.pipelineHealth.healthyClients}
@@ -324,17 +325,18 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
 
               {vagueRewrites.length > 0 && (
                 <Card className="border-amber-500/50">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                        <Edit3 className="w-4 h-4" />
-                        Suggested Rewrites ({vagueRewrites.length})
+                  <CardHeader className="pb-2 px-3 sm:px-6">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <Edit3 className="w-4 h-4 shrink-0" />
+                        <span>Rewrites ({vagueRewrites.length})</span>
                       </CardTitle>
                       {selectedRewrites.size > 0 && (
                         <Button
                           size="sm"
                           onClick={handleApplySelectedRewrites}
                           disabled={applyRewritesMutation.isPending}
+                          className="w-full sm:w-auto"
                           data-testid="button-apply-rewrites"
                         >
                           {applyRewritesMutation.isPending ? (
@@ -347,8 +349,8 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">
+                  <CardContent className="px-3 sm:px-6">
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                       Select rewrites to apply:
                     </p>
                     <div className="space-y-2">
@@ -357,7 +359,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         return (
                           <div 
                             key={idx} 
-                            className={`p-3 rounded-md cursor-pointer transition-colors ${
+                            className={`p-2 sm:p-3 rounded-md cursor-pointer transition-colors ${
                               isSelected 
                                 ? "bg-amber-500/20 ring-1 ring-amber-500/50" 
                                 : "bg-amber-500/10 hover-elevate"
@@ -365,22 +367,22 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                             onClick={() => handleToggleRewrite(item.moveId)}
                             data-testid={`triage-rewrite-${idx}`}
                           >
-                            <div className="flex items-start gap-3">
+                            <div className="flex items-start gap-2">
                               <Checkbox
                                 checked={isSelected}
                                 onCheckedChange={() => handleToggleRewrite(item.moveId)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="mt-0.5"
+                                className="mt-0.5 shrink-0"
                                 data-testid={`checkbox-rewrite-${idx}`}
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm line-through text-muted-foreground truncate">"{item.title}"</span>
-                                  <Badge variant="outline" className="text-xs shrink-0">{item.clientName}</Badge>
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                                  <span className="text-xs sm:text-sm line-through text-muted-foreground truncate">"{item.title}"</span>
+                                  <Badge variant="outline" className="text-xs shrink-0 w-fit">{item.clientName}</Badge>
                                 </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-sm">→</span>
-                                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">"{item.suggestion}"</span>
+                                <div className="flex items-start gap-1 mt-1">
+                                  <span className="text-xs sm:text-sm shrink-0">→</span>
+                                  <span className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-300 break-words">"{item.suggestion}"</span>
                                 </div>
                               </div>
                             </div>
