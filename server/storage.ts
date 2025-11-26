@@ -3,7 +3,7 @@ import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, 
 import { eq, desc, and, gte, isNull, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
-function getLocalDateString(date: Date = new Date()): string {
+export function getLocalDateString(date: Date = new Date()): string {
   const options: Intl.DateTimeFormatOptions = {
     timeZone: 'America/New_York',
     year: 'numeric',

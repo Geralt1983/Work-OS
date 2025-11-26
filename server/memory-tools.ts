@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage, getLocalDateString } from "./storage";
 import type { Client, Move } from "@shared/schema";
 
 export const memoryTools = [
@@ -196,7 +196,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
     }
 
     case "get_today_summary": {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       const dailyLog = await storage.getDailyLog(today);
       
       if (!dailyLog) {
@@ -221,7 +221,7 @@ export async function executeMemoryTool(name: string, args: Record<string, unkno
     }
 
     case "log_daily_reset": {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       let dailyLog = await storage.getDailyLog(today);
       
       if (!dailyLog) {

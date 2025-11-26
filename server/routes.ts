@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, getLocalDateString } from "./storage";
 import { processChat } from "./openai-service";
 import { z } from "zod";
 import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } from "@shared/schema";
@@ -394,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Also log to daily metrics if move has a client
       if (move.clientId) {
         const client = await storage.getClient(move.clientId);
-        const today = new Date().toISOString().split("T")[0];
+        const today = getLocalDateString();
         await storage.addCompletedMove(today, {
           moveId: move.id.toString(),
           description: move.title,

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { storage } from "./storage";
+import { storage, getLocalDateString } from "./storage";
 import { normalizeDrainType } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -279,7 +279,7 @@ async function runPipelineAudit(shouldCheckActionability: boolean = true): Promi
   
   return {
     audited: true,
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     clients: pipelines,
     summary: {
       totalClients: pipelines.length,
@@ -554,7 +554,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         }
       }
       
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       let dailyLog = await storage.getDailyLog(today);
       
       if (!dailyLog) {
