@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
-import { MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock } from "lucide-react";
+import { 
+  MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, 
+  Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock,
+  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown
+} from "lucide-react";
 import MoveForm from "@/components/MoveForm";
+
+type ViewMode = "board" | "list";
+type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
+type SortDirection = "asc" | "desc";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   active: { label: "Active", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
@@ -22,12 +33,22 @@ const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   done: { label: "Done", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
 };
 
+const STATUS_ORDER: MoveStatus[] = ["active", "queued", "backlog", "done"];
+
 const DRAIN_ICONS: Record<DrainType, typeof Brain> = {
   deep: Brain,
   comms: Mail,
   admin: FileText,
   creative: Lightbulb,
   easy: Zap,
+};
+
+const DRAIN_LABELS: Record<DrainType, string> = {
+  deep: "Deep",
+  comms: "Comms",
+  admin: "Admin",
+  creative: "Creative",
+  easy: "Easy",
 };
 
 function getDaysOld(createdAt: Date | string | null): number {
@@ -236,6 +257,303 @@ function StatusColumn({
   );
 }
 
+function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[]; onUpdate: () => void }) {
+  const { toast } = useToast();
+  const client = clients.find(c => c.id === move.clientId);
+  const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
+  const normalizedDrainType = normalizeDrainType(move.drainType);
+  const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
+  const statusInfo = STATUS_LABELS[move.status as MoveStatus];
+  
+  const daysOld = getDaysOld(move.createdAt);
+  const isAging = daysOld >= 7 && move.status === "backlog";
+  const isStale = daysOld >= 10 && move.status === "backlog";
+
+  const promoteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/promote`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      onUpdate();
+    },
+  });
+
+  const demoteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/demote`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      onUpdate();
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/complete`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      toast({ title: "Move completed", description: move.title });
+      onUpdate();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/moves/${move.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      toast({ title: "Move deleted" });
+      onUpdate();
+    },
+  });
+
+  const canPromote = move.status !== "active" && move.status !== "done";
+  const canDemote = move.status !== "backlog" && move.status !== "done";
+
+  return (
+    <TableRow 
+      className={`group ${isStale ? "bg-orange-500/5" : isAging ? "bg-yellow-500/5" : ""}`}
+      data-testid={`row-move-${move.id}`}
+    >
+      <TableCell className="font-medium max-w-[300px]">
+        <div className="flex items-center gap-2">
+          <span className="truncate" data-testid={`text-row-title-${move.id}`}>{move.title}</span>
+          {isStale && (
+            <Badge variant="destructive" className="text-xs gap-1 shrink-0">
+              <AlertCircle className="h-3 w-3" />
+              {daysOld}d
+            </Badge>
+          )}
+          {isAging && !isStale && (
+            <Badge variant="outline" className="text-xs gap-1 shrink-0 text-yellow-600 border-yellow-400">
+              <Clock className="h-3 w-3" />
+              {daysOld}d
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        {client && (
+          <Badge variant="outline" className="text-xs">
+            {client.name}
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge className={statusInfo.color}>
+          {statusInfo.label}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        {effortLevel && (
+          <Badge variant="secondary" className="text-xs">
+            {effortLevel.label}
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        {DrainIcon && normalizedDrainType && (
+          <div className="flex items-center gap-1.5">
+            <DrainIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{DRAIN_LABELS[normalizedDrainType]}</span>
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {canPromote && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => promoteMutation.mutate()}
+              disabled={promoteMutation.isPending}
+              data-testid={`button-row-promote-${move.id}`}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          )}
+          {canDemote && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => demoteMutation.mutate()}
+              disabled={demoteMutation.isPending}
+              data-testid={`button-row-demote-${move.id}`}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
+          {move.status !== "done" && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-green-600"
+              onClick={() => completeMutation.mutate()}
+              disabled={completeMutation.isPending}
+              data-testid={`button-row-complete-${move.id}`}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-destructive"
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteMutation.isPending}
+            data-testid={`button-row-delete-${move.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ListView({ 
+  moves, 
+  clients, 
+  onUpdate,
+  sortField,
+  sortDirection,
+  onSort
+}: { 
+  moves: Move[]; 
+  clients: Client[]; 
+  onUpdate: () => void;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  onSort: (field: SortField) => void;
+}) {
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 text-muted-foreground" />;
+    return sortDirection === "asc" 
+      ? <ArrowUp className="h-3.5 w-3.5 ml-1" /> 
+      : <ArrowDown className="h-3.5 w-3.5 ml-1" />;
+  };
+
+  const sortedMoves = [...moves].sort((a, b) => {
+    let comparison = 0;
+    
+    switch (sortField) {
+      case "title":
+        comparison = a.title.localeCompare(b.title);
+        break;
+      case "client":
+        const clientA = clients.find(c => c.id === a.clientId)?.name || "";
+        const clientB = clients.find(c => c.id === b.clientId)?.name || "";
+        comparison = clientA.localeCompare(clientB);
+        break;
+      case "status":
+        comparison = STATUS_ORDER.indexOf(a.status as MoveStatus) - STATUS_ORDER.indexOf(b.status as MoveStatus);
+        break;
+      case "effort":
+        comparison = (a.effortEstimate || 0) - (b.effortEstimate || 0);
+        break;
+      case "drain":
+        const drainA = normalizeDrainType(a.drainType) || "";
+        const drainB = normalizeDrainType(b.drainType) || "";
+        comparison = drainA.localeCompare(drainB);
+        break;
+      case "created":
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        comparison = dateA - dateB;
+        break;
+    }
+    
+    return sortDirection === "asc" ? comparison : -comparison;
+  });
+
+  return (
+    <div className="rounded-md border" data-testid="list-view">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onSort("title")}
+              data-testid="sort-title"
+            >
+              <div className="flex items-center">
+                Title
+                <SortIcon field="title" />
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onSort("client")}
+              data-testid="sort-client"
+            >
+              <div className="flex items-center">
+                Client
+                <SortIcon field="client" />
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onSort("status")}
+              data-testid="sort-status"
+            >
+              <div className="flex items-center">
+                Status
+                <SortIcon field="status" />
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onSort("effort")}
+              data-testid="sort-effort"
+            >
+              <div className="flex items-center">
+                Effort
+                <SortIcon field="effort" />
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onSort("drain")}
+              data-testid="sort-drain"
+            >
+              <div className="flex items-center">
+                Type
+                <SortIcon field="drain" />
+              </div>
+            </TableHead>
+            <TableHead className="w-[140px]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedMoves.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                No moves found
+              </TableCell>
+            </TableRow>
+          ) : (
+            sortedMoves.map(move => (
+              <MoveListRow 
+                key={move.id} 
+                move={move} 
+                clients={clients} 
+                onUpdate={onUpdate} 
+              />
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function ThemeToggle() {
   const [isDark, setIsDark] = useState(() => 
     document.documentElement.classList.contains("dark")
@@ -262,8 +580,29 @@ function ThemeToggle() {
 
 export default function Moves() {
   const [clientFilter, setClientFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [drainFilter, setDrainFilter] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [showBacklog, setShowBacklog] = useState(() => {
+    const saved = localStorage.getItem("moves-show-backlog");
+    return saved !== null ? saved === "true" : false;
+  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("moves-view-mode");
+    return (saved === "list" || saved === "board") ? saved : "board";
+  });
+  const [sortField, setSortField] = useState<SortField>("status");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  
   const { toast } = useToast();
+
+  useEffect(() => {
+    localStorage.setItem("moves-show-backlog", String(showBacklog));
+  }, [showBacklog]);
+
+  useEffect(() => {
+    localStorage.setItem("moves-view-mode", viewMode);
+  }, [viewMode]);
 
   const { data: moves = [], isLoading: movesLoading, refetch: refetchMoves } = useQuery<Move[]>({
     queryKey: ["/api/moves"],
@@ -273,9 +612,27 @@ export default function Moves() {
     queryKey: ["/api/clients"],
   });
 
-  const filteredMoves = clientFilter === "all" 
-    ? moves 
-    : moves.filter(m => m.clientId?.toString() === clientFilter);
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const filteredMoves = moves.filter(m => {
+    if (!showBacklog && m.status === "backlog") return false;
+    if (clientFilter !== "all" && m.clientId?.toString() !== clientFilter) return false;
+    if (statusFilter !== "all" && m.status !== statusFilter) return false;
+    if (drainFilter !== "all") {
+      const normalized = normalizeDrainType(m.drainType);
+      if (normalized !== drainFilter) return false;
+    }
+    return true;
+  });
+
+  const backlogCount = moves.filter(m => m.status === "backlog").length;
 
   const handleMoveCreated = () => {
     setCreateDialogOpen(false);
@@ -332,19 +689,26 @@ export default function Moves() {
         </div>
         
         <div className="flex items-center gap-3">
-          <Select value={clientFilter} onValueChange={setClientFilter}>
-            <SelectTrigger className="w-[180px]" data-testid="select-client-filter">
-              <SelectValue placeholder="All Clients" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Clients</SelectItem>
-              {clients.map(client => (
-                <SelectItem key={client.id} value={client.id.toString()}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 border rounded-md p-1" data-testid="view-toggle">
+            <Button
+              size="icon"
+              variant={viewMode === "board" ? "secondary" : "ghost"}
+              className="h-7 w-7"
+              onClick={() => setViewMode("board")}
+              data-testid="button-view-board"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              className="h-7 w-7"
+              onClick={() => setViewMode("list")}
+              data-testid="button-view-list"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
           
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -365,27 +729,99 @@ export default function Moves() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-x-auto p-6">
-        <div className="flex gap-6 min-w-max">
-          <StatusColumn 
-            status="active" 
-            moves={filteredMoves} 
-            clients={clients}
-            onUpdate={() => refetchMoves()}
+      <div className="border-b px-6 py-3 flex items-center gap-4 flex-wrap" data-testid="filter-bar">
+        <Select value={clientFilter} onValueChange={setClientFilter}>
+          <SelectTrigger className="w-[160px]" data-testid="select-client-filter">
+            <SelectValue placeholder="All Clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Clients</SelectItem>
+            {clients.map(client => (
+              <SelectItem key={client.id} value={client.id.toString()}>
+                {client.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="queued">Queued</SelectItem>
+            {showBacklog && <SelectItem value="backlog">Backlog</SelectItem>}
+          </SelectContent>
+        </Select>
+
+        <Select value={drainFilter} onValueChange={setDrainFilter}>
+          <SelectTrigger className="w-[140px]" data-testid="select-drain-filter">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {DRAIN_TYPES.map(drain => (
+              <SelectItem key={drain} value={drain}>
+                {DRAIN_LABELS[drain]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Switch
+            id="show-backlog"
+            checked={showBacklog}
+            onCheckedChange={setShowBacklog}
+            data-testid="switch-show-backlog"
           />
-          <StatusColumn 
-            status="queued" 
-            moves={filteredMoves} 
-            clients={clients}
-            onUpdate={() => refetchMoves()}
-          />
-          <StatusColumn 
-            status="backlog" 
-            moves={filteredMoves} 
-            clients={clients}
-            onUpdate={() => refetchMoves()}
-          />
+          <Label htmlFor="show-backlog" className="text-sm text-muted-foreground cursor-pointer">
+            Show Backlog
+            {backlogCount > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {backlogCount}
+              </Badge>
+            )}
+          </Label>
         </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        {viewMode === "board" ? (
+          <div className="flex gap-6 min-w-max">
+            <StatusColumn 
+              status="active" 
+              moves={filteredMoves} 
+              clients={clients}
+              onUpdate={() => refetchMoves()}
+            />
+            <StatusColumn 
+              status="queued" 
+              moves={filteredMoves} 
+              clients={clients}
+              onUpdate={() => refetchMoves()}
+            />
+            {showBacklog && (
+              <StatusColumn 
+                status="backlog" 
+                moves={filteredMoves} 
+                clients={clients}
+                onUpdate={() => refetchMoves()}
+              />
+            )}
+          </div>
+        ) : (
+          <ListView 
+            moves={filteredMoves} 
+            clients={clients} 
+            onUpdate={() => refetchMoves()}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+          />
+        )}
       </div>
     </div>
   );
