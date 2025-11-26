@@ -103,7 +103,11 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
     },
     onSuccess: (appliedIds) => {
       setSelectedRewrites(new Set());
-      setAppliedRewrites(prev => new Set([...prev, ...appliedIds]));
+      setAppliedRewrites(prev => {
+        const next = new Set(prev);
+        appliedIds.forEach(id => next.add(id));
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
     },
   });
@@ -345,7 +349,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         return (
                           <div 
                             key={idx} 
-                            className={`p-2 sm:p-3 rounded-md cursor-pointer transition-colors ${
+                            className={`p-2 sm:p-3 rounded-md cursor-pointer transition-colors overflow-hidden ${
                               isSelected 
                                 ? "bg-amber-500/20 ring-1 ring-amber-500/50" 
                                 : "bg-amber-500/10 hover-elevate"
@@ -353,7 +357,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                             onClick={() => handleToggleRewrite(item.moveId)}
                             data-testid={`triage-rewrite-${idx}`}
                           >
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-start gap-2 overflow-hidden">
                               <Checkbox
                                 checked={isSelected}
                                 onCheckedChange={() => handleToggleRewrite(item.moveId)}
@@ -361,15 +365,12 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                                 className="mt-0.5 shrink-0"
                                 data-testid={`checkbox-rewrite-${idx}`}
                               />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                                  <span className="text-xs sm:text-sm line-through text-muted-foreground truncate">"{item.title}"</span>
-                                  <Badge variant="outline" className="text-xs shrink-0 w-fit">{item.clientName}</Badge>
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className="text-xs shrink-0">{item.clientName}</Badge>
                                 </div>
-                                <div className="flex items-start gap-1 mt-1">
-                                  <span className="text-xs sm:text-sm shrink-0">→</span>
-                                  <span className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-300 break-words">"{item.suggestion}"</span>
-                                </div>
+                                <p className="text-xs sm:text-sm line-through text-muted-foreground break-words">"{item.title}"</p>
+                                <p className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-300 break-words mt-1">→ "{item.suggestion}"</p>
                               </div>
                             </div>
                           </div>
