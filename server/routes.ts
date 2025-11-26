@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, getLocalDateString } from "./storage";
 import { processChat } from "./openai-service";
-import { runTriage } from "./pipeline-tools";
+import { runTriage, runTriageWithAutoRemediation } from "./pipeline-tools";
 import { z } from "zod";
 import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } from "@shared/schema";
 
@@ -468,7 +468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/triage", async (req, res) => {
+  app.get("/api/triage", async (req, res) => {
     try {
       const result = await runTriage();
       res.json(result);
@@ -478,13 +478,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/triage", async (req, res) => {
+  app.post("/api/triage/auto-fix", async (req, res) => {
     try {
-      const result = await runTriage();
+      const result = await runTriageWithAutoRemediation();
       res.json(result);
     } catch (error) {
-      console.error("Error running triage:", error);
-      res.status(500).json({ error: "Failed to run triage" });
+      console.error("Error running triage with auto-fix:", error);
+      res.status(500).json({ error: "Failed to run triage with auto-fix" });
     }
   });
 

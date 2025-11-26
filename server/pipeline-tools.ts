@@ -386,6 +386,358 @@ export async function runTriage(): Promise<TriageResult> {
   };
 }
 
+interface AutoRemediationAction {
+  type: "promote" | "fill_field";
+  moveId: number;
+  moveTitle: string;
+  clientName: string;
+  from?: string;
+  to?: string;
+  field?: string;
+  value?: string;
+  reasoning: string;
+}
+
+export interface TriageWithRemediationResult extends TriageResult {
+  autoActions: AutoRemediationAction[];
+  remainingIssues: {
+    pipelineGaps: { clientName: string; gap: string; reason: string }[];
+    vagueTasksNeedingRewrite: { moveId: number; title: string; clientName: string; suggestion: string }[];
+  };
+}
+
+export async function runTriageWithAutoRemediation(): Promise<TriageWithRemediationResult> {
+  const pipelines = await getClientsWithPipelines();
+  const actionabilityIssues: TriageResult["actionabilityIssues"] = [];
+  const missingFields: TriageResult["missingFields"] = [];
+  const autoActions: AutoRemediationAction[] = [];
+  const remainingPipelineGaps: { clientName: string; gap: string; reason: string }[] = [];
+  const vagueTasksNeedingRewrite: { moveId: number; title: string; clientName: string; suggestion: string }[] = [];
+  
+  // Get client memory for prioritization context
+  const clientMemories = await storage.getAllClients();
+  const clientMemoryMap = new Map(clientMemories.map(c => [c.clientName.toLowerCase(), c]));
+  
+  // Get stale clients for urgency
+  const staleClients = await storage.getStaleClients(2);
+  const staleClientNames = new Set(staleClients.map(c => c.clientName.toLowerCase()));
+  
+  // Check all moves for missing fields first
+  for (const pipeline of pipelines) {
+    const allMoves = [...pipeline.active, ...pipeline.queued, ...pipeline.backlog];
+    
+    for (const move of allMoves) {
+      const missing: string[] = [];
+      if (!move.drainType) missing.push("drain type");
+      if (!move.effortEstimate) missing.push("effort estimate");
+      
+      if (missing.length > 0) {
+        missingFields.push({
+          moveId: move.id,
+          title: move.title,
+          clientName: move.clientName,
+          status: move.status,
+          missing,
+        });
+      }
+    }
+    
+    // Check actionability for active/queued
+    for (const move of [...pipeline.active, ...pipeline.queued]) {
+      const actionCheck = await checkActionability(move.title, move.description || undefined);
+      if (!actionCheck.actionable) {
+        actionabilityIssues.push({
+          moveId: move.id,
+          title: move.title,
+          clientName: move.clientName,
+          status: move.status,
+          reason: actionCheck.reason,
+        });
+      }
+    }
+  }
+  
+  // Build context for AI decision making
+  const clientsNeedingWork = pipelines.filter(p => p.issues.length > 0);
+  
+  if (clientsNeedingWork.length > 0) {
+    // Build a rich context for each client needing work
+    const clientContexts = clientsNeedingWork.map(p => {
+      const memory = clientMemoryMap.get(p.clientName.toLowerCase());
+      const isStale = staleClientNames.has(p.clientName.toLowerCase());
+      
+      return {
+        clientName: p.clientName,
+        issues: p.issues,
+        isStale,
+        staleDays: memory?.staleDays || 0,
+        importance: memory?.importance || "medium",
+        sentiment: memory?.sentiment || "neutral",
+        avoidanceScore: memory?.avoidanceScore || 0,
+        availableQueued: p.queued.map(m => ({
+          id: m.id,
+          title: m.title,
+          drainType: m.drainType,
+          effortEstimate: m.effortEstimate,
+          daysOld: Math.floor((Date.now() - new Date(m.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+        })),
+        availableBacklog: p.backlog.map(m => ({
+          id: m.id,
+          title: m.title,
+          drainType: m.drainType,
+          effortEstimate: m.effortEstimate,
+          daysOld: Math.floor((Date.now() - new Date(m.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+        })),
+      };
+    });
+    
+    // Ask AI to make intelligent promotion decisions
+    const prompt = `You are helping auto-balance task pipelines for an IT consultant. Each client should have:
+- 1 Active move (work for Today)
+- 1 Queued move (work for Next)
+- Backlog items (future work)
+
+Here are the clients that need attention:
+
+${JSON.stringify(clientContexts, null, 2)}
+
+For EACH client with issues, decide what to do. Consider:
+1. Client importance (high > medium > low) - high importance clients should be fixed first
+2. Stale clients (isStale=true) - these haven't been touched in 2+ days, prioritize them
+3. Task age (daysOld) - older tasks in backlog should generally be promoted first
+4. Avoidance score - high scores may indicate problematic tasks to skip
+5. Task titles - promote actionable-sounding tasks over vague ones
+
+Rules:
+- If client needs Active AND has Queued tasks → promote best Queued task to Active
+- If client needs Queued AND has Backlog tasks → promote best Backlog task to Queued
+- If client has NO Queued/Backlog to promote from, leave as "cannot_auto_fix"
+- Prefer tasks with clear, actionable titles
+- For high-importance or stale clients, be more aggressive about promoting
+
+Respond with JSON:
+{
+  "decisions": [
+    {
+      "clientName": "ClientName",
+      "action": "promote_to_active" | "promote_to_queued" | "cannot_auto_fix",
+      "moveId": <id of move to promote, or null>,
+      "moveTitle": "<title of move>",
+      "reasoning": "<brief explanation>"
+    }
+  ]
+}
+
+If a client has multiple issues (needs both Active AND Queued), include multiple decisions for that client.`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      const decisions = result.decisions || [];
+      
+      // Execute the promotions
+      for (const decision of decisions) {
+        if (decision.action === "cannot_auto_fix") {
+          // Find what gap this is for
+          const client = clientsNeedingWork.find(c => c.clientName === decision.clientName);
+          if (client) {
+            for (const issue of client.issues) {
+              remainingPipelineGaps.push({
+                clientName: decision.clientName,
+                gap: issue,
+                reason: decision.reasoning,
+              });
+            }
+          }
+          continue;
+        }
+        
+        if (!decision.moveId) continue;
+        
+        const targetStatus = decision.action === "promote_to_active" ? "active" : "queued";
+        const move = await storage.getMove(decision.moveId);
+        
+        if (move) {
+          const fromStatus = move.status;
+          await storage.updateMove(decision.moveId, { status: targetStatus });
+          
+          autoActions.push({
+            type: "promote",
+            moveId: decision.moveId,
+            moveTitle: decision.moveTitle || move.title,
+            clientName: decision.clientName,
+            from: fromStatus,
+            to: targetStatus,
+            reasoning: decision.reasoning,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error in AI auto-remediation:", error);
+      // Fall back to marking all as remaining issues
+      for (const client of clientsNeedingWork) {
+        for (const issue of client.issues) {
+          remainingPipelineGaps.push({
+            clientName: client.clientName,
+            gap: issue,
+            reason: "AI analysis unavailable",
+          });
+        }
+      }
+    }
+  }
+  
+  // Auto-fill missing fields using AI inference
+  for (const item of missingFields) {
+    if (item.missing.includes("drain type") || item.missing.includes("effort estimate")) {
+      try {
+        const inferResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: `Analyze this task and infer missing fields:
+Task: "${item.title}"
+Client: ${item.clientName}
+
+Infer:
+1. drain_type: deep (focus work, research, coding), comms (meetings, emails, calls), admin (invoices, scheduling), creative (proposals, design, strategy), or easy (routine, quick wins)
+2. effort_estimate: 1 (quick <10min), 2 (standard 20min), 3 (chunky 30-45min), or 4 (draining 45min+)
+
+Respond with JSON: { "drain_type": "...", "effort_estimate": 1-4, "reasoning": "brief explanation" }`
+          }],
+          response_format: { type: "json_object" },
+        });
+        
+        const inferred = JSON.parse(inferResponse.choices[0].message.content || "{}");
+        const updates: Record<string, unknown> = {};
+        
+        if (item.missing.includes("drain type") && inferred.drain_type) {
+          updates.drainType = inferred.drain_type;
+          autoActions.push({
+            type: "fill_field",
+            moveId: item.moveId,
+            moveTitle: item.title,
+            clientName: item.clientName,
+            field: "drain_type",
+            value: inferred.drain_type,
+            reasoning: inferred.reasoning || "AI inference",
+          });
+        }
+        
+        if (item.missing.includes("effort estimate") && inferred.effort_estimate) {
+          updates.effortEstimate = inferred.effort_estimate;
+          autoActions.push({
+            type: "fill_field",
+            moveId: item.moveId,
+            moveTitle: item.title,
+            clientName: item.clientName,
+            field: "effort_estimate",
+            value: String(inferred.effort_estimate),
+            reasoning: inferred.reasoning || "AI inference",
+          });
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          await storage.updateMove(item.moveId, updates);
+        }
+      } catch (error) {
+        console.error("Error inferring fields for move:", item.moveId, error);
+      }
+    }
+  }
+  
+  // For vague tasks, suggest rewrites but don't auto-fix
+  for (const issue of actionabilityIssues) {
+    try {
+      const rewriteResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{
+          role: "user",
+          content: `This task title is too vague: "${issue.title}"
+Problem: ${issue.reason}
+
+Suggest a more actionable rewrite that is specific, concrete, and can be done in 20 minutes.
+Respond with JSON: { "suggested_title": "..." }`
+        }],
+        response_format: { type: "json_object" },
+      });
+      
+      const suggestion = JSON.parse(rewriteResponse.choices[0].message.content || "{}");
+      vagueTasksNeedingRewrite.push({
+        moveId: issue.moveId,
+        title: issue.title,
+        clientName: issue.clientName,
+        suggestion: suggestion.suggested_title || "No suggestion available",
+      });
+    } catch (error) {
+      vagueTasksNeedingRewrite.push({
+        moveId: issue.moveId,
+        title: issue.title,
+        clientName: issue.clientName,
+        suggestion: "Unable to generate suggestion",
+      });
+    }
+  }
+  
+  // Recalculate pipeline health after auto-fixes
+  const updatedPipelines = await getClientsWithPipelines();
+  const updatedClientsWithIssues = updatedPipelines
+    .filter(p => p.issues.length > 0)
+    .map(p => ({ clientName: p.clientName, issues: p.issues }));
+  
+  // Recalculate missing fields after auto-fills
+  const remainingMissingFields: TriageResult["missingFields"] = [];
+  for (const pipeline of updatedPipelines) {
+    const allMoves = [...pipeline.active, ...pipeline.queued, ...pipeline.backlog];
+    for (const move of allMoves) {
+      const missing: string[] = [];
+      if (!move.drainType) missing.push("drain type");
+      if (!move.effortEstimate) missing.push("effort estimate");
+      if (missing.length > 0) {
+        remainingMissingFields.push({
+          moveId: move.id,
+          title: move.title,
+          clientName: move.clientName,
+          status: move.status,
+          missing,
+        });
+      }
+    }
+  }
+  
+  const pipelineIssueCount = updatedClientsWithIssues.reduce((sum, c) => sum + c.issues.length, 0);
+  const totalIssues = pipelineIssueCount + actionabilityIssues.length + remainingMissingFields.length;
+  
+  return {
+    date: getLocalDateString(),
+    timestamp: new Date().toISOString(),
+    pipelineHealth: {
+      totalClients: updatedPipelines.length,
+      healthyClients: updatedPipelines.length - updatedClientsWithIssues.length,
+      clientsWithIssues: updatedClientsWithIssues,
+    },
+    actionabilityIssues,
+    missingFields: remainingMissingFields,
+    summary: {
+      totalIssues,
+      pipelineIssueCount,
+      actionabilityIssueCount: actionabilityIssues.length,
+      missingFieldsCount: remainingMissingFields.length,
+      isHealthy: totalIssues === 0,
+    },
+    autoActions,
+    remainingIssues: {
+      pipelineGaps: remainingPipelineGaps,
+      vagueTasksNeedingRewrite,
+    },
+  };
+}
+
 async function getClientPipeline(clientName: string): Promise<ClientPipeline | null> {
   const clients = await storage.getAllClientsEntity();
   const client = clients.find((c: { name: string }) => 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,12 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { 
   CheckCircle2, AlertTriangle, XCircle, Users, FileText, 
-  Zap, RefreshCw, Loader2, MessageSquare
+  Zap, RefreshCw, Loader2, ArrowUpCircle, Sparkles, Edit3
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+
+interface AutoAction {
+  type: "promote" | "fill_field";
+  moveId: number;
+  moveTitle: string;
+  clientName: string;
+  from?: string;
+  to?: string;
+  field?: string;
+  value?: string;
+  reasoning: string;
+}
 
 interface TriageResult {
   date: string;
@@ -42,6 +53,11 @@ interface TriageResult {
     missingFieldsCount: number;
     isHealthy: boolean;
   };
+  autoActions?: AutoAction[];
+  remainingIssues?: {
+    pipelineGaps: { clientName: string; gap: string; reason: string }[];
+    vagueTasksNeedingRewrite: { moveId: number; title: string; clientName: string; suggestion: string }[];
+  };
 }
 
 interface TriageDialogProps {
@@ -51,12 +67,14 @@ interface TriageDialogProps {
 
 export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const [triageKey, setTriageKey] = useState(0);
-  const { toast } = useToast();
   
-  const { data: triage, isLoading, isFetching, refetch, isSuccess } = useQuery<TriageResult>({
+  const { data: triage, isLoading, isFetching } = useQuery<TriageResult>({
     queryKey: ['triage', triageKey],
     queryFn: async () => {
-      const res = await fetch('/api/triage');
+      const res = await fetch('/api/triage/auto-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
       if (!res.ok) throw new Error('Failed to run triage');
       return res.json();
     },
@@ -64,43 +82,41 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
     staleTime: 0,
   });
 
-  useEffect(() => {
-    if (isSuccess && triage) {
-      if (triage.summary.isHealthy) {
-        toast({
-          title: "All Clear",
-          description: `${triage.pipelineHealth.healthyClients} clients healthy, no issues found.`,
-        });
-      } else {
-        toast({
-          title: "Issues Found",
-          description: `${triage.summary.totalIssues} issue${triage.summary.totalIssues !== 1 ? 's' : ''} need attention.`,
-          variant: "destructive",
-        });
-      }
-    }
-  }, [isSuccess, triage, toast]);
-
   const handleRefresh = () => {
     setTriageKey(prev => prev + 1);
+    queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
   };
 
+  const autoActions = triage?.autoActions || [];
+  const promotions = autoActions.filter(a => a.type === "promote");
+  const fieldFills = autoActions.filter(a => a.type === "fill_field");
+  const vagueRewrites = triage?.remainingIssues?.vagueTasksNeedingRewrite || [];
+  const remainingGaps = triage?.remainingIssues?.pipelineGaps || [];
+  
+  const hasAutoActions = autoActions.length > 0;
   const isHealthy = triage?.summary.isHealthy ?? false;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      if (!newOpen && hasAutoActions) {
+        queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
+      }
+      onOpenChange(newOpen);
+    }}>
+      <DialogContent className="max-w-2xl h-[85vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <DialogTitle className="text-xl">Daily Triage</DialogTitle>
               {triage && !isLoading && (
                 <Badge 
-                  variant={isHealthy ? "default" : "destructive"}
-                  className={isHealthy ? "bg-green-500" : ""}
+                  variant={isHealthy ? "default" : hasAutoActions ? "default" : "destructive"}
+                  className={isHealthy ? "bg-green-500" : hasAutoActions ? "bg-blue-500" : ""}
                 >
                   {isHealthy ? (
                     <><CheckCircle2 className="w-3 h-3 mr-1" /> All Clear</>
+                  ) : hasAutoActions ? (
+                    <><Sparkles className="w-3 h-3 mr-1" /> {autoActions.length} Auto-Fixed</>
                   ) : (
                     <><AlertTriangle className="w-3 h-3 mr-1" /> {triage.summary.totalIssues} Issues</>
                   )}
@@ -108,7 +124,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               )}
             </div>
             <Button 
-              size="sm" 
+              size="icon" 
               variant="ghost" 
               onClick={handleRefresh}
               disabled={isFetching}
@@ -122,20 +138,94 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
             </Button>
           </div>
           <DialogDescription>
-            Pipeline health check, actionability scan, and field validation
+            {hasAutoActions 
+              ? "Auto-balanced pipelines and filled missing fields"
+              : "Pipeline health check, actionability scan, and field validation"
+            }
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12 flex-1">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Running triage analysis...</p>
+              <p className="text-sm text-muted-foreground">Running triage with auto-fix...</p>
             </div>
           </div>
         ) : triage ? (
-          <ScrollArea className="flex-1 pr-4">
+          <ScrollArea className="flex-1 -mr-4 pr-4 min-h-0">
             <div className="space-y-4">
+              {promotions.length > 0 && (
+                <Card className="border-blue-500/50 bg-blue-500/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <ArrowUpCircle className="w-4 h-4" />
+                      Tasks Promoted ({promotions.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {promotions.map((action, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-start gap-2 p-2 rounded-md bg-blue-500/10"
+                          data-testid={`triage-promotion-${idx}`}
+                        >
+                          <ArrowUpCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium truncate">"{action.moveTitle}"</span>
+                              <Badge variant="outline" className="text-xs shrink-0">{action.clientName}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {action.from} → <span className="font-medium text-blue-600">{action.to}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1 italic">{action.reasoning}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {fieldFills.length > 0 && (
+                <Card className="border-green-500/50 bg-green-500/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-green-600 dark:text-green-400">
+                      <Sparkles className="w-4 h-4" />
+                      Fields Auto-Filled ({fieldFills.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {fieldFills.slice(0, 8).map((action, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-start gap-2 p-2 rounded-md bg-green-500/10"
+                          data-testid={`triage-field-fill-${idx}`}
+                        >
+                          <Sparkles className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium truncate">"{action.moveTitle}"</span>
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                {action.field}: {action.value}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {fieldFills.length > 8 && (
+                        <p className="text-sm text-muted-foreground pl-6">
+                          ...and {fieldFills.length - 8} more fields filled
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -179,18 +269,63 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                       <span className="text-sm">All clients have active, queued, and backlog tasks</span>
                     </div>
                   )}
+
+                  {remainingGaps.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-sm text-muted-foreground mb-2">Could not auto-fix:</p>
+                      {remainingGaps.map((gap, idx) => (
+                        <div key={idx} className="text-sm text-muted-foreground">
+                          • {gap.clientName}: {gap.gap} - <span className="italic">{gap.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Actionability Check
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {triage.actionabilityIssues.length > 0 ? (
+              {vagueRewrites.length > 0 && (
+                <Card className="border-amber-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                      <Edit3 className="w-4 h-4" />
+                      Suggested Rewrites ({vagueRewrites.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      These tasks are vague. Consider rewriting them:
+                    </p>
+                    <div className="space-y-3">
+                      {vagueRewrites.map((item, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-2 rounded-md bg-amber-500/10"
+                          data-testid={`triage-rewrite-${idx}`}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm line-through text-muted-foreground">"{item.title}"</span>
+                            <Badge variant="outline" className="text-xs">{item.clientName}</Badge>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm">→</span>
+                            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">"{item.suggestion}"</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {triage.actionabilityIssues.length > 0 && vagueRewrites.length === 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Actionability Check
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <div className="space-y-2">
                       {triage.actionabilityIssues.map((issue, idx) => (
                         <div 
@@ -200,7 +335,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         >
                           <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium">"{issue.title}"</span>
                               <Badge variant="outline" className="text-xs">{issue.clientName}</Badge>
                               <Badge variant="secondary" className="text-xs">{issue.status}</Badge>
@@ -210,24 +345,19 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm">All active and queued moves are actionable</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Missing Fields
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {triage.missingFields.length > 0 ? (
+              {triage.missingFields.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Missing Fields
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <div className="space-y-2">
                       {triage.missingFields.slice(0, 10).map((item, idx) => (
                         <div 
@@ -237,7 +367,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         >
                           <FileText className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium">"{item.title}"</span>
                               <Badge variant="outline" className="text-xs">{item.clientName}</Badge>
                             </div>
@@ -253,14 +383,21 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                         </p>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm">All moves have drain type and effort estimate</span>
+                  </CardContent>
+                </Card>
+              )}
+
+              {triage.missingFields.length === 0 && triage.actionabilityIssues.length === 0 && triage.pipelineHealth.clientsWithIssues.length === 0 && (
+                <Card className="border-green-500/50 bg-green-500/5">
+                  <CardContent className="pt-6">
+                    <div className="flex flex-col items-center gap-2 text-green-600">
+                      <CheckCircle2 className="w-8 h-8" />
+                      <span className="font-medium">All systems healthy!</span>
+                      <span className="text-sm text-muted-foreground">Every client has a balanced pipeline with actionable tasks.</span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
               <Separator />
               
