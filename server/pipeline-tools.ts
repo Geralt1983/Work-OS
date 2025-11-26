@@ -1050,7 +1050,31 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       const description = args.description as string | undefined;
       const status = (args.status as string) || "backlog";
       const effortEstimate = (args.effort_estimate as number) || 2;
-      const drainType = args.drain_type as string | undefined;
+      let drainType = args.drain_type as string | undefined;
+      
+      // Auto-infer drain_type if not provided
+      if (!drainType) {
+        const titleLower = title.toLowerCase();
+        if (titleLower.includes('email') || titleLower.includes('call') || titleLower.includes('meet') || 
+            titleLower.includes('message') || titleLower.includes('follow up') || titleLower.includes('reach out') ||
+            titleLower.includes('contact') || titleLower.includes('sync') || titleLower.includes('discuss')) {
+          drainType = 'comms';
+        } else if (titleLower.includes('invoice') || titleLower.includes('schedule') || titleLower.includes('update') ||
+                   titleLower.includes('form') || titleLower.includes('paperwork') || titleLower.includes('file') ||
+                   titleLower.includes('log') || titleLower.includes('submit') || titleLower.includes('enter')) {
+          drainType = 'admin';
+        } else if (titleLower.includes('proposal') || titleLower.includes('design') || titleLower.includes('strategy') ||
+                   titleLower.includes('plan') || titleLower.includes('brainstorm') || titleLower.includes('outline') ||
+                   titleLower.includes('draft') || titleLower.includes('write') || titleLower.includes('create')) {
+          drainType = 'creative';
+        } else if (titleLower.includes('research') || titleLower.includes('build') || titleLower.includes('code') ||
+                   titleLower.includes('analyze') || titleLower.includes('debug') || titleLower.includes('fix') ||
+                   titleLower.includes('implement') || titleLower.includes('develop') || titleLower.includes('investigate')) {
+          drainType = 'deep';
+        } else {
+          drainType = 'easy'; // Default to easy for simple tasks
+        }
+      }
       
       let clientId: number | null = null;
       
@@ -1074,12 +1098,12 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         clientId,
         status,
         effortEstimate,
-        drainType: drainType || null,
+        drainType,
       });
       
       return {
         success: true,
-        message: `Created move "${title}"${clientName ? ` for ${clientName}` : ""}`,
+        message: `Created move "${title}"${clientName ? ` for ${clientName}` : ""} [${drainType}, effort: ${effortEstimate}]`,
         move,
       };
     }

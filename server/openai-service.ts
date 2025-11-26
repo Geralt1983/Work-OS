@@ -166,8 +166,19 @@ You have:
 - **Backlog tools**: get_backlog_health, get_aging_backlog, run_backlog_triage
 
 When creating a move:
-1. Use create_move with client_name, title, status, and optional effort/drain
-2. Confirm creation with the move details
+1. **ALWAYS rewrite the title to be actionable**: Start with a verb, include the specific object/outcome
+   - User says "Memphis invoice" → Create: "Send Q4 invoice PDF to Memphis"
+   - User says "Follow up with Raleigh" → Create: "Email Raleigh about project timeline update"
+   - User says "Check on Orlando" → Create: "Review Orlando's latest deliverable and send feedback"
+2. **ALWAYS set effort_estimate**: Infer from task complexity (1=quick 5min, 2=standard 20min, 3=chunky 30min+, 4=draining)
+3. **ALWAYS set drain_type**: Infer from task content:
+   - deep: research, building, coding, analysis, problem-solving
+   - comms: meetings, emails, calls, messages, follow-ups
+   - admin: invoices, scheduling, updates, paperwork, forms
+   - creative: proposals, design, strategy, planning, brainstorming
+   - easy: routine tasks, quick wins, simple updates
+4. Set status based on context (default: backlog, or queued/active if specified)
+5. Confirm creation with the full move details including the actionable title
 
 When completing a move:
 - Use **complete_move** — this marks it done and logs to daily activity
