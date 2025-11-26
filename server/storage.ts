@@ -28,6 +28,8 @@ export interface IStorage {
   getAllClients(): Promise<ClientMemory[]>;
   upsertClientMemory(client: Partial<InsertClientMemory> & { clientName: string }): Promise<ClientMemory>;
   updateClientMove(clientName: string, moveId: string, description: string): Promise<void>;
+  updateClientSentiment(clientName: string, sentiment: string): Promise<ClientMemory | undefined>;
+  updateClientImportance(clientName: string, importance: string): Promise<ClientMemory | undefined>;
   getStaleClients(days?: number): Promise<ClientMemory[]>;
   
   createDailyLog(log: InsertDailyLog): Promise<DailyLog>;
@@ -93,6 +95,12 @@ export interface IStorage {
     sentiment: string;
     importance: string;
     tier: string;
+  }>>;
+  getDrainTypeMetrics(daysBack?: number): Promise<Array<{
+    drainType: string;
+    count: number;
+    minutes: number;
+    percentage: number;
   }>>;
 
   // ============ CLIENTS (first-class entity) ============
@@ -210,6 +218,34 @@ class DatabaseStorage implements IStorage {
         staleDays: 0,
       });
     }
+  }
+
+  async updateClientSentiment(clientName: string, sentiment: string): Promise<ClientMemory | undefined> {
+    const normalized = clientName.toLowerCase().trim();
+    const existing = await this.getClientMemory(normalized);
+    
+    if (existing) {
+      const [updated] = await db.update(clientMemory)
+        .set({ sentiment, updatedAt: new Date() })
+        .where(eq(clientMemory.id, existing.id))
+        .returning();
+      return updated;
+    }
+    return undefined;
+  }
+
+  async updateClientImportance(clientName: string, importance: string): Promise<ClientMemory | undefined> {
+    const normalized = clientName.toLowerCase().trim();
+    const existing = await this.getClientMemory(normalized);
+    
+    if (existing) {
+      const [updated] = await db.update(clientMemory)
+        .set({ importance, updatedAt: new Date() })
+        .where(eq(clientMemory.id, existing.id))
+        .returning();
+      return updated;
+    }
+    return undefined;
   }
 
   async getStaleClients(days: number = 2): Promise<ClientMemory[]> {
@@ -715,6 +751,39 @@ class DatabaseStorage implements IStorage {
         tier: client.tier || "active",
       };
     });
+  }
+
+  async getDrainTypeMetrics(daysBack: number = 30): Promise<Array<{
+    drainType: string;
+    count: number;
+    minutes: number;
+    percentage: number;
+  }>> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    
+    const completedMoves = await db.select().from(moves)
+      .where(eq(moves.status, "done"));
+    
+    const drainCounts = new Map<string, number>();
+    let total = 0;
+    
+    for (const move of completedMoves) {
+      if (move.completedAt && new Date(move.completedAt) >= startDate) {
+        const drainType = move.drainType || "unset";
+        drainCounts.set(drainType, (drainCounts.get(drainType) || 0) + 1);
+        total++;
+      }
+    }
+    
+    return Array.from(drainCounts.entries())
+      .map(([drainType, count]) => ({
+        drainType,
+        count,
+        minutes: count * 20,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
   }
 
   // ============ CLIENTS (first-class entity) ============

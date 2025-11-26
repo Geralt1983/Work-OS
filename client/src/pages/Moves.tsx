@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
-import { MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb } from "lucide-react";
+import { MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock } from "lucide-react";
 import MoveForm from "@/components/MoveForm";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
@@ -30,12 +30,23 @@ const DRAIN_ICONS: Record<DrainType, typeof Brain> = {
   easy: Zap,
 };
 
+function getDaysOld(createdAt: Date | string | null): number {
+  if (!createdAt) return 0;
+  const created = new Date(createdAt);
+  const now = new Date();
+  return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; onUpdate: () => void }) {
   const { toast } = useToast();
   const client = clients.find(c => c.id === move.clientId);
   const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
   const normalizedDrainType = normalizeDrainType(move.drainType);
   const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
+  
+  const daysOld = getDaysOld(move.createdAt);
+  const isAging = daysOld >= 7 && move.status === "backlog";
+  const isStale = daysOld >= 10 && move.status === "backlog";
 
   const promoteMutation = useMutation({
     mutationFn: async () => {
@@ -84,13 +95,30 @@ function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; 
   const canDemote = move.status !== "backlog" && move.status !== "done";
 
   return (
-    <Card className="group hover-elevate" data-testid={`card-move-${move.id}`}>
+    <Card 
+      className={`group hover-elevate ${isStale ? "border-orange-400 dark:border-orange-600" : isAging ? "border-yellow-400 dark:border-yellow-600" : ""}`} 
+      data-testid={`card-move-${move.id}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-sm leading-tight truncate" data-testid={`text-move-title-${move.id}`}>
-              {move.title}
-            </h4>
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium text-sm leading-tight truncate flex-1" data-testid={`text-move-title-${move.id}`}>
+                {move.title}
+              </h4>
+              {isStale && (
+                <Badge variant="destructive" className="text-xs gap-1 shrink-0" data-testid={`badge-stale-${move.id}`}>
+                  <AlertCircle className="h-3 w-3" />
+                  {daysOld}d
+                </Badge>
+              )}
+              {isAging && !isStale && (
+                <Badge variant="outline" className="text-xs gap-1 shrink-0 text-yellow-600 border-yellow-400" data-testid={`badge-aging-${move.id}`}>
+                  <Clock className="h-3 w-3" />
+                  {daysOld}d
+                </Badge>
+              )}
+            </div>
             {client && (
               <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-client-${move.id}`}>
                 {client.name}

@@ -129,6 +129,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/metrics/drain-types", async (req, res) => {
+    try {
+      const daysBack = req.query.days ? parseInt(req.query.days as string) : 30;
+      const metrics = await storage.getDrainTypeMetrics(daysBack);
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching drain type metrics:", error);
+      res.status(500).json({ error: "Failed to fetch drain type metrics" });
+    }
+  });
+
+  app.get("/api/metrics/productivity", async (req, res) => {
+    try {
+      const metrics = await storage.getProductivityByHour();
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching productivity metrics:", error);
+      res.status(500).json({ error: "Failed to fetch productivity metrics" });
+    }
+  });
+
+  app.get("/api/metrics/backlog-health", async (req, res) => {
+    try {
+      const health = await storage.getBacklogHealth();
+      res.json(health);
+    } catch (error) {
+      console.error("Error fetching backlog health:", error);
+      res.status(500).json({ error: "Failed to fetch backlog health" });
+    }
+  });
+
+  app.get("/api/metrics/avoided-tasks", async (req, res) => {
+    try {
+      const daysBack = req.query.days ? parseInt(req.query.days as string) : 14;
+      const tasks = await storage.getAvoidedTasks(daysBack);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching avoided tasks:", error);
+      res.status(500).json({ error: "Failed to fetch avoided tasks" });
+    }
+  });
+
+  app.get("/api/metrics/patterns", async (req, res) => {
+    try {
+      const patternType = req.query.type as string | undefined;
+      const patterns = await storage.getPatterns(patternType);
+      res.json(patterns);
+    } catch (error) {
+      console.error("Error fetching patterns:", error);
+      res.status(500).json({ error: "Failed to fetch patterns" });
+    }
+  });
+
+  const sentimentSchema = z.object({
+    sentiment: z.enum(["positive", "neutral", "negative", "complicated"]),
+  });
+
+  app.patch("/api/client-memory/:clientName/sentiment", async (req, res) => {
+    try {
+      const clientName = decodeURIComponent(req.params.clientName).toLowerCase().trim();
+      const parseResult = sentimentSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        res.status(400).json({ error: "Invalid sentiment value", details: parseResult.error.errors });
+        return;
+      }
+      const { sentiment } = parseResult.data;
+      const updated = await storage.updateClientSentiment(clientName, sentiment);
+      if (!updated) {
+        res.status(404).json({ error: "Client not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating client sentiment:", error);
+      res.status(500).json({ error: "Failed to update client sentiment" });
+    }
+  });
+
+  const importanceSchema = z.object({
+    importance: z.enum(["high", "medium", "low"]),
+  });
+
+  app.patch("/api/client-memory/:clientName/importance", async (req, res) => {
+    try {
+      const clientName = decodeURIComponent(req.params.clientName).toLowerCase().trim();
+      const parseResult = importanceSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        res.status(400).json({ error: "Invalid importance value", details: parseResult.error.errors });
+        return;
+      }
+      const { importance } = parseResult.data;
+      const updated = await storage.updateClientImportance(clientName, importance);
+      if (!updated) {
+        res.status(404).json({ error: "Client not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating client importance:", error);
+      res.status(500).json({ error: "Failed to update client importance" });
+    }
+  });
+
   // ============ CLIENTS API ============
 
   app.get("/api/clients", async (req, res) => {
