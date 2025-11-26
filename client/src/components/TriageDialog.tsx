@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import { 
   CheckCircle2, AlertTriangle, XCircle, Users, FileText, 
-  Zap, RefreshCw, Loader2 
+  Zap, RefreshCw, Loader2, MessageSquare
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface TriageResult {
   date: string;
@@ -49,16 +51,38 @@ interface TriageDialogProps {
 
 export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const [triageKey, setTriageKey] = useState(0);
+  const { toast } = useToast();
   
-  const { data: triage, isLoading, isFetching, refetch } = useQuery<TriageResult>({
-    queryKey: ['/api/triage', triageKey],
+  const { data: triage, isLoading, isFetching, refetch, isSuccess } = useQuery<TriageResult>({
+    queryKey: ['triage', triageKey],
+    queryFn: async () => {
+      const res = await fetch('/api/triage');
+      if (!res.ok) throw new Error('Failed to run triage');
+      return res.json();
+    },
     enabled: open,
     staleTime: 0,
   });
 
+  useEffect(() => {
+    if (isSuccess && triage) {
+      if (triage.summary.isHealthy) {
+        toast({
+          title: "All Clear",
+          description: `${triage.pipelineHealth.healthyClients} clients healthy, no issues found.`,
+        });
+      } else {
+        toast({
+          title: "Issues Found",
+          description: `${triage.summary.totalIssues} issue${triage.summary.totalIssues !== 1 ? 's' : ''} need attention.`,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [isSuccess, triage, toast]);
+
   const handleRefresh = () => {
     setTriageKey(prev => prev + 1);
-    refetch();
   };
 
   const isHealthy = triage?.summary.isHealthy ?? false;
