@@ -220,15 +220,15 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                           data-testid={`triage-promotion-${idx}`}
                         >
                           <ArrowUpCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                              <span className="font-medium text-sm truncate">"{action.moveTitle}"</span>
-                              <Badge variant="outline" className="text-xs shrink-0 w-fit">{action.clientName}</Badge>
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-xs shrink-0">{action.clientName}</Badge>
                             </div>
+                            <p className="font-medium text-sm break-words">"{action.moveTitle}"</p>
                             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                               {action.from} → <span className="font-medium text-blue-600">{action.to}</span>
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">{action.reasoning}</p>
+                            <p className="text-xs text-muted-foreground mt-1 italic break-words">{action.reasoning}</p>
                           </div>
                         </div>
                       ))}
@@ -254,13 +254,13 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                           data-testid={`triage-field-fill-${idx}`}
                         >
                           <Sparkles className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                              <span className="font-medium text-sm truncate">"{action.moveTitle}"</span>
-                              <Badge variant="secondary" className="text-xs shrink-0 w-fit">
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="secondary" className="text-xs shrink-0">
                                 {action.field}: {action.value}
                               </Badge>
                             </div>
+                            <p className="font-medium text-sm break-words">"{action.moveTitle}"</p>
                           </div>
                         </div>
                       ))}

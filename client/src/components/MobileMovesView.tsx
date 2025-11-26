@@ -82,8 +82,8 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-medium text-base leading-tight truncate" data-testid={`mobile-text-move-title-${move.id}`}>
+            <div className="flex items-start gap-2 mb-1">
+              <h4 className="font-medium text-base leading-tight break-words flex-1 min-w-0" data-testid={`mobile-text-move-title-${move.id}`}>
                 {move.title}
               </h4>
               {isStale && (
