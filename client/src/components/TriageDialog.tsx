@@ -69,6 +69,7 @@ interface TriageDialogProps {
 export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const [triageKey, setTriageKey] = useState(0);
   const [selectedRewrites, setSelectedRewrites] = useState<Set<number>>(new Set());
+  const [appliedRewrites, setAppliedRewrites] = useState<Set<number>>(new Set());
   
   const { data: triage, isLoading, isFetching } = useQuery<TriageResult>({
     queryKey: ['triage', triageKey],
@@ -87,6 +88,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const handleRefresh = () => {
     setTriageKey(prev => prev + 1);
     setSelectedRewrites(new Set());
+    setAppliedRewrites(new Set());
     queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
   };
 
@@ -97,11 +99,12 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
           apiRequest('PATCH', `/api/moves/${moveId}`, { title: newTitle })
         )
       );
+      return rewrites.map(r => r.moveId);
     },
-    onSuccess: () => {
+    onSuccess: (appliedIds) => {
       setSelectedRewrites(new Set());
+      setAppliedRewrites(prev => new Set([...prev, ...appliedIds]));
       queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
-      handleRefresh();
     },
   });
 
@@ -129,7 +132,8 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const autoActions = triage?.autoActions || [];
   const promotions = autoActions.filter(a => a.type === "promote");
   const fieldFills = autoActions.filter(a => a.type === "fill_field");
-  const vagueRewrites = triage?.remainingIssues?.vagueTasksNeedingRewrite || [];
+  const allVagueRewrites = triage?.remainingIssues?.vagueTasksNeedingRewrite || [];
+  const vagueRewrites = allVagueRewrites.filter(r => !appliedRewrites.has(r.moveId));
   const remainingGaps = triage?.remainingIssues?.pipelineGaps || [];
   
   const hasAutoActions = autoActions.length > 0;
@@ -196,14 +200,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
           <ScrollArea className="flex-1 -mr-4 pr-4 min-h-0">
             <div className="space-y-4">
               {promotions.length > 0 && (
-                <Card className="border-blue-500/50 bg-blue-500/5">
+                <Card className="border-blue-500/50 bg-blue-500/5 overflow-hidden">
                   <CardHeader className="pb-2 px-3 sm:px-6">
                     <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-blue-600 dark:text-blue-400">
                       <ArrowUpCircle className="w-4 h-4 shrink-0" />
                       <span>Promoted ({promotions.length})</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-3 sm:px-6">
+                  <CardContent className="px-3 sm:px-6 overflow-hidden">
                     <div className="space-y-2">
                       {promotions.map((action, idx) => (
                         <div 
@@ -230,14 +234,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               )}
 
               {fieldFills.length > 0 && (
-                <Card className="border-green-500/50 bg-green-500/5">
+                <Card className="border-green-500/50 bg-green-500/5 overflow-hidden">
                   <CardHeader className="pb-2 px-3 sm:px-6">
                     <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-green-600 dark:text-green-400">
                       <Sparkles className="w-4 h-4 shrink-0" />
                       <span>Fields Filled ({fieldFills.length})</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-3 sm:px-6">
+                  <CardContent className="px-3 sm:px-6 overflow-hidden">
                     <div className="space-y-2">
                       {fieldFills.slice(0, 6).map((action, idx) => (
                         <div 
@@ -266,14 +270,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                 </Card>
               )}
 
-              <Card>
+              <Card className="overflow-hidden">
                 <CardHeader className="pb-2 px-3 sm:px-6">
                   <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                     <Users className="w-4 h-4 shrink-0" />
                     <span>Pipeline Health</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-3 sm:px-6">
+                <CardContent className="px-3 sm:px-6 overflow-hidden">
                   <div className="flex items-center gap-4 mb-3">
                     <div className="text-2xl font-bold text-green-600">
                       {triage.pipelineHealth.healthyClients}
@@ -324,14 +328,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               </Card>
 
               {vagueRewrites.length > 0 && (
-                <Card className="border-amber-500/50">
+                <Card className="border-amber-500/50 overflow-hidden">
                   <CardHeader className="pb-2 px-3 sm:px-6">
                     <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
                       <Edit3 className="w-4 h-4 shrink-0" />
                       <span>Rewrites ({vagueRewrites.length})</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-3 sm:px-6">
+                  <CardContent className="px-3 sm:px-6 overflow-hidden">
                     <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                       Select rewrites to apply:
                     </p>
@@ -377,14 +381,14 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               )}
 
               {triage.actionabilityIssues.length > 0 && vagueRewrites.length === 0 && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Zap className="w-4 h-4" />
-                      Actionability Check
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-2 px-3 sm:px-6">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <Zap className="w-4 h-4 shrink-0" />
+                      <span>Actionability Check</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-3 sm:px-6 overflow-hidden">
                     <div className="space-y-2">
                       {triage.actionabilityIssues.map((issue, idx) => (
                         <div 
