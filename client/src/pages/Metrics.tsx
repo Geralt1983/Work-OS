@@ -99,7 +99,9 @@ function formatMinutes(minutes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
+  // Parse as local date to avoid timezone shift (dateStr is YYYY-MM-DD)
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
