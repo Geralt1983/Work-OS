@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { queryClient } from "@/lib/queryClient";
+import { Checkbox } from "@/components/ui/checkbox";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   CheckCircle2, AlertTriangle, XCircle, Users, FileText, 
-  Zap, RefreshCw, Loader2, ArrowUpCircle, Sparkles, Edit3
+  Zap, RefreshCw, Loader2, ArrowUpCircle, Sparkles, Edit3, Check
 } from "lucide-react";
 
 interface AutoAction {
@@ -67,6 +68,7 @@ interface TriageDialogProps {
 
 export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
   const [triageKey, setTriageKey] = useState(0);
+  const [selectedRewrites, setSelectedRewrites] = useState<Set<number>>(new Set());
   
   const { data: triage, isLoading, isFetching } = useQuery<TriageResult>({
     queryKey: ['triage', triageKey],
@@ -84,7 +86,44 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
 
   const handleRefresh = () => {
     setTriageKey(prev => prev + 1);
+    setSelectedRewrites(new Set());
     queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
+  };
+
+  const applyRewritesMutation = useMutation({
+    mutationFn: async (rewrites: { moveId: number; newTitle: string }[]) => {
+      await Promise.all(
+        rewrites.map(({ moveId, newTitle }) =>
+          apiRequest('PATCH', `/api/moves/${moveId}`, { title: newTitle })
+        )
+      );
+    },
+    onSuccess: () => {
+      setSelectedRewrites(new Set());
+      queryClient.invalidateQueries({ queryKey: ['/api/moves'] });
+      handleRefresh();
+    },
+  });
+
+  const handleToggleRewrite = (moveId: number) => {
+    setSelectedRewrites(prev => {
+      const next = new Set(prev);
+      if (next.has(moveId)) {
+        next.delete(moveId);
+      } else {
+        next.add(moveId);
+      }
+      return next;
+    });
+  };
+
+  const handleApplySelectedRewrites = () => {
+    const rewrites = vagueRewrites
+      .filter(r => selectedRewrites.has(r.moveId))
+      .map(r => ({ moveId: r.moveId, newTitle: r.suggestion }));
+    if (rewrites.length > 0) {
+      applyRewritesMutation.mutate(rewrites);
+    }
   };
 
   const autoActions = triage?.autoActions || [];
@@ -286,32 +325,68 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               {vagueRewrites.length > 0 && (
                 <Card className="border-amber-500/50">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                      <Edit3 className="w-4 h-4" />
-                      Suggested Rewrites ({vagueRewrites.length})
-                    </CardTitle>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <Edit3 className="w-4 h-4" />
+                        Suggested Rewrites ({vagueRewrites.length})
+                      </CardTitle>
+                      {selectedRewrites.size > 0 && (
+                        <Button
+                          size="sm"
+                          onClick={handleApplySelectedRewrites}
+                          disabled={applyRewritesMutation.isPending}
+                          data-testid="button-apply-rewrites"
+                        >
+                          {applyRewritesMutation.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                          ) : (
+                            <Check className="w-3 h-3 mr-1" />
+                          )}
+                          Apply {selectedRewrites.size}
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-3">
-                      These tasks are vague. Consider rewriting them:
+                      Select rewrites to apply:
                     </p>
-                    <div className="space-y-3">
-                      {vagueRewrites.map((item, idx) => (
-                        <div 
-                          key={idx} 
-                          className="p-2 rounded-md bg-amber-500/10"
-                          data-testid={`triage-rewrite-${idx}`}
-                        >
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm line-through text-muted-foreground">"{item.title}"</span>
-                            <Badge variant="outline" className="text-xs">{item.clientName}</Badge>
+                    <div className="space-y-2">
+                      {vagueRewrites.map((item, idx) => {
+                        const isSelected = selectedRewrites.has(item.moveId);
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`p-3 rounded-md cursor-pointer transition-colors ${
+                              isSelected 
+                                ? "bg-amber-500/20 ring-1 ring-amber-500/50" 
+                                : "bg-amber-500/10 hover-elevate"
+                            }`}
+                            onClick={() => handleToggleRewrite(item.moveId)}
+                            data-testid={`triage-rewrite-${idx}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleToggleRewrite(item.moveId)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-0.5"
+                                data-testid={`checkbox-rewrite-${idx}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm line-through text-muted-foreground truncate">"{item.title}"</span>
+                                  <Badge variant="outline" className="text-xs shrink-0">{item.clientName}</Badge>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-sm">→</span>
+                                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">"{item.suggestion}"</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm">→</span>
-                            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">"{item.suggestion}"</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
