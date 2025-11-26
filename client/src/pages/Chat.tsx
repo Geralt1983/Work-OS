@@ -4,7 +4,6 @@ import ChatMessage, { type ChatMessageProps } from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
 import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,10 +17,7 @@ export default function Chat() {
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]");
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   };
 
@@ -109,20 +105,20 @@ export default function Chat() {
     <div className="h-screen flex flex-col bg-background" data-testid="page-chat">
       <ChatHeader onClearChat={handleClearChat} isConnected={isConnected} />
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto overscroll-contain">
         {messages.length === 0 ? (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto overscroll-contain">
             <EmptyState onExampleClick={handleExampleClick} />
           </div>
         ) : (
-          <ScrollArea ref={scrollAreaRef} className="h-full">
+          <div ref={scrollAreaRef} className="h-full overflow-auto overscroll-contain">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-4">
               {messages.map((message, index) => (
                 <ChatMessage key={index} {...message} />
               ))}
               {isTyping && <TypingIndicator />}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </div>
 
