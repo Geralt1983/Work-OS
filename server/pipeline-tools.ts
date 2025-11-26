@@ -113,7 +113,7 @@ export const pipelineTools = [
   },
   {
     name: "create_move",
-    description: "Create a new move for a client. Moves are 20-minute tasks that advance client work.",
+    description: "Create a new move for a client. Moves are 20-minute tasks that advance client work. ALWAYS infer and set drain_type based on the task content - analyze whether it's focus work (deep), communication (comms), administrative (admin), strategic thinking (creative), or a quick win (easy).",
     parameters: {
       type: "object",
       properties: {
@@ -122,7 +122,7 @@ export const pipelineTools = [
         description: { type: "string", description: "Optional description with more details" },
         status: { type: "string", enum: ["active", "queued", "backlog"], description: "Initial status (default: backlog)" },
         effort_estimate: { type: "number", enum: [1, 2, 3, 4], description: "Effort level: 1=quick, 2=standard 20min, 3=chunky, 4=draining" },
-        drain_type: { type: "string", enum: ["deep", "comms", "admin", "creative", "easy"], description: "Type of work: deep=focus-intensive, comms=meetings/emails, admin=paperwork, creative=strategic, easy=quick wins" },
+        drain_type: { type: "string", enum: ["deep", "comms", "admin", "creative", "easy"], description: "Type of work - ALWAYS infer from task: deep=research/building/coding/analysis, comms=meetings/emails/calls/messages, admin=invoices/scheduling/updates/paperwork, creative=proposals/design/strategy/planning, easy=routine/quick-wins/simple-updates" },
       },
       required: ["title"],
     },
