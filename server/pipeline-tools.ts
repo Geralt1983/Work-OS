@@ -257,18 +257,25 @@ async function checkActionability(moveName: string, moveDescription?: string): P
       messages: [
         {
           role: "system",
-          content: `You are evaluating if a move is "actionable" - meaning it has a clear, concrete next step that can be done in 20 minutes or less.
+          content: `You are evaluating if a task can be STARTED as a 20-minute move. Be LENIENT - most tasks are actionable.
 
-ACTIONABLE moves:
-- "Send Q4 invoice PDF to Memphis" ✓
-- "Review and comment on Raleigh's proposal doc" ✓  
-- "Schedule 15-min call with Orlando about timeline" ✓
+ACTIONABLE (mark true) - has ANY concrete action:
+- "Review the proposal" ✓ (reviewing is an action)
+- "Check the logs for errors" ✓ (checking is an action)
+- "Draft email to client" ✓ (drafting is an action)
+- "Document the API changes" ✓ (documenting is an action)
+- "Contact recruiters about roles" ✓ (contacting is an action)
+- "Summarize meeting notes" ✓ (summarizing is an action)
+- "Review item #2 on the list" ✓ (specific enough)
 
-NON-ACTIONABLE moves:
-- "Follow up" ✗ (vague - follow up how? about what?)
-- "Check on project" ✗ (no clear action)
-- "Memphis stuff" ✗ (too vague)
-- "Think about strategy" ✗ (not a clear action)
+NON-ACTIONABLE (mark false) - ONLY these patterns:
+- "Follow up" ✗ (no object - follow up on WHAT?)
+- "Client stuff" ✗ (no verb at all)
+- "Memphis" ✗ (just a name, no action)
+- "Check on things" ✗ (too vague - check WHAT?)
+- "Handle it" ✗ (no specifics)
+
+DEFAULT TO TRUE. Only mark false if the task literally cannot be started because it lacks both a verb AND an object.
 
 Respond with JSON: { "actionable": true/false, "reason": "brief explanation" }`
         },
