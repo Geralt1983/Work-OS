@@ -153,10 +153,7 @@ export default function Metrics() {
 
   const updateSentiment = useMutation({
     mutationFn: async ({ clientName, sentiment }: { clientName: string; sentiment: string }) => {
-      return apiRequest(`/api/client-memory/${encodeURIComponent(clientName)}/sentiment`, {
-        method: "PATCH",
-        body: JSON.stringify({ sentiment }),
-      });
+      return apiRequest("PATCH", `/api/client-memory/${encodeURIComponent(clientName)}/sentiment`, { sentiment });
     },
     onSuccess: (_, { clientName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics/clients"] });
@@ -169,10 +166,7 @@ export default function Metrics() {
 
   const updateImportance = useMutation({
     mutationFn: async ({ clientName, importance }: { clientName: string; importance: string }) => {
-      return apiRequest(`/api/client-memory/${encodeURIComponent(clientName)}/importance`, {
-        method: "PATCH",
-        body: JSON.stringify({ importance }),
-      });
+      return apiRequest("PATCH", `/api/client-memory/${encodeURIComponent(clientName)}/importance`, { importance });
     },
     onSuccess: (_, { clientName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics/clients"] });
