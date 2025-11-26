@@ -109,9 +109,11 @@ export default function Chat() {
     <div className="h-screen flex flex-col bg-background" data-testid="page-chat">
       <ChatHeader onClearChat={handleClearChat} isConnected={isConnected} />
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto">
         {messages.length === 0 ? (
-          <EmptyState onExampleClick={handleExampleClick} />
+          <div className="h-full overflow-auto">
+            <EmptyState onExampleClick={handleExampleClick} />
+          </div>
         ) : (
           <ScrollArea ref={scrollAreaRef} className="h-full">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-4">
