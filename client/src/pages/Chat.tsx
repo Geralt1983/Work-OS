@@ -4,6 +4,7 @@ import ChatMessage, { type ChatMessageProps } from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
 import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
+import { TriageDialog } from "@/components/TriageDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -12,6 +13,7 @@ export default function Chat() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(true);
+  const [triageOpen, setTriageOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -92,6 +94,11 @@ export default function Chat() {
   };
 
   const handleExampleClick = (example: string) => {
+    // "Run triage" opens the dialog directly instead of sending a message
+    if (example.toLowerCase() === "run triage") {
+      setTriageOpen(true);
+      return;
+    }
     handleSendMessage(example);
   };
 
@@ -103,7 +110,11 @@ export default function Chat() {
 
   return (
     <div className="h-screen flex flex-col bg-background" data-testid="page-chat">
-      <ChatHeader onClearChat={handleClearChat} isConnected={isConnected} />
+      <ChatHeader 
+        onClearChat={handleClearChat} 
+        onTriageClick={() => setTriageOpen(true)}
+        isConnected={isConnected} 
+      />
 
       <div className="flex-1 min-h-0 overflow-auto overscroll-contain">
         {messages.length === 0 ? (
@@ -125,6 +136,8 @@ export default function Chat() {
       <div className="shrink-0 border-t bg-background">
         <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
       </div>
+
+      <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
     </div>
   );
 }
