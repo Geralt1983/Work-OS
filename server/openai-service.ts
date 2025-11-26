@@ -190,7 +190,7 @@ The Metrics dashboard shows pacing (target: 3 hours/day = 9 moves), weekly trend
 export async function processChat(
   messages: Message[],
   imageUrl?: string,
-  imageBase64?: string
+  imagesBase64?: string[]
 ): Promise<{ content: string; taskCard?: any }> {
   const openaiMessages: Array<OpenAI.ChatCompletionMessageParam> = [
     { role: "system", content: WORK_OS_PROMPT },
@@ -199,8 +199,9 @@ export async function processChat(
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
     const isLastMessage = i === messages.length - 1;
+    const hasImages = imageUrl || (imagesBase64 && imagesBase64.length > 0);
     
-    if (msg.role === "user" && isLastMessage && (imageUrl || imageBase64)) {
+    if (msg.role === "user" && isLastMessage && hasImages) {
       const contentParts: OpenAI.ChatCompletionContentPart[] = [];
       
       if (imageUrl) {
@@ -208,14 +209,16 @@ export async function processChat(
           type: "image_url",
           image_url: { url: imageUrl }
         });
-      } else if (imageBase64) {
-        contentParts.push({
-          type: "image_url",
-          image_url: { url: `data:image/jpeg;base64,${imageBase64}` }
-        });
+      } else if (imagesBase64 && imagesBase64.length > 0) {
+        for (const base64 of imagesBase64) {
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64}` }
+          });
+        }
       }
       
-      const textContent = msg.content.replace("[Image attached]\n", "");
+      const textContent = msg.content.replace(/\[Image(?:s)? attached\]\n?/g, "");
       contentParts.push({
         type: "text",
         text: textContent
@@ -264,7 +267,6 @@ export async function processChat(
       const toolArgs = JSON.parse(toolCall.function.arguments);
 
       console.log(`🔧 Calling tool: ${toolName}`, toolArgs);
-      onToolCall?.(toolName);
 
       try {
         let result: unknown;

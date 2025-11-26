@@ -3,11 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, ImagePlus, X } from "lucide-react";
 
+interface SelectedImage {
+  file: File;
+  previewUrl: string;
+  base64: string;
+}
+
 export interface ChatInputProps {
-  onSendMessage: (message: string, imageBase64?: string) => void;
+  onSendMessage: (message: string, imagesBase64?: string[]) => void;
   disabled?: boolean;
   placeholder?: string;
 }
+
+const MAX_IMAGES = 5;
 
 export default function ChatInput({
   onSendMessage,
@@ -15,36 +23,45 @@ export default function ChatInput({
   placeholder = "Tell me about your tasks or what you'd like to do...",
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
-  const [selectedImage, setSelectedImage] = useState<{ file: File; previewUrl: string; base64: string } | null>(null);
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
     
-    const previewUrl = URL.createObjectURL(file);
-    
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      setSelectedImage({ file, previewUrl, base64 });
-    };
-    reader.readAsDataURL(file);
+    setSelectedImages(prev => {
+      if (prev.length >= MAX_IMAGES) return prev;
+      
+      const previewUrl = URL.createObjectURL(file);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        setSelectedImages(current => {
+          const exists = current.some(img => img.file.name === file.name && img.file.size === file.size);
+          if (exists || current.length >= MAX_IMAGES) return current;
+          return [...current, { file, previewUrl, base64 }];
+        });
+      };
+      reader.readAsDataURL(file);
+      
+      return prev;
+    });
   }, []);
 
   const handlePaste = useCallback((e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
-    for (const item of items) {
+    Array.from(items).forEach(item => {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
           handleFileSelect(file);
-          break;
         }
       }
-    }
+    });
   }, [handleFileSelect]);
 
   useEffect(() => {
@@ -54,25 +71,28 @@ export default function ChatInput({
 
   const handleSubmit = () => {
     const trimmed = message.trim();
-    if ((!trimmed && !selectedImage) || disabled) return;
+    if ((!trimmed && selectedImages.length === 0) || disabled) return;
 
-    onSendMessage(trimmed || "What's in this image?", selectedImage?.base64);
+    const base64Array = selectedImages.length > 0 ? selectedImages.map(img => img.base64) : undefined;
+    onSendMessage(trimmed || "What's in this image?", base64Array);
     setMessage("");
-    if (selectedImage) {
-      URL.revokeObjectURL(selectedImage.previewUrl);
-      setSelectedImage(null);
-    }
+    
+    selectedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+    setSelectedImages([]);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
   };
 
-  const handleRemoveImage = () => {
-    if (selectedImage) {
-      URL.revokeObjectURL(selectedImage.previewUrl);
-      setSelectedImage(null);
-    }
+  const handleRemoveImage = (index: number) => {
+    setSelectedImages(prev => {
+      const img = prev[index];
+      if (img) {
+        URL.revokeObjectURL(img.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -90,33 +110,40 @@ export default function ChatInput({
   }, [message]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(file => handleFileSelect(file));
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
   return (
     <div className="border-t bg-background/95 backdrop-blur-lg p-6">
       <div className="max-w-4xl mx-auto space-y-3">
-        {selectedImage && (
-          <div className="relative inline-block">
-            <img 
-              src={selectedImage.previewUrl} 
-              alt="Selected" 
-              className="h-20 w-20 object-cover rounded-lg border"
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="destructive"
-              className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
-              onClick={handleRemoveImage}
-              disabled={disabled}
-              data-testid="button-remove-image"
-            >
-              <X className="h-3 w-3" />
-            </Button>
+        {selectedImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedImages.map((img, index) => (
+              <div key={`${img.file.name}-${index}`} className="relative inline-block">
+                <img 
+                  src={img.previewUrl} 
+                  alt={`Selected ${index + 1}`} 
+                  className="h-20 w-20 object-cover rounded-lg border"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
+                  onClick={() => handleRemoveImage(index)}
+                  disabled={disabled}
+                  data-testid={`button-remove-image-${index}`}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
           </div>
         )}
         <div className="flex gap-3 items-end">
@@ -124,6 +151,7 @@ export default function ChatInput({
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleInputChange}
             className="hidden"
             data-testid="input-image-file"
@@ -133,7 +161,7 @@ export default function ChatInput({
             size="icon"
             variant="ghost"
             onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
+            disabled={disabled || selectedImages.length >= MAX_IMAGES}
             className="h-12 w-12 rounded-full shrink-0"
             data-testid="button-add-image"
           >
@@ -144,7 +172,7 @@ export default function ChatInput({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={selectedImage ? "Describe what you want to know about this image..." : placeholder}
+            placeholder={selectedImages.length > 0 ? "Describe what you want to know about these images..." : placeholder}
             disabled={disabled}
             className="min-h-[48px] max-h-[200px] resize-none rounded-xl text-[15px] leading-relaxed"
             rows={1}
@@ -152,7 +180,7 @@ export default function ChatInput({
           />
           <Button
             onClick={handleSubmit}
-            disabled={disabled || (!message.trim() && !selectedImage)}
+            disabled={disabled || (!message.trim() && selectedImages.length === 0)}
             size="icon"
             className="rounded-full h-12 w-12 shrink-0"
             data-testid="button-send"
@@ -161,7 +189,7 @@ export default function ChatInput({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Paste or drop an image, or click the image button to upload a screenshot
+          Paste, drop, or click to upload images (up to {MAX_IMAGES})
         </p>
       </div>
     </div>

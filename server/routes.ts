@@ -10,6 +10,7 @@ const sendMessageSchema = z.object({
   message: z.string().min(1),
   imageUrl: z.string().optional().nullable(),
   imageBase64: z.string().optional().nullable(),
+  imagesBase64: z.array(z.string()).optional().nullable(),
 });
 
 const updateMoveSchema = z.object({
@@ -54,7 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { sessionId: providedSessionId, message, imageUrl, imageBase64 } = sendMessageSchema.parse(req.body);
+      const { sessionId: providedSessionId, message, imageUrl, imageBase64, imagesBase64 } = sendMessageSchema.parse(req.body);
 
       let sessionId = providedSessionId;
       if (!sessionId) {
@@ -62,10 +63,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sessionId = session.id;
       }
 
+      const allImages = imagesBase64 || (imageBase64 ? [imageBase64] : undefined);
+      const hasImages = allImages && allImages.length > 0;
+
       const userMessage = await storage.createMessage({
         sessionId,
         role: "user",
-        content: imageUrl || imageBase64 ? `[Image attached]\n${message}` : message,
+        content: hasImages ? `[${allImages.length > 1 ? 'Images' : 'Image'} attached]\n${message}` : message,
       });
 
       const conversationHistory = await storage.getSessionMessages(sessionId, 20);
@@ -73,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { content, taskCard } = await processChat(
         conversationHistory, 
         imageUrl || undefined, 
-        imageBase64 || undefined
+        allImages
       );
 
       const assistantMessage = await storage.createMessage({

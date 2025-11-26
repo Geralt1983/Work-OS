@@ -34,7 +34,7 @@ export default function Chat() {
       try {
         const response = await fetch("/api/health");
         const data = await response.json();
-        setIsConnected(data.clickupConfigured);
+        setIsConnected(data.status === "ok");
       } catch (error) {
         setIsConnected(false);
       }
@@ -44,12 +44,13 @@ export default function Chat() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSendMessage = async (content: string, imageBase64?: string) => {
+  const handleSendMessage = async (content: string, imagesBase64?: string[]) => {
+    const hasImages = imagesBase64 && imagesBase64.length > 0;
     const userMessage: ChatMessageProps = {
       role: "user",
-      content: imageBase64 ? `[Image attached]\n${content}` : content,
+      content: hasImages ? `[${imagesBase64.length > 1 ? 'Images' : 'Image'} attached]\n${content}` : content,
       timestamp: new Date(),
-      imageBase64: imageBase64,
+      imagesBase64: imagesBase64,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -59,7 +60,7 @@ export default function Chat() {
       const res = await apiRequest("POST", "/api/chat", {
         ...(sessionId && { sessionId }),
         message: content,
-        ...(imageBase64 && { imageBase64 }),
+        ...(hasImages && { imagesBase64 }),
       });
       const response = await res.json() as { sessionId: string; assistantMessage: { content: string; timestamp: string; taskCard?: any } };
 
@@ -85,7 +86,7 @@ export default function Chat() {
 
       const errorMessage: ChatMessageProps = {
         role: "assistant",
-        content: "I'm having trouble connecting to ClickUp right now. Please check your configuration and try again.",
+        content: "I'm having trouble processing that request. Please try again.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

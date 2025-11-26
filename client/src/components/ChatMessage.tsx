@@ -7,7 +7,7 @@ export interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  imageBase64?: string;
+  imagesBase64?: string[];
   taskCard?: {
     title: string;
     taskId: string;
@@ -16,9 +16,9 @@ export interface ChatMessageProps {
   };
 }
 
-export default function ChatMessage({ role, content, timestamp, imageBase64, taskCard }: ChatMessageProps) {
+export default function ChatMessage({ role, content, timestamp, imagesBase64, taskCard }: ChatMessageProps) {
   const isUser = role === "user";
-  const displayContent = content.replace("[Image attached]\n", "");
+  const displayContent = content.replace(/\[Image(?:s)? attached\]\n?/g, "");
 
   return (
     <div className={`flex gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -29,14 +29,18 @@ export default function ChatMessage({ role, content, timestamp, imageBase64, tas
       </Avatar>
 
       <div className={`flex flex-col gap-2.5 max-w-[65%] ${isUser ? "items-end" : "items-start"}`}>
-        {imageBase64 && isUser && (
-          <div className="rounded-xl overflow-hidden border max-w-xs">
-            <img 
-              src={`data:image/jpeg;base64,${imageBase64}`} 
-              alt="Uploaded" 
-              className="max-w-full max-h-48 object-contain"
-              data-testid="message-image"
-            />
+        {imagesBase64 && imagesBase64.length > 0 && isUser && (
+          <div className="flex flex-wrap gap-2 justify-end">
+            {imagesBase64.map((img, index) => (
+              <div key={index} className="rounded-xl overflow-hidden border max-w-[150px]">
+                <img 
+                  src={`data:image/jpeg;base64,${img}`} 
+                  alt={`Uploaded ${index + 1}`} 
+                  className="max-w-full max-h-32 object-contain"
+                  data-testid={`message-image-${index}`}
+                />
+              </div>
+            ))}
           </div>
         )}
         <div
