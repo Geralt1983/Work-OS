@@ -6,11 +6,11 @@ export interface EmptyStateProps {
 }
 
 const examplePrompts = [
-  "Make a Raleigh move to review their backlog",
-  "Summarize Memphis",
-  "What did I do today?",
-  "Which clients are stale?",
-  "Show me all my tasks",
+  "What should I work on next?",
+  "Run triage",
+  "I have 30 minutes and low energy",
+  "Show all pipelines",
+  "Who needs attention?",
 ];
 
 export default function EmptyState({ onExampleClick }: EmptyStateProps) {
