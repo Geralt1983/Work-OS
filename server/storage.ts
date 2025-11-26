@@ -267,7 +267,18 @@ class DatabaseStorage implements IStorage {
     const allClients = await this.getAllClients();
     const now = new Date();
     
+    // Get internal entities to exclude from stale checks
+    const clientEntities = await this.getAllClientsEntity();
+    const internalNames = new Set(
+      clientEntities
+        .filter(c => c.type === "internal")
+        .map(c => c.name.toLowerCase())
+    );
+    
     return allClients.filter(client => {
+      // Skip internal entities (Revenue, General Admin, etc.)
+      if (internalNames.has(client.clientName.toLowerCase())) return false;
+      
       if (!client.lastMoveAt) return true;
       const lastMove = new Date(client.lastMoveAt);
       const diffDays = Math.floor((now.getTime() - lastMove.getTime()) / (1000 * 60 * 60 * 24));

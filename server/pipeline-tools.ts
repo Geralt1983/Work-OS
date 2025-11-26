@@ -21,6 +21,7 @@ interface MoveWithContext {
 interface ClientPipeline {
   clientName: string;
   clientId: number;
+  clientType: string; // "client" or "internal"
   active: MoveWithContext[];
   queued: MoveWithContext[];
   backlog: MoveWithContext[];
@@ -202,10 +203,12 @@ async function getClientsWithPipelines(): Promise<ClientPipeline[]> {
     if (client.isActive === 0) continue;
     
     const moves = await storage.getMovesByClient(client.id);
+    const isInternal = client.type === "internal";
     
     const pipeline: ClientPipeline = {
       clientName: client.name,
       clientId: client.id,
+      clientType: client.type || "client",
       active: [],
       queued: [],
       backlog: [],
@@ -234,14 +237,17 @@ async function getClientsWithPipelines(): Promise<ClientPipeline[]> {
       }
     }
     
-    if (pipeline.active.length === 0) {
-      pipeline.issues.push("No active move (Today)");
-    }
-    if (pipeline.queued.length === 0) {
-      pipeline.issues.push("No queued move (Next)");
-    }
-    if (pipeline.backlog.length === 0) {
-      pipeline.issues.push("Empty backlog");
+    // Only enforce strict pipeline rules for actual clients, not internal work
+    if (!isInternal) {
+      if (pipeline.active.length === 0) {
+        pipeline.issues.push("No active move (Today)");
+      }
+      if (pipeline.queued.length === 0) {
+        pipeline.issues.push("No queued move (Next)");
+      }
+      if (pipeline.backlog.length === 0) {
+        pipeline.issues.push("Empty backlog");
+      }
     }
     
     pipelines.push(pipeline);
@@ -756,10 +762,12 @@ async function getClientPipeline(clientName: string): Promise<ClientPipeline | n
   }
   
   const moves = await storage.getMovesByClient(client.id);
+  const isInternal = client.type === "internal";
   
   const pipeline: ClientPipeline = {
     clientName: client.name,
     clientId: client.id,
+    clientType: client.type || "client",
     active: [],
     queued: [],
     backlog: [],
@@ -788,9 +796,12 @@ async function getClientPipeline(clientName: string): Promise<ClientPipeline | n
     }
   }
   
-  if (pipeline.active.length === 0) pipeline.issues.push("No active move");
-  if (pipeline.queued.length === 0) pipeline.issues.push("No queued move");
-  if (pipeline.backlog.length === 0) pipeline.issues.push("Empty backlog");
+  // Only enforce strict pipeline rules for actual clients, not internal work
+  if (!isInternal) {
+    if (pipeline.active.length === 0) pipeline.issues.push("No active move");
+    if (pipeline.queued.length === 0) pipeline.issues.push("No queued move");
+    if (pipeline.backlog.length === 0) pipeline.issues.push("Empty backlog");
+  }
   
   return pipeline;
 }
