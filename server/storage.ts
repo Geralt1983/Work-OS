@@ -2,6 +2,14 @@ import { db } from "./db";
 import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, backlogEntries, clients, moves } from "@shared/schema";
 import { eq, desc, and, gte, isNull, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+
+function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 import type { 
   Session, InsertSession, 
   Message, InsertMessage,
@@ -632,7 +640,7 @@ class DatabaseStorage implements IStorage {
     backlogMoves: number;
     nonBacklogMoves: number;
   }> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalDateString();
     const log = await this.getDailyLog(today);
     
     const completedMoves = (log?.completedMoves as string[] || []);
@@ -690,7 +698,7 @@ class DatabaseStorage implements IStorage {
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = getLocalDateString(date);
       
       const log = logsByDate.get(dateStr);
       const completedMoves = log ? (log.completedMoves as string[] || []) : [];
