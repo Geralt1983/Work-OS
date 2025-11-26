@@ -1082,13 +1082,15 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       
       if (clientName) {
         const clients = await storage.getAllClientsEntity();
-        let client = clients.find((c: { name: string }) => c.name.toLowerCase() === clientName.toLowerCase());
+        const client = clients.find((c: { name: string }) => c.name.toLowerCase() === clientName.toLowerCase());
         
         if (!client) {
-          client = await storage.createClient({
-            name: clientName,
-            type: "client",
-          });
+          // IMPORTANT: Never auto-create clients from task names
+          // Clients must be added through an explicit add_client action
+          return {
+            success: false,
+            error: `Client "${clientName}" not found. Clients must be added explicitly using add_client before creating moves for them. Do not infer client names from task descriptions.`,
+          };
         }
         
         clientId = client.id;
