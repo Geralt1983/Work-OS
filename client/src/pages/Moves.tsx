@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import MoveForm from "@/components/MoveForm";
 import MoveDetailSheet from "@/components/MoveDetailSheet";
+import MobileMovesView from "@/components/MobileMovesView";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -633,6 +635,7 @@ function ThemeToggle() {
 }
 
 export default function Moves() {
+  const isMobile = useIsMobile();
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [drainFilter, setDrainFilter] = useState<string>("all");
@@ -729,6 +732,11 @@ export default function Moves() {
     toast({ title: "Move created" });
   };
 
+  const handleEditMove = (move: Move) => {
+    setSelectedMove(move);
+    setDetailSheetOpen(true);
+  };
+
   if (movesLoading || clientsLoading) {
     return (
       <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
@@ -740,18 +748,84 @@ export default function Moves() {
           </div>
         </header>
         <div className="flex-1 p-6">
-          <div className="flex gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex-1 min-w-[280px]">
-                <Skeleton className="h-6 w-20 mb-4" />
-                <div className="space-y-3">
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-24 w-full" />
+          {isMobile ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : (
+            <div className="flex gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex-1 min-w-[280px]">
+                  <Skeleton className="h-6 w-20 mb-4" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
+        <header className="h-14 border-b flex items-center justify-between px-4 shrink-0">
+          <h1 className="text-lg font-semibold">Moves</h1>
+          <div className="flex items-center gap-2">
+            <nav className="flex items-center gap-1">
+              <Link href="/">
+                <Button variant="ghost" size="icon" data-testid="mobile-link-chat">
+                  <MessageSquare className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link href="/metrics">
+                <Button variant="ghost" size="icon" data-testid="mobile-link-metrics">
+                  <BarChart3 className="h-5 w-5" />
+                </Button>
+              </Link>
+            </nav>
+            <ThemeToggle />
+          </div>
+        </header>
+        
+        <MobileMovesView
+          moves={moves}
+          clients={clients}
+          showBacklog={showBacklog}
+          onToggleBacklog={setShowBacklog}
+          onUpdate={() => refetchMoves()}
+          onCreateMove={() => setCreateDialogOpen(true)}
+          onEditMove={handleEditMove}
+        />
+
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Move</DialogTitle>
+            </DialogHeader>
+            <MoveForm clients={clients} onSuccess={handleMoveCreated} />
+          </DialogContent>
+        </Dialog>
+
+        <MoveDetailSheet
+          move={selectedMove}
+          clients={clients}
+          open={detailSheetOpen}
+          onOpenChange={setDetailSheetOpen}
+          onUpdate={() => {
+            refetchMoves();
+            if (selectedMove) {
+              const updatedMove = moves.find(m => m.id === selectedMove.id);
+              if (updatedMove) setSelectedMove(updatedMove);
+            }
+          }}
+        />
       </div>
     );
   }
