@@ -326,28 +326,10 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               {vagueRewrites.length > 0 && (
                 <Card className="border-amber-500/50">
                   <CardHeader className="pb-2 px-3 sm:px-6">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                        <Edit3 className="w-4 h-4 shrink-0" />
-                        <span>Rewrites ({vagueRewrites.length})</span>
-                      </CardTitle>
-                      {selectedRewrites.size > 0 && (
-                        <Button
-                          size="sm"
-                          onClick={handleApplySelectedRewrites}
-                          disabled={applyRewritesMutation.isPending}
-                          className="w-full sm:w-auto"
-                          data-testid="button-apply-rewrites"
-                        >
-                          {applyRewritesMutation.isPending ? (
-                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                          ) : (
-                            <Check className="w-3 h-3 mr-1" />
-                          )}
-                          Apply {selectedRewrites.size}
-                        </Button>
-                      )}
-                    </div>
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                      <Edit3 className="w-4 h-4 shrink-0" />
+                      <span>Rewrites ({vagueRewrites.length})</span>
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="px-3 sm:px-6">
                     <p className="text-xs sm:text-sm text-muted-foreground mb-3">
@@ -488,6 +470,24 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
             </div>
           </ScrollArea>
         ) : null}
+
+        {selectedRewrites.size > 0 && (
+          <div className="shrink-0 border-t pt-3 pb-1 px-1 bg-background">
+            <Button
+              onClick={handleApplySelectedRewrites}
+              disabled={applyRewritesMutation.isPending}
+              className="w-full"
+              data-testid="button-apply-rewrites"
+            >
+              {applyRewritesMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              Apply {selectedRewrites.size} Rewrite{selectedRewrites.size > 1 ? 's' : ''}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
