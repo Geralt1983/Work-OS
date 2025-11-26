@@ -9,7 +9,7 @@ const examplePrompts = [
   "What should I work on next?",
   "Run triage",
   "I have 30 minutes and low energy",
-  "Show all pipelines",
+  "Who's missing an active or queued task?",
   "Who needs attention?",
 ];
 
