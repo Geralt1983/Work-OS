@@ -82,8 +82,8 @@ Prevents backlog stagnation through multiple mechanics:
 **Key Components:**
 - ChatHeader: "Work OS" branding with theme toggle and navigation
 - MoveForm: Create/edit moves with effort estimate (1-4) and drain type
-- ChatInput: Message input with Enter to send
-- ChatMessage: User/assistant messages with TaskCard support
+- ChatInput: Message input with Enter to send, supports image upload (paste, drag-drop, or button)
+- ChatMessage: User/assistant messages with TaskCard support and image display
 
 ### Backend Architecture
 
@@ -162,7 +162,9 @@ Prevents backlog stagnation through multiple mechanics:
   - Factors in: learned patterns, avoided tasks, client sentiment, productivity times
 
 **Learning Memory Tools:**
-- record_signal: Capture task behaviors (deferred, avoided, completed_fast, struggled, excited)
+- record_signal: Capture task behaviors and psychological patterns with context
+  - Signal types: deferred, avoided, completed_fast, struggled, excited, anxiety, starting_difficulty, needs_breakdown, energized, drained
+  - Optional context: time_window_minutes (how much time was available), energy_level (high/medium/low)
 - record_pattern: Store learned patterns (productivity times, preferences, avoidance)
 - set_client_sentiment: Track feelings about clients (positive, neutral, negative, complicated)
 - set_client_importance: Set client priority (high, medium, low)

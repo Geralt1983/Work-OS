@@ -6,19 +6,25 @@ export const LEARNING_TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTo
     type: 'function',
     function: {
       name: 'record_signal',
-      description: 'Record a behavioral signal about a task or client. Use this to capture patterns like: task was deferred, avoided, completed quickly, struggled with, or user was excited about it. These signals help learn user patterns over time.',
+      description: 'Record a behavioral signal about a task or user state. Use this to capture psychological patterns like anxiety, starting difficulty, energy levels, and work preferences. These signals help learn the user\'s work patterns over time.',
       parameters: {
         type: 'object',
         properties: {
-          task_id: { type: 'string', description: 'ClickUp task ID (optional)' },
+          task_id: { type: 'string', description: 'Move/task ID (optional)' },
           task_name: { type: 'string', description: 'Task name for reference' },
           client_name: { type: 'string', description: 'Client this task belongs to' },
           signal_type: { 
             type: 'string', 
-            enum: ['deferred', 'avoided', 'completed_fast', 'struggled', 'excited'],
-            description: 'Type of signal: deferred (pushed to later), avoided (explicitly skipped), completed_fast (done quickly), struggled (took effort), excited (user showed enthusiasm)'
+            enum: ['deferred', 'avoided', 'completed_fast', 'struggled', 'excited', 'anxiety', 'starting_difficulty', 'needs_breakdown', 'energized', 'drained'],
+            description: 'Signal type: deferred (pushed to later), avoided (skipped), completed_fast (done quickly), struggled (took effort), excited (enthusiasm), anxiety (felt anxious), starting_difficulty (trouble getting started), needs_breakdown (task too big), energized (gave energy), drained (energy-draining)'
           },
-          context: { type: 'string', description: 'Any relevant context about why this happened' }
+          context: { type: 'string', description: 'Any relevant context about why this happened' },
+          time_window_minutes: { type: 'number', description: 'How much time was available when this happened (e.g., 20 for a quick slot, 120 for a big block)' },
+          energy_level: { 
+            type: 'string', 
+            enum: ['high', 'medium', 'low'],
+            description: 'User\'s energy level at the time'
+          }
         },
         required: ['signal_type']
       }
@@ -161,7 +167,9 @@ export async function executeLearningTool(
           taskName: args.task_name as string | undefined,
           clientName: args.client_name as string | undefined,
           signalType: args.signal_type as string,
-          context: args.context as string | undefined
+          context: args.context as string | undefined,
+          timeWindowMinutes: args.time_window_minutes as number | undefined,
+          energyLevel: args.energy_level as string | undefined
         });
         return JSON.stringify({
           success: true,

@@ -87,15 +87,18 @@ export const userPatterns = pgTable("user_patterns", {
 });
 
 // Learning memory: captures signals about tasks (avoided, deferred, completed quickly, etc.)
+// Signal types: deferred, avoided, completed_fast, struggled, excited, anxiety, starting_difficulty, needs_breakdown, energized, drained
 export const taskSignals = pgTable("task_signals", {
   id: text("id").primaryKey(),
   taskId: text("task_id"), // ClickUp task ID (nullable for general patterns)
   taskName: text("task_name"),
   clientName: text("client_name"),
-  signalType: text("signal_type").notNull(), // 'deferred', 'avoided', 'completed_fast', 'struggled', 'excited'
+  signalType: text("signal_type").notNull(), // see SIGNAL_TYPES constant below
   context: text("context"), // any context captured
   hourOfDay: integer("hour_of_day"), // when the signal occurred (0-23)
   dayOfWeek: integer("day_of_week"), // 0=Sunday, 6=Saturday
+  timeWindowMinutes: integer("time_window_minutes"), // how much time was available (null = unknown)
+  energyLevel: text("energy_level"), // 'high', 'medium', 'low' - user's energy at the time
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -189,3 +192,35 @@ export function normalizeDrainType(drainType: string | null | undefined): DrainT
 
 export const CLIENT_TYPES = ["client", "internal"] as const;
 export type ClientType = typeof CLIENT_TYPES[number];
+
+// ============ LEARNING SIGNAL TYPES ============
+
+export const SIGNAL_TYPES = [
+  "deferred",           // pushed to later
+  "avoided",            // explicitly skipped
+  "completed_fast",     // done quickly
+  "struggled",          // took effort/multiple attempts
+  "excited",            // user showed enthusiasm
+  "anxiety",            // user felt anxious about task
+  "starting_difficulty", // trouble getting started
+  "needs_breakdown",    // task was too big, needed splitting
+  "energized",          // task gave energy/motivation
+  "drained",            // task was draining
+] as const;
+export type SignalType = typeof SIGNAL_TYPES[number];
+
+export const SIGNAL_TYPE_LABELS: Record<SignalType, { label: string; description: string }> = {
+  deferred: { label: "Deferred", description: "Pushed to later" },
+  avoided: { label: "Avoided", description: "Explicitly skipped" },
+  completed_fast: { label: "Completed Fast", description: "Done quickly" },
+  struggled: { label: "Struggled", description: "Took effort or multiple attempts" },
+  excited: { label: "Excited", description: "Showed enthusiasm" },
+  anxiety: { label: "Anxiety", description: "Felt anxious about this task" },
+  starting_difficulty: { label: "Starting Difficulty", description: "Had trouble getting started" },
+  needs_breakdown: { label: "Needs Breakdown", description: "Task was too big, needed splitting" },
+  energized: { label: "Energized", description: "Task gave energy and motivation" },
+  drained: { label: "Drained", description: "Task was energy-draining" },
+} as const;
+
+export const ENERGY_LEVELS = ["high", "medium", "low"] as const;
+export type EnergyLevel = typeof ENERGY_LEVELS[number];

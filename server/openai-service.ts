@@ -84,28 +84,62 @@ Bad moves are vague:
 
 ## LEARNING MEMORY
 
-You learn and remember patterns over time:
+You learn and remember patterns over time. You're not just tracking tasks — you're understanding HOW Jeremy works.
 
-**What to capture:**
-- When Jeremy defers a move → record_signal with "deferred"
-- When he completes something quickly → record_signal with "completed_fast"  
-- When he avoids certain work → record_signal with "avoided"
-- When he expresses feelings about a client → set_client_sentiment
-- When he indicates client priority → set_client_importance
-- When you notice productivity patterns → record_pattern
+**Signal Types to Capture:**
+- **deferred**: Pushed to later (basic procrastination)
+- **avoided**: Explicitly skipped (active avoidance)
+- **completed_fast**: Done quickly (flow state, good energy match)
+- **struggled**: Took effort/multiple attempts (might need breakdown)
+- **excited**: Showed enthusiasm (energizing work)
+- **anxiety**: Expressed worry or stress about a task
+- **starting_difficulty**: "I can't seem to get started on this"
+- **needs_breakdown**: Task was too big, required splitting
+- **energized**: Task gave energy, not drained by it
+- **drained**: Task was exhausting, low energy after
+
+**Additional Context to Capture:**
+- time_window_minutes: How much time did he have? (20 for tight slot, 120 for big block)
+- energy_level: Was it high/medium/low energy time?
+
+**Psychological Patterns to Notice:**
+- Which clients trigger anxiety?
+- What types of work cause starting difficulty?
+- Does he avoid certain work types (deep work, admin)?
+- Which work energizes vs drains?
+- How does he perform in tight windows vs big blocks?
+- What tasks consistently need breakdown?
 
 **How to use learned patterns:**
 - Check get_learned_patterns before daily planning
-- Use get_avoided_tasks to NOT suggest moves he's been avoiding (unless specifically addressing avoidance)
+- Use get_avoided_tasks to NOT suggest moves he's been avoiding
 - Use get_productivity_insights to recommend moves at optimal times
 - Factor client sentiment into suggestions (don't stack negative clients)
-- Prioritize high-importance clients
+- If he mentions anxiety, record it AND acknowledge it
+- If he has trouble starting, suggest a micro-version of the task
+- If tasks keep getting deferred, proactively suggest breakdown
 
 **Examples:**
-- "Ugh, I hate dealing with Memphis invoices" → set_client_sentiment(memphis, negative)
-- "Orlando is my biggest client" → set_client_importance(orlando, high)
-- "I'll do that Memphis move later" (3rd time) → record_signal(deferred) + notice avoidance pattern
-- "What should I work on?" → check learned patterns + productivity insights + suggest optimal move
+- "Ugh, I hate dealing with Memphis invoices" → set_client_sentiment(memphis, negative) + record_signal(anxiety, context: "invoices")
+- "I just can't seem to start on this proposal" → record_signal(starting_difficulty, task_name: "proposal")
+- "This is too much, I need to break it down" → record_signal(needs_breakdown, task_name: "...")
+- "That call really drained me" → record_signal(drained, context: "client call")
+- "I'm feeling great after finishing that!" → record_signal(energized)
+- "I've only got 30 minutes before my next meeting" → factor time_window_minutes: 30 into suggestions
+
+## VISION / IMAGE ANALYSIS
+
+When Jeremy sends an image (screenshot, photo), you can analyze it:
+- **Screenshots of task lists**: Extract tasks and create moves
+- **Error messages**: Diagnose issues and suggest fixes
+- **Documents/emails**: Summarize and create action items
+- **Kanban boards**: Understand work state and suggest organization
+
+When analyzing images:
+1. Describe what you see briefly
+2. Extract actionable information
+3. Offer to create moves from any tasks identified
+4. Be helpful but not overwhelming with detail
 
 ## BACKLOG RESURFACING
 
@@ -155,15 +189,49 @@ The Metrics dashboard shows pacing (target: 3 hours/day = 9 moves), weekly trend
 
 export async function processChat(
   messages: Message[],
-  onToolCall?: (toolName: string) => void
+  imageUrl?: string,
+  imageBase64?: string
 ): Promise<{ content: string; taskCard?: any }> {
   const openaiMessages: Array<OpenAI.ChatCompletionMessageParam> = [
     { role: "system", content: WORK_OS_PROMPT },
-    ...messages.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    })),
   ];
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const isLastMessage = i === messages.length - 1;
+    
+    if (msg.role === "user" && isLastMessage && (imageUrl || imageBase64)) {
+      const contentParts: OpenAI.ChatCompletionContentPart[] = [];
+      
+      if (imageUrl) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: imageUrl }
+        });
+      } else if (imageBase64) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${imageBase64}` }
+        });
+      }
+      
+      const textContent = msg.content.replace("[Image attached]\n", "");
+      contentParts.push({
+        type: "text",
+        text: textContent
+      });
+      
+      openaiMessages.push({
+        role: "user",
+        content: contentParts
+      });
+    } else {
+      openaiMessages.push({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      });
+    }
+  }
 
   const legacyTools = [...memoryTools, ...pipelineTools];
   const legacyOpenaiTools: OpenAI.ChatCompletionTool[] = legacyTools.map((tool) => ({

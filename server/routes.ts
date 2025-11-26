@@ -8,6 +8,8 @@ import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } 
 const sendMessageSchema = z.object({
   sessionId: z.string().optional().nullable(),
   message: z.string().min(1),
+  imageUrl: z.string().optional().nullable(),
+  imageBase64: z.string().optional().nullable(),
 });
 
 const updateMoveSchema = z.object({
@@ -52,7 +54,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { sessionId: providedSessionId, message } = sendMessageSchema.parse(req.body);
+      const { sessionId: providedSessionId, message, imageUrl, imageBase64 } = sendMessageSchema.parse(req.body);
 
       let sessionId = providedSessionId;
       if (!sessionId) {
@@ -63,12 +65,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userMessage = await storage.createMessage({
         sessionId,
         role: "user",
-        content: message,
+        content: imageUrl || imageBase64 ? `[Image attached]\n${message}` : message,
       });
 
       const conversationHistory = await storage.getSessionMessages(sessionId, 20);
 
-      const { content, taskCard } = await processChat(conversationHistory);
+      const { content, taskCard } = await processChat(
+        conversationHistory, 
+        imageUrl || undefined, 
+        imageBase64 || undefined
+      );
 
       const assistantMessage = await storage.createMessage({
         sessionId,

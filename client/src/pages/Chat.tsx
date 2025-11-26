@@ -44,11 +44,12 @@ export default function Chat() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, imageBase64?: string) => {
     const userMessage: ChatMessageProps = {
       role: "user",
-      content,
+      content: imageBase64 ? `[Image attached]\n${content}` : content,
       timestamp: new Date(),
+      imageBase64: imageBase64,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -58,6 +59,7 @@ export default function Chat() {
       const res = await apiRequest("POST", "/api/chat", {
         ...(sessionId && { sessionId }),
         message: content,
+        ...(imageBase64 && { imageBase64 }),
       });
       const response = await res.json() as { sessionId: string; assistantMessage: { content: string; timestamp: string; taskCard?: any } };
 

@@ -7,6 +7,7 @@ export interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  imageBase64?: string;
   taskCard?: {
     title: string;
     taskId: string;
@@ -15,8 +16,9 @@ export interface ChatMessageProps {
   };
 }
 
-export default function ChatMessage({ role, content, timestamp, taskCard }: ChatMessageProps) {
+export default function ChatMessage({ role, content, timestamp, imageBase64, taskCard }: ChatMessageProps) {
   const isUser = role === "user";
+  const displayContent = content.replace("[Image attached]\n", "");
 
   return (
     <div className={`flex gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -27,6 +29,16 @@ export default function ChatMessage({ role, content, timestamp, taskCard }: Chat
       </Avatar>
 
       <div className={`flex flex-col gap-2.5 max-w-[65%] ${isUser ? "items-end" : "items-start"}`}>
+        {imageBase64 && isUser && (
+          <div className="rounded-xl overflow-hidden border max-w-xs">
+            <img 
+              src={`data:image/jpeg;base64,${imageBase64}`} 
+              alt="Uploaded" 
+              className="max-w-full max-h-48 object-contain"
+              data-testid="message-image"
+            />
+          </div>
+        )}
         <div
           className={`rounded-2xl px-5 py-3.5 ${
             isUser
@@ -35,7 +47,7 @@ export default function ChatMessage({ role, content, timestamp, taskCard }: Chat
           }`}
           data-testid={`message-${role}`}
         >
-          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{content}</p>
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{displayContent}</p>
         </div>
 
         {taskCard && !isUser && (
