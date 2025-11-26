@@ -966,11 +966,13 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         return { error: `Move ${moveId} not found` };
       }
       
-      await storage.updateMove(moveId, { status: target });
+      // Use storage.promoteMove which handles rebalancing automatically
+      const promotedMove = await storage.promoteMove(moveId);
+      
       return { 
         success: true, 
         message: `Promoted "${move.title}" to ${target}`,
-        move: { ...move, status: target }
+        move: promotedMove || { ...move, status: target }
       };
     }
     
@@ -1100,6 +1102,8 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         effortEstimate,
         drainType,
       });
+      
+      // Note: storage.createMove already handles rebalancing via rebalanceClientPipeline
       
       return {
         success: true,

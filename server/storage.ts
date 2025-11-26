@@ -855,6 +855,11 @@ class DatabaseStorage implements IStorage {
       });
     }
     
+    // Enforce 1 active + 1 queued per client rule
+    if (created.clientId && (created.status === 'active' || created.status === 'queued')) {
+      await this.rebalanceClientPipeline(created.clientId, created.id);
+    }
+    
     return created;
   }
 
@@ -976,7 +981,14 @@ class DatabaseStorage implements IStorage {
     }
     
     const newStatus = statusOrder[currentIndex + 1];
-    return this.updateMove(id, { status: newStatus });
+    const updatedMove = await this.updateMove(id, { status: newStatus });
+    
+    // Enforce 1 active + 1 queued per client rule
+    if (move.clientId) {
+      await this.rebalanceClientPipeline(move.clientId, id);
+    }
+    
+    return updatedMove;
   }
 
   async demoteMove(id: number): Promise<Move | undefined> {
@@ -992,6 +1004,76 @@ class DatabaseStorage implements IStorage {
     
     const newStatus = statusOrder[currentIndex - 1];
     return this.updateMove(id, { status: newStatus });
+  }
+  
+  /**
+   * Enforces the "1 active + 1 queued per client" rule.
+   * Ensures exactly 1 active and 1 queued move per client.
+   * The preserved move (newest/just-created/promoted) takes priority.
+   * @param clientId The client to rebalance
+   * @param preserveMoveId The move ID to preserve (won't be demoted) - usually the just-created or promoted move
+   */
+  async rebalanceClientPipeline(clientId: number, preserveMoveId?: number): Promise<void> {
+    if (!clientId) return;
+    
+    const clientMoves = await this.getMovesByClient(clientId);
+    
+    // Get active moves sorted by newest first
+    const activeMoves = clientMoves
+      .filter(m => m.status === 'active')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // Keep exactly 1 active move: prefer preserveMoveId if active, else keep newest
+    if (activeMoves.length > 1) {
+      const preservedIsActive = activeMoves.some(m => m.id === preserveMoveId);
+      let keptActiveId: number | null = null;
+      
+      for (const move of activeMoves) {
+        // Determine which one to keep
+        if (preservedIsActive && move.id === preserveMoveId) {
+          keptActiveId = move.id;
+          continue; // Keep the preserved move
+        }
+        if (!preservedIsActive && keptActiveId === null) {
+          keptActiveId = move.id;
+          continue; // Keep the first (newest) if preserved isn't active
+        }
+        if (move.id === keptActiveId) {
+          continue; // Already decided to keep this one
+        }
+        // Demote all others to queued
+        await this.updateMove(move.id, { status: 'queued' });
+      }
+    }
+    
+    // Re-fetch to get updated queued list after active demotion
+    const updatedMoves = await this.getMovesByClient(clientId);
+    const queuedMoves = updatedMoves
+      .filter(m => m.status === 'queued')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // Keep exactly 1 queued move: prefer preserveMoveId if queued, else keep newest
+    if (queuedMoves.length > 1) {
+      const preservedIsQueued = queuedMoves.some(m => m.id === preserveMoveId);
+      let keptQueuedId: number | null = null;
+      
+      for (const move of queuedMoves) {
+        // Determine which one to keep
+        if (preservedIsQueued && move.id === preserveMoveId) {
+          keptQueuedId = move.id;
+          continue; // Keep the preserved move
+        }
+        if (!preservedIsQueued && keptQueuedId === null) {
+          keptQueuedId = move.id;
+          continue; // Keep the first (newest) if preserved isn't queued
+        }
+        if (move.id === keptQueuedId) {
+          continue; // Already decided to keep this one
+        }
+        // Demote all others to backlog
+        await this.updateMove(move.id, { status: 'backlog' });
+      }
+    }
   }
 
   async deleteMove(id: number): Promise<void> {
