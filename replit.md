@@ -117,6 +117,14 @@ Prevents backlog stagnation through multiple mechanics:
 - PATCH `/api/clients/:id`: Update client
 - DELETE `/api/clients/:id`: Archive client
 
+**Triage API:**
+- GET `/api/triage`: Read-only pipeline audit (no mutations)
+- POST `/api/triage/auto-fix`: AI-powered auto-remediation that:
+  - Analyzes client health (importance, sentiment, stale days)
+  - Intelligently promotes tasks to fill pipeline gaps using GPT
+  - Auto-fills missing drain types and effort estimates
+  - Surfaces vague task rewrites as suggestions (not auto-applied)
+
 ### Database Schema
 
 **Core Tables:**
