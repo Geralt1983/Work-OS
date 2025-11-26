@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -18,9 +19,10 @@ import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
 import { 
   MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, 
   Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock,
-  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown
+  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, GripVertical
 } from "lucide-react";
 import MoveForm from "@/components/MoveForm";
+import MoveDetailSheet from "@/components/MoveDetailSheet";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -58,7 +60,19 @@ function getDaysOld(createdAt: Date | string | null): number {
   return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; onUpdate: () => void }) {
+function MoveCard({ 
+  move, 
+  clients, 
+  onUpdate,
+  onSelect,
+  isDragging
+}: { 
+  move: Move; 
+  clients: Client[]; 
+  onUpdate: () => void;
+  onSelect: () => void;
+  isDragging?: boolean;
+}) {
   const { toast } = useToast();
   const client = clients.find(c => c.id === move.clientId);
   const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
@@ -101,23 +115,21 @@ function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; 
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/moves/${move.id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      toast({ title: "Move deleted" });
-      onUpdate();
-    },
-  });
-
   const canPromote = move.status !== "active" && move.status !== "done";
   const canDemote = move.status !== "backlog" && move.status !== "done";
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    onSelect();
+  };
+
   return (
     <Card 
-      className={`group hover-elevate ${isStale ? "border-orange-400 dark:border-orange-600" : isAging ? "border-yellow-400 dark:border-yellow-600" : ""}`} 
+      className={`group cursor-pointer hover-elevate transition-shadow ${
+        isDragging ? "shadow-lg ring-2 ring-primary/50" : ""
+      } ${isStale ? "border-orange-400 dark:border-orange-600" : isAging ? "border-yellow-400 dark:border-yellow-600" : ""}`}
+      onClick={handleCardClick}
       data-testid={`card-move-${move.id}`}
     >
       <CardContent className="p-4">
@@ -146,53 +158,43 @@ function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; 
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5">
             {canPromote && (
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7"
-                onClick={() => promoteMutation.mutate()}
+                className="h-6 w-6"
+                onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
                 disabled={promoteMutation.isPending}
                 data-testid={`button-promote-${move.id}`}
               >
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-3.5 w-3.5" />
               </Button>
             )}
             {canDemote && (
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7"
-                onClick={() => demoteMutation.mutate()}
+                className="h-6 w-6"
+                onClick={(e) => { e.stopPropagation(); demoteMutation.mutate(); }}
                 disabled={demoteMutation.isPending}
                 data-testid={`button-demote-${move.id}`}
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-3.5 w-3.5" />
               </Button>
             )}
             {move.status !== "done" && (
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 text-green-600"
-                onClick={() => completeMutation.mutate()}
+                className="h-6 w-6 text-green-600"
+                onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
                 disabled={completeMutation.isPending}
                 data-testid={`button-complete-${move.id}`}
               >
-                <Check className="h-4 w-4" />
+                <Check className="h-3.5 w-3.5" />
               </Button>
             )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-destructive"
-              onClick={() => deleteMutation.mutate()}
-              disabled={deleteMutation.isPending}
-              data-testid={`button-delete-${move.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
         
@@ -215,12 +217,14 @@ function StatusColumn({
   status, 
   moves, 
   clients,
-  onUpdate 
+  onUpdate,
+  onSelectMove
 }: { 
   status: MoveStatus; 
   moves: Move[]; 
   clients: Client[];
   onUpdate: () => void;
+  onSelectMove: (move: Move) => void;
 }) {
   const statusInfo = STATUS_LABELS[status];
   const columnMoves = moves.filter(m => m.status === status);
@@ -236,28 +240,62 @@ function StatusColumn({
         </div>
       </div>
       
-      <ScrollArea className="h-[calc(100vh-220px)]">
-        <div className="space-y-3 pr-4">
-          {columnMoves.map(move => (
-            <MoveCard 
-              key={move.id} 
-              move={move} 
-              clients={clients}
-              onUpdate={onUpdate}
-            />
-          ))}
-          {columnMoves.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              No moves
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+      <Droppable droppableId={status}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`min-h-[200px] rounded-lg transition-colors ${
+              snapshot.isDraggingOver ? "bg-muted/50" : ""
+            }`}
+          >
+            <ScrollArea className="h-[calc(100vh-260px)]">
+              <div className="space-y-3 pr-4">
+                {columnMoves.map((move, index) => (
+                  <Draggable key={move.id} draggableId={move.id.toString()} index={index}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        <MoveCard 
+                          move={move} 
+                          clients={clients}
+                          onUpdate={onUpdate}
+                          onSelect={() => onSelectMove(move)}
+                          isDragging={snapshot.isDragging}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+                {columnMoves.length === 0 && !snapshot.isDraggingOver && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    No moves
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </Droppable>
     </div>
   );
 }
 
-function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[]; onUpdate: () => void }) {
+function MoveListRow({ 
+  move, 
+  clients, 
+  onUpdate,
+  onSelect
+}: { 
+  move: Move; 
+  clients: Client[]; 
+  onUpdate: () => void;
+  onSelect: () => void;
+}) {
   const { toast } = useToast();
   const client = clients.find(c => c.id === move.clientId);
   const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
@@ -315,9 +353,16 @@ function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[
   const canPromote = move.status !== "active" && move.status !== "done";
   const canDemote = move.status !== "backlog" && move.status !== "done";
 
+  const handleRowClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    onSelect();
+  };
+
   return (
     <TableRow 
-      className={`group ${isStale ? "bg-orange-500/5" : isAging ? "bg-yellow-500/5" : ""}`}
+      className={`group cursor-pointer ${isStale ? "bg-orange-500/5" : isAging ? "bg-yellow-500/5" : ""}`}
+      onClick={handleRowClick}
       data-testid={`row-move-${move.id}`}
     >
       <TableCell className="font-medium max-w-[300px]">
@@ -338,40 +383,46 @@ function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[
         </div>
       </TableCell>
       <TableCell>
-        {client && (
+        {client ? (
           <Badge variant="outline" className="text-xs">
             {client.name}
           </Badge>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
-        <Badge className={statusInfo.color}>
+        <Badge className={`text-xs ${statusInfo.color}`}>
           {statusInfo.label}
         </Badge>
       </TableCell>
       <TableCell>
-        {effortLevel && (
+        {effortLevel ? (
           <Badge variant="secondary" className="text-xs">
             {effortLevel.label}
           </Badge>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
-        {DrainIcon && normalizedDrainType && (
+        {DrainIcon ? (
           <div className="flex items-center gap-1.5">
             <DrainIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{DRAIN_LABELS[normalizedDrainType]}</span>
+            <span className="text-sm">{DRAIN_LABELS[normalizedDrainType!]}</span>
           </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5">
           {canPromote && (
             <Button
               size="icon"
               variant="ghost"
               className="h-7 w-7"
-              onClick={() => promoteMutation.mutate()}
+              onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
               disabled={promoteMutation.isPending}
               data-testid={`button-row-promote-${move.id}`}
             >
@@ -383,7 +434,7 @@ function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[
               size="icon"
               variant="ghost"
               className="h-7 w-7"
-              onClick={() => demoteMutation.mutate()}
+              onClick={(e) => { e.stopPropagation(); demoteMutation.mutate(); }}
               disabled={demoteMutation.isPending}
               data-testid={`button-row-demote-${move.id}`}
             >
@@ -395,7 +446,7 @@ function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[
               size="icon"
               variant="ghost"
               className="h-7 w-7 text-green-600"
-              onClick={() => completeMutation.mutate()}
+              onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
               disabled={completeMutation.isPending}
               data-testid={`button-row-complete-${move.id}`}
             >
@@ -406,7 +457,7 @@ function MoveListRow({ move, clients, onUpdate }: { move: Move; clients: Client[
             size="icon"
             variant="ghost"
             className="h-7 w-7 text-destructive"
-            onClick={() => deleteMutation.mutate()}
+            onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(); }}
             disabled={deleteMutation.isPending}
             data-testid={`button-row-delete-${move.id}`}
           >
@@ -422,6 +473,7 @@ function ListView({
   moves, 
   clients, 
   onUpdate,
+  onSelectMove,
   sortField,
   sortDirection,
   onSort
@@ -429,6 +481,7 @@ function ListView({
   moves: Move[]; 
   clients: Client[]; 
   onUpdate: () => void;
+  onSelectMove: (move: Move) => void;
   sortField: SortField;
   sortDirection: SortDirection;
   onSort: (field: SortField) => void;
@@ -544,7 +597,8 @@ function ListView({
                 key={move.id} 
                 move={move} 
                 clients={clients} 
-                onUpdate={onUpdate} 
+                onUpdate={onUpdate}
+                onSelect={() => onSelectMove(move)}
               />
             ))
           )}
@@ -593,6 +647,8 @@ export default function Moves() {
   });
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [selectedMove, setSelectedMove] = useState<Move | null>(null);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   
   const { toast } = useToast();
 
@@ -612,6 +668,34 @@ export default function Moves() {
     queryKey: ["/api/clients"],
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: async ({ moveId, newStatus, newIndex }: { moveId: number; newStatus: MoveStatus; newIndex: number }) => {
+      await apiRequest("PATCH", `/api/moves/${moveId}`, { 
+        status: newStatus,
+        sortOrder: newIndex
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+    },
+  });
+
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+    
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    const moveId = parseInt(draggableId);
+    const newStatus = destination.droppableId as MoveStatus;
+    
+    reorderMutation.mutate({
+      moveId,
+      newStatus,
+      newIndex: destination.index
+    });
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === "asc" ? "desc" : "asc");
@@ -619,6 +703,11 @@ export default function Moves() {
       setSortField(field);
       setSortDirection("asc");
     }
+  };
+
+  const handleSelectMove = (move: Move) => {
+    setSelectedMove(move);
+    setDetailSheetOpen(true);
   };
 
   const filteredMoves = moves.filter(m => {
@@ -790,39 +879,59 @@ export default function Moves() {
 
       <div className="flex-1 overflow-auto p-6">
         {viewMode === "board" ? (
-          <div className="flex gap-6 min-w-max">
-            <StatusColumn 
-              status="active" 
-              moves={filteredMoves} 
-              clients={clients}
-              onUpdate={() => refetchMoves()}
-            />
-            <StatusColumn 
-              status="queued" 
-              moves={filteredMoves} 
-              clients={clients}
-              onUpdate={() => refetchMoves()}
-            />
-            {showBacklog && (
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <div className="flex gap-6 min-w-max">
               <StatusColumn 
-                status="backlog" 
+                status="active" 
                 moves={filteredMoves} 
                 clients={clients}
                 onUpdate={() => refetchMoves()}
+                onSelectMove={handleSelectMove}
               />
-            )}
-          </div>
+              <StatusColumn 
+                status="queued" 
+                moves={filteredMoves} 
+                clients={clients}
+                onUpdate={() => refetchMoves()}
+                onSelectMove={handleSelectMove}
+              />
+              {showBacklog && (
+                <StatusColumn 
+                  status="backlog" 
+                  moves={filteredMoves} 
+                  clients={clients}
+                  onUpdate={() => refetchMoves()}
+                  onSelectMove={handleSelectMove}
+                />
+              )}
+            </div>
+          </DragDropContext>
         ) : (
           <ListView 
             moves={filteredMoves} 
             clients={clients} 
             onUpdate={() => refetchMoves()}
+            onSelectMove={handleSelectMove}
             sortField={sortField}
             sortDirection={sortDirection}
             onSort={handleSort}
           />
         )}
       </div>
+
+      <MoveDetailSheet
+        move={selectedMove}
+        clients={clients}
+        open={detailSheetOpen}
+        onOpenChange={setDetailSheetOpen}
+        onUpdate={() => {
+          refetchMoves();
+          if (selectedMove) {
+            const updatedMove = moves.find(m => m.id === selectedMove.id);
+            if (updatedMove) setSelectedMove(updatedMove);
+          }
+        }}
+      />
     </div>
   );
 }
