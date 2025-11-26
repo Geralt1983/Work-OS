@@ -20,11 +20,13 @@ import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
 import { 
   MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, 
   Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock,
-  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, GripVertical
+  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
+  ClipboardCheck
 } from "lucide-react";
 import MoveForm from "@/components/MoveForm";
 import MoveDetailSheet from "@/components/MoveDetailSheet";
 import MobileMovesView from "@/components/MobileMovesView";
+import { TriageDialog } from "@/components/TriageDialog";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -640,6 +642,7 @@ export default function Moves() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [drainFilter, setDrainFilter] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [triageDialogOpen, setTriageDialogOpen] = useState(false);
   const [showBacklog, setShowBacklog] = useState(() => {
     const saved = localStorage.getItem("moves-show-backlog");
     return saved !== null ? saved === "true" : false;
@@ -777,19 +780,25 @@ export default function Moves() {
       <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
         <header className="h-14 border-b flex items-center justify-between px-4 shrink-0">
           <h1 className="text-lg font-semibold">Moves</h1>
-          <div className="flex items-center gap-2">
-            <nav className="flex items-center gap-1">
-              <Link href="/">
-                <Button variant="ghost" size="icon" data-testid="mobile-link-chat">
-                  <MessageSquare className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link href="/metrics">
-                <Button variant="ghost" size="icon" data-testid="mobile-link-metrics">
-                  <BarChart3 className="h-5 w-5" />
-                </Button>
-              </Link>
-            </nav>
+          <div className="flex items-center gap-1">
+            <Link href="/">
+              <Button variant="ghost" size="icon" data-testid="mobile-link-chat">
+                <MessageSquare className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link href="/metrics">
+              <Button variant="ghost" size="icon" data-testid="mobile-link-metrics">
+                <BarChart3 className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setTriageDialogOpen(true)}
+              data-testid="mobile-button-triage"
+            >
+              <ClipboardCheck className="h-5 w-5" />
+            </Button>
             <ThemeToggle />
           </div>
         </header>
@@ -825,6 +834,11 @@ export default function Moves() {
               if (updatedMove) setSelectedMove(updatedMove);
             }
           }}
+        />
+
+        <TriageDialog 
+          open={triageDialogOpen} 
+          onOpenChange={setTriageDialogOpen} 
         />
       </div>
     );
@@ -887,6 +901,16 @@ export default function Moves() {
               <MoveForm clients={clients} onSuccess={handleMoveCreated} />
             </DialogContent>
           </Dialog>
+          
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => setTriageDialogOpen(true)}
+            data-testid="button-run-triage"
+          >
+            <ClipboardCheck className="h-4 w-4 mr-2" />
+            Triage
+          </Button>
           
           <ThemeToggle />
         </div>
@@ -1005,6 +1029,11 @@ export default function Moves() {
             if (updatedMove) setSelectedMove(updatedMove);
           }
         }}
+      />
+
+      <TriageDialog 
+        open={triageDialogOpen} 
+        onOpenChange={setTriageDialogOpen} 
       />
     </div>
   );

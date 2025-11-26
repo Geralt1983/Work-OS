@@ -39,6 +39,37 @@ interface PipelineAuditResult {
   nonActionableMoves: { move: MoveWithContext; reason: string }[];
 }
 
+export interface TriageResult {
+  date: string;
+  timestamp: string;
+  pipelineHealth: {
+    totalClients: number;
+    healthyClients: number;
+    clientsWithIssues: { clientName: string; issues: string[] }[];
+  };
+  actionabilityIssues: { 
+    moveId: number;
+    title: string;
+    clientName: string;
+    status: string;
+    reason: string;
+  }[];
+  missingFields: {
+    moveId: number;
+    title: string;
+    clientName: string;
+    status: string;
+    missing: string[];
+  }[];
+  summary: {
+    totalIssues: number;
+    pipelineIssueCount: number;
+    actionabilityIssueCount: number;
+    missingFieldsCount: number;
+    isHealthy: boolean;
+  };
+}
+
 export const pipelineTools = [
   {
     name: "run_pipeline_audit",
@@ -287,6 +318,71 @@ async function runPipelineAudit(shouldCheckActionability: boolean = true): Promi
       clientsNeedingAttention,
     },
     nonActionableMoves,
+  };
+}
+
+export async function runTriage(): Promise<TriageResult> {
+  const pipelines = await getClientsWithPipelines();
+  const actionabilityIssues: TriageResult["actionabilityIssues"] = [];
+  const missingFields: TriageResult["missingFields"] = [];
+  
+  for (const pipeline of pipelines) {
+    const allMoves = [...pipeline.active, ...pipeline.queued, ...pipeline.backlog];
+    
+    for (const move of allMoves) {
+      const missing: string[] = [];
+      if (!move.drainType) missing.push("drain type");
+      if (!move.effortEstimate) missing.push("effort estimate");
+      
+      if (missing.length > 0) {
+        missingFields.push({
+          moveId: move.id,
+          title: move.title,
+          clientName: move.clientName,
+          status: move.status,
+          missing,
+        });
+      }
+    }
+    
+    for (const move of [...pipeline.active, ...pipeline.queued]) {
+      const actionCheck = await checkActionability(move.title, move.description || undefined);
+      if (!actionCheck.actionable) {
+        actionabilityIssues.push({
+          moveId: move.id,
+          title: move.title,
+          clientName: move.clientName,
+          status: move.status,
+          reason: actionCheck.reason,
+        });
+      }
+    }
+  }
+  
+  const clientsWithIssues = pipelines
+    .filter(p => p.issues.length > 0)
+    .map(p => ({ clientName: p.clientName, issues: p.issues }));
+  
+  const pipelineIssueCount = clientsWithIssues.reduce((sum, c) => sum + c.issues.length, 0);
+  const totalIssues = pipelineIssueCount + actionabilityIssues.length + missingFields.length;
+  
+  return {
+    date: getLocalDateString(),
+    timestamp: new Date().toISOString(),
+    pipelineHealth: {
+      totalClients: pipelines.length,
+      healthyClients: pipelines.length - clientsWithIssues.length,
+      clientsWithIssues,
+    },
+    actionabilityIssues,
+    missingFields,
+    summary: {
+      totalIssues,
+      pipelineIssueCount,
+      actionabilityIssueCount: actionabilityIssues.length,
+      missingFieldsCount: missingFields.length,
+      isHealthy: totalIssues === 0,
+    },
   };
 }
 

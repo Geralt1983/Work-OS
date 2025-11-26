@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, getLocalDateString } from "./storage";
 import { processChat } from "./openai-service";
+import { runTriage } from "./pipeline-tools";
 import { z } from "zod";
 import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } from "@shared/schema";
 
@@ -464,6 +465,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error reordering moves:", error);
       res.status(500).json({ error: "Failed to reorder moves" });
+    }
+  });
+
+  app.post("/api/triage", async (req, res) => {
+    try {
+      const result = await runTriage();
+      res.json(result);
+    } catch (error) {
+      console.error("Error running triage:", error);
+      res.status(500).json({ error: "Failed to run triage" });
+    }
+  });
+
+  app.get("/api/triage", async (req, res) => {
+    try {
+      const result = await runTriage();
+      res.json(result);
+    } catch (error) {
+      console.error("Error running triage:", error);
+      res.status(500).json({ error: "Failed to run triage" });
     }
   });
 
