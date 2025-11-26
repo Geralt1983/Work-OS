@@ -844,6 +844,17 @@ class DatabaseStorage implements IStorage {
 
   async createMove(move: InsertMove): Promise<Move> {
     const [created] = await db.insert(moves).values(move).returning();
+    
+    // Track backlog entry when move is created in backlog
+    if (created.status === 'backlog') {
+      const client = created.clientId ? await this.getClient(created.clientId) : null;
+      await this.recordBacklogEntry({
+        taskId: String(created.id),
+        taskName: created.title,
+        clientName: client?.name || 'Unknown',
+      });
+    }
+    
     return created;
   }
 
@@ -889,22 +900,67 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
+    const oldMove = await this.getMove(id);
+    
     const [updated] = await db.update(moves)
       .set(updates)
       .where(eq(moves.id, id))
       .returning();
+    
+    // Track backlog entry when move enters backlog
+    if (updated && updates.status === 'backlog' && oldMove?.status !== 'backlog') {
+      const client = updated.clientId ? await this.getClient(updated.clientId) : null;
+      await this.recordBacklogEntry({
+        taskId: String(updated.id),
+        taskName: updated.title,
+        clientName: client?.name || 'Unknown',
+      });
+    }
+    
+    // Track promotion when move leaves backlog
+    if (updated && oldMove?.status === 'backlog' && updates.status && updates.status !== 'backlog') {
+      await this.markBacklogPromoted(String(id));
+    }
+    
     return updated;
   }
 
   async completeMove(id: number, effortActual?: number): Promise<Move | undefined> {
+    const move = await this.getMove(id);
+    const now = new Date();
+    
     const [completed] = await db.update(moves)
       .set({
         status: "done",
-        completedAt: new Date(),
+        completedAt: now,
         effortActual: effortActual,
       })
       .where(eq(moves.id, id))
       .returning();
+    
+    // Record task signal for productivity tracking
+    if (completed) {
+      const client = completed.clientId ? await this.getClient(completed.clientId) : null;
+      const hourET = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+      // Get day of week (0 = Sunday, 6 = Saturday)
+      const etDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const dayOfWeek = etDate.getDay();
+      
+      await this.recordSignal({
+        taskId: String(completed.id),
+        taskName: completed.title,
+        clientName: client?.name || 'Unknown',
+        signalType: 'completed_fast',
+        hourOfDay: hourET,
+        dayOfWeek: dayOfWeek,
+      });
+      
+      // If was in backlog, mark it promoted
+      if (move?.status === 'backlog') {
+        await this.markBacklogPromoted(String(id));
+      }
+    }
+    
     return completed;
   }
 
