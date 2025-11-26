@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
-import { EFFORT_LEVELS, DRAIN_TYPES } from "@shared/schema";
-import { MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, Sun, Moon, Zap, Brain, Heart, Dumbbell } from "lucide-react";
+import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
+import { MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb } from "lucide-react";
 import MoveForm from "@/components/MoveForm";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
@@ -23,9 +23,10 @@ const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
 };
 
 const DRAIN_ICONS: Record<DrainType, typeof Brain> = {
-  mental: Brain,
-  emotional: Heart,
-  physical: Dumbbell,
+  deep: Brain,
+  comms: Mail,
+  admin: FileText,
+  creative: Lightbulb,
   easy: Zap,
 };
 
@@ -33,7 +34,8 @@ function MoveCard({ move, clients, onUpdate }: { move: Move; clients: Client[]; 
   const { toast } = useToast();
   const client = clients.find(c => c.id === move.clientId);
   const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
-  const DrainIcon = move.drainType ? DRAIN_ICONS[move.drainType as DrainType] : null;
+  const normalizedDrainType = normalizeDrainType(move.drainType);
+  const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
 
   const promoteMutation = useMutation({
     mutationFn: async () => {

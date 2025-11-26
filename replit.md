@@ -14,6 +14,18 @@ Work OS is a task management application with a custom Moves board and AI chat i
 - **No guilt-based decisions**: System adapts, never scolds
 - **Natural language intent**: "Make a Raleigh move" → creates task
 
+## Work Types (Drain Categories)
+
+Optimized for IT consulting and knowledge work:
+
+- **Deep**: Focus-intensive work (research, building, complex problems) - needs high energy and uninterrupted time
+- **Comms**: Communication work (meetings, emails, calls) - can be done at medium energy
+- **Admin**: Administrative tasks (invoices, scheduling, updates) - good for low energy or fragmented time
+- **Creative**: Strategic thinking (proposals, design work) - needs medium-high energy
+- **Easy**: Quick wins (routine tasks) - perfect for low energy or between meetings
+
+The AI uses these categories to match work to current energy levels when suggesting moves.
+
 ## Pipeline Workflow
 
 Every client should have a healthy pipeline:
@@ -109,7 +121,7 @@ Prevents backlog stagnation through multiple mechanics:
 
 **Core Tables:**
 - `clients`: Client entities (id, name, type: client|internal, color, isActive)
-- `moves`: Tasks/moves (id, clientId, title, description, status: active|queued|backlog|done, effortEstimate: 1-4, effortActual, drainType: mental|emotional|physical|easy, createdAt, completedAt)
+- `moves`: Tasks/moves (id, clientId, title, description, status: active|queued|backlog|done, effortEstimate: 1-4, effortActual, drainType: deep|comms|admin|creative|easy, createdAt, completedAt)
 
 **Session & Memory Tables:**
 - `sessions`: Chat session tracking

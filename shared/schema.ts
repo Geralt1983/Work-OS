@@ -23,7 +23,7 @@ export const moves = pgTable("moves", {
   status: text("status").notNull().default("backlog"), // 'active' | 'queued' | 'backlog' | 'done'
   effortEstimate: integer("effort_estimate").default(2), // 1=quick, 2=standard, 3=chunky, 4=draining
   effortActual: integer("effort_actual"), // filled after completion
-  drainType: text("drain_type"), // 'mental' | 'emotional' | 'physical' | 'easy' | null
+  drainType: text("drain_type"), // 'deep' | 'comms' | 'admin' | 'creative' | 'easy' | null
   sortOrder: integer("sort_order").default(0), // for manual ordering within status
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
@@ -164,8 +164,28 @@ export const EFFORT_LEVELS = [
   { value: 4, label: "Draining", description: "45+ min or high effort" },
 ] as const;
 
-export const DRAIN_TYPES = ["mental", "emotional", "physical", "easy"] as const;
+export const DRAIN_TYPES = ["deep", "comms", "admin", "creative", "easy"] as const;
 export type DrainType = typeof DRAIN_TYPES[number];
+
+export const DRAIN_TYPE_LABELS: Record<DrainType, { label: string; description: string }> = {
+  deep: { label: "Deep Work", description: "Focus-intensive building, research, complex problems" },
+  comms: { label: "Comms", description: "Meetings, emails, calls, discussions" },
+  admin: { label: "Admin", description: "Invoices, scheduling, updates, paperwork" },
+  creative: { label: "Creative", description: "Strategic thinking, proposals, design work" },
+  easy: { label: "Easy", description: "Low-effort quick wins, routine tasks" },
+} as const;
+
+export const LEGACY_DRAIN_TYPE_MAP: Record<string, DrainType> = {
+  mental: "deep",
+  emotional: "comms",
+  physical: "admin",
+};
+
+export function normalizeDrainType(drainType: string | null | undefined): DrainType | null {
+  if (!drainType) return null;
+  if (DRAIN_TYPES.includes(drainType as DrainType)) return drainType as DrainType;
+  return LEGACY_DRAIN_TYPE_MAP[drainType] || null;
+}
 
 export const CLIENT_TYPES = ["client", "internal"] as const;
 export type ClientType = typeof CLIENT_TYPES[number];

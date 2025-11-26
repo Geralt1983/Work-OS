@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { storage } from "./storage";
+import { normalizeDrainType } from "@shared/schema";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -121,7 +122,7 @@ export const pipelineTools = [
         description: { type: "string", description: "Optional description with more details" },
         status: { type: "string", enum: ["active", "queued", "backlog"], description: "Initial status (default: backlog)" },
         effort_estimate: { type: "number", enum: [1, 2, 3, 4], description: "Effort level: 1=quick, 2=standard 20min, 3=chunky, 4=draining" },
-        drain_type: { type: "string", enum: ["mental", "emotional", "physical", "easy"], description: "Type of energy this move drains" },
+        drain_type: { type: "string", enum: ["deep", "comms", "admin", "creative", "easy"], description: "Type of work: deep=focus-intensive, comms=meetings/emails, admin=paperwork, creative=strategic, easy=quick wins" },
       },
       required: ["title"],
     },
@@ -409,7 +410,8 @@ async function suggestNextMove(args: SuggestMoveArgs): Promise<{
   
   const moveList = availableMoves.map((m, i) => {
     const effortLabel = m.effortEstimate === 1 ? "quick" : m.effortEstimate === 2 ? "standard" : m.effortEstimate === 3 ? "chunky" : "draining";
-    const drainLabel = m.drainType ? ` [${m.drainType}]` : "";
+    const normalizedDrain = normalizeDrainType(m.drainType);
+    const drainLabel = normalizedDrain ? ` [${normalizedDrain}]` : "";
     return `${i + 1}. [${m.tier.toUpperCase()}] ${m.clientName}: "${m.title}" (effort: ${effortLabel}${drainLabel})`;
   }).join("\n");
   
@@ -423,13 +425,21 @@ User context:
 - Preferred client: ${args.prefer_client || "none"}
 - Additional context: ${args.context || "none"}
 
+Work type categories:
+- deep: Focus-intensive work (research, building, complex problems) - needs high energy and uninterrupted time
+- comms: Communication work (meetings, emails, calls) - can be done at medium energy
+- admin: Administrative tasks (invoices, scheduling, updates) - good for low energy or fragmented time
+- creative: Strategic thinking (proposals, design) - needs medium-high energy
+- easy: Quick wins (routine tasks) - perfect for low energy or between meetings
+
 Based on this context, recommend the BEST move to work on right now.
 
 Rules:
 1. Active moves should generally be prioritized over queued
 2. Match effort level to energy and time available
-3. Consider drain type vs current energy
+3. Match work type to current energy (deep work needs high energy, admin/easy work is fine for low energy)
 4. If client preference is given, prioritize that client's moves
+5. Consider context (e.g., "between meetings" suggests quick admin/easy tasks, not deep work)
 
 Respond with JSON:
 {

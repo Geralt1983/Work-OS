@@ -8,8 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
-import type { Client } from "@shared/schema";
-import { EFFORT_LEVELS, DRAIN_TYPES, MOVE_STATUSES } from "@shared/schema";
+import type { Client, DrainType } from "@shared/schema";
+import { EFFORT_LEVELS, DRAIN_TYPES, DRAIN_TYPE_LABELS, MOVE_STATUSES } from "@shared/schema";
 
 const moveFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -197,7 +197,7 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
                     <SelectItem value="none">None</SelectItem>
                     {DRAIN_TYPES.map(type => (
                       <SelectItem key={type} value={type}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                        {DRAIN_TYPE_LABELS[type as DrainType].label}
                       </SelectItem>
                     ))}
                   </SelectContent>
