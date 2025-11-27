@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +16,7 @@ import {
   Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock, Archive
 } from "lucide-react";
 import { format } from "date-fns";
+import { ArcCard } from "@/components/ArcCard";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   active: { label: "Active", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
@@ -70,71 +70,75 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
     },
   });
 
+  const getGlow = (): "purple" | "cyan" | "orange" | "pink" | "none" => {
+    if (move.status === 'active') return 'purple';
+    if (normalizedDrainType === 'deep') return 'cyan';
+    if (normalizedDrainType === 'admin') return 'orange';
+    if (normalizedDrainType === 'creative') return 'pink';
+    return 'none';
+  };
+
   return (
-    <Card 
-      className={`active:scale-[0.98] transition-transform touch-manipulation ${
-        isStale ? "border-orange-400 dark:border-orange-600" : 
-        isAging ? "border-yellow-400 dark:border-yellow-600" : ""
-      }`}
+    <ArcCard 
+      glowColor={getGlow()}
       onClick={onSelect}
+      className={isStale ? "border-orange-500/30" : ""}
       data-testid={`mobile-card-move-${move.id}`}
     >
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-2 mb-1">
-              <h4 className="font-medium text-base leading-tight break-words flex-1 min-w-0" data-testid={`mobile-text-move-title-${move.id}`}>
-                {move.title}
-              </h4>
-              {isStale && (
-                <Badge variant="destructive" className="text-xs gap-1 shrink-0">
-                  <AlertCircle className="h-3 w-3" />
-                  {daysOld}d
-                </Badge>
-              )}
-              {isAging && !isStale && (
-                <Badge variant="outline" className="text-xs gap-1 shrink-0 text-yellow-600 border-yellow-400">
-                  <Clock className="h-3 w-3" />
-                  {daysOld}d
-                </Badge>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              {client && (
-                <Badge variant="outline" className="text-xs">
-                  {client.name}
-                </Badge>
-              )}
-              {effortLevel && (
-                <Badge variant="secondary" className="text-xs">
-                  {effortLevel.label}
-                </Badge>
-              )}
-              {DrainIcon && (
-                <DrainIcon className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-            </div>
+      <div className="p-4 flex items-start gap-3">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2">
+            {client && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                {client.name}
+              </span>
+            )}
+            {isStale && (
+              <span className="flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                <AlertCircle className="w-3 h-3" /> {daysOld}d
+              </span>
+            )}
+            {isAging && !isStale && (
+              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                <Clock className="w-3 h-3" /> {daysOld}d
+              </span>
+            )}
           </div>
+
+          <h4 className="font-semibold text-base leading-snug text-white/90" data-testid={`mobile-text-move-title-${move.id}`}>
+            {move.title}
+          </h4>
           
-          {move.status !== "done" && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-10 w-10 shrink-0 text-green-600"
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                completeMutation.mutate(); 
-              }}
-              disabled={completeMutation.isPending}
-              data-testid={`mobile-button-complete-${move.id}`}
-            >
-              <Check className="h-5 w-5" />
-            </Button>
-          )}
+          <div className="flex items-center gap-3 pt-1">
+            {effortLevel && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div className={`w-1.5 h-1.5 rounded-full ${move.effortEstimate && move.effortEstimate > 2 ? 'bg-orange-400' : 'bg-emerald-400'}`} />
+                {effortLevel.label}
+              </span>
+            )}
+            {DrainIcon && (
+              <DrainIcon className="w-3.5 h-3.5 text-muted-foreground/60" />
+            )}
+          </div>
         </div>
-      </CardContent>
-    </Card>
+        
+        {move.status !== "done" && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-10 w-10 shrink-0 rounded-full bg-white/5 text-muted-foreground hover:bg-emerald-500 hover:text-white"
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              completeMutation.mutate(); 
+            }}
+            disabled={completeMutation.isPending}
+            data-testid={`mobile-button-complete-${move.id}`}
+          >
+            <Check className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
+    </ArcCard>
   );
 }
 
@@ -208,24 +212,24 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent data-testid="mobile-drawer-move-detail">
+      <DrawerContent className="bg-[#141420] border-white/10 text-white" data-testid="mobile-drawer-move-detail">
         <DrawerHeader className="text-left">
-          <DrawerTitle className="flex items-center gap-2" data-testid="mobile-drawer-title">
+          <DrawerTitle className="flex items-center gap-2 text-white" data-testid="mobile-drawer-title">
             {move.title}
             {isStale && (
-              <Badge variant="destructive" className="text-xs gap-1">
+              <span className="flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
                 <AlertCircle className="h-3 w-3" />
                 {daysOld}d
-              </Badge>
+              </span>
             )}
             {isAging && !isStale && (
-              <Badge variant="outline" className="text-xs gap-1 text-yellow-600 border-yellow-400">
+              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                 <Clock className="h-3 w-3" />
                 {daysOld}d
-              </Badge>
+              </span>
             )}
           </DrawerTitle>
-          <DrawerDescription>
+          <DrawerDescription className="text-muted-foreground">
             {client ? client.name : "No client"} • {STATUS_LABELS[move.status as MoveStatus].label}
           </DrawerDescription>
         </DrawerHeader>
@@ -238,16 +242,16 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className={STATUS_LABELS[move.status as MoveStatus].color}>
+            <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
               {STATUS_LABELS[move.status as MoveStatus].label}
             </Badge>
             {effortLevel && (
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
                 {effortLevel.label}
               </Badge>
             )}
             {normalizedDrainType && (
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
                 {DRAIN_TYPE_LABELS[normalizedDrainType]?.label}
               </Badge>
             )}
@@ -259,13 +263,13 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             </p>
           )}
 
-          <Separator />
+          <Separator className="bg-white/10" />
 
           <div className="grid grid-cols-2 gap-2">
             {canPromote && (
               <Button
                 variant="outline"
-                className="h-12"
+                className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
                 onClick={() => promoteMutation.mutate()}
                 disabled={promoteMutation.isPending}
                 data-testid="mobile-button-promote"
@@ -277,7 +281,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             {canDemote && (
               <Button
                 variant="outline"
-                className="h-12"
+                className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
                 onClick={() => demoteMutation.mutate()}
                 disabled={demoteMutation.isPending}
                 data-testid="mobile-button-demote"
@@ -289,7 +293,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             {move.status !== "done" && (
               <Button
                 variant="outline"
-                className="h-12 text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
+                className="h-12 bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
                 onClick={() => completeMutation.mutate()}
                 disabled={completeMutation.isPending}
                 data-testid="mobile-button-complete-drawer"
@@ -300,7 +304,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             )}
             <Button
               variant="outline"
-              className="h-12"
+              className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
               onClick={onEdit}
               data-testid="mobile-button-edit"
             >
@@ -313,6 +317,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
         <DrawerFooter className="pt-0">
           <Button
             variant="destructive"
+            className="bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:bg-rose-500/30"
             onClick={() => deleteMutation.mutate()}
             disabled={deleteMutation.isPending}
             data-testid="mobile-button-delete"
@@ -382,20 +387,21 @@ export default function MobileMovesView({
 
   const renderMoveList = (moves: Move[]) => (
     <ScrollArea className="h-[calc(100vh-220px)]">
-      <div className="space-y-3 p-4">
+      <div className="p-4 pb-20">
         {moves.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-12 text-muted-foreground/50">
             No moves in this status
           </div>
         ) : (
           moves.map(move => (
-            <MobileMoveCard
-              key={move.id}
-              move={move}
-              clients={clients}
-              onSelect={() => handleSelectMove(move)}
-              onUpdate={onUpdate}
-            />
+            <div key={move.id} className="mb-3">
+              <MobileMoveCard
+                move={move}
+                clients={clients}
+                onSelect={() => handleSelectMove(move)}
+                onUpdate={onUpdate}
+              />
+            </div>
           ))
         )}
       </div>
@@ -403,13 +409,13 @@ export default function MobileMovesView({
   );
 
   return (
-    <div className="flex flex-col h-full" data-testid="mobile-moves-view">
-      <div className="px-4 py-3 border-b flex items-center gap-2">
+    <div className="flex flex-col h-full bg-transparent" data-testid="mobile-moves-view">
+      <div className="px-4 py-3 flex items-center gap-2">
         <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="flex-1" data-testid="mobile-select-client-filter">
+          <SelectTrigger className="flex-1 bg-white/5 border-white/10 text-white focus:ring-purple-500/50" data-testid="mobile-select-client-filter">
             <SelectValue placeholder="All Clients" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
             <SelectItem value="all">All Clients</SelectItem>
             {clients.map(client => (
               <SelectItem key={client.id} value={client.id.toString()}>
@@ -420,8 +426,9 @@ export default function MobileMovesView({
         </Select>
         <Button 
           size="icon"
-          variant={showBacklog ? "secondary" : "ghost"}
+          variant="ghost"
           onClick={() => onToggleBacklog(!showBacklog)}
+          className={`shrink-0 ${showBacklog ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-muted-foreground'}`}
           data-testid="mobile-button-toggle-backlog"
           title={showBacklog ? "Hide backlog" : "Show backlog"}
         >
@@ -430,6 +437,7 @@ export default function MobileMovesView({
         <Button 
           size="sm" 
           onClick={onCreateMove}
+          className="bg-gradient-to-r from-purple-600 to-pink-600 border-0 shadow-glow-purple text-white"
           data-testid="mobile-button-create-move"
         >
           New
@@ -437,49 +445,48 @@ export default function MobileMovesView({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} rounded-none border-b h-12`} data-testid="mobile-tabs">
-          <TabsTrigger 
-            value="active" 
-            className="data-[state=active]:bg-green-500/10 data-[state=active]:text-green-600 rounded-none h-full"
-            data-testid="mobile-tab-active"
-          >
-            Active
-            <Badge variant="secondary" className="ml-2 text-xs">
-              {getTabCount("active")}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="queued" 
-            className="data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 rounded-none h-full"
-            data-testid="mobile-tab-queued"
-          >
-            Queued
-            <Badge variant="secondary" className="ml-2 text-xs">
-              {getTabCount("queued")}
-            </Badge>
-          </TabsTrigger>
-          {showBacklog && (
+        <div className="px-4">
+          <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`} data-testid="mobile-tabs">
             <TabsTrigger 
-              value="backlog" 
-              className="data-[state=active]:bg-gray-500/10 data-[state=active]:text-gray-600 rounded-none h-full"
-              data-testid="mobile-tab-backlog"
+              value="active" 
+              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+              data-testid="mobile-tab-active"
             >
-              Backlog
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {getTabCount("backlog")}
+              Active
+              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
+                {getTabCount("active")}
               </Badge>
             </TabsTrigger>
-          )}
-        </TabsList>
+            <TabsTrigger 
+              value="queued" 
+              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+              data-testid="mobile-tab-queued"
+            >
+              Queued
+              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
+                {getTabCount("queued")}
+              </Badge>
+            </TabsTrigger>
+            {showBacklog && (
+              <TabsTrigger 
+                value="backlog" 
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+                data-testid="mobile-tab-backlog"
+              >
+                Backlog
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
-        <TabsContent value="active" className="flex-1 mt-0">
+        <TabsContent value="active" className="flex-1 mt-2">
           {renderMoveList(activeMoves)}
         </TabsContent>
-        <TabsContent value="queued" className="flex-1 mt-0">
+        <TabsContent value="queued" className="flex-1 mt-2">
           {renderMoveList(queuedMoves)}
         </TabsContent>
         {showBacklog && (
-          <TabsContent value="backlog" className="flex-1 mt-0">
+          <TabsContent value="backlog" className="flex-1 mt-2">
             {renderMoveList(backlogMoves)}
           </TabsContent>
         )}

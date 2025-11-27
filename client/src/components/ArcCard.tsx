@@ -1,14 +1,15 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-interface ArcCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface ArcCardProps {
   children: React.ReactNode;
   glowColor?: "purple" | "cyan" | "pink" | "orange" | "emerald" | "none";
   onClick?: (e: React.MouseEvent) => void;
   className?: string;
+  "data-testid"?: string;
 }
 
-export function ArcCard({ children, className, glowColor = "none", onClick, ...props }: ArcCardProps) {
+export function ArcCard({ children, className, glowColor = "none", onClick, "data-testid": testId }: ArcCardProps) {
   const glowStyles = {
     purple: "hover:shadow-[0_0_30px_-5px_rgba(168,85,247,0.3)] hover:border-purple-500/50",
     cyan: "hover:shadow-[0_0_30px_-5px_rgba(6,182,212,0.3)] hover:border-cyan-500/50",
@@ -22,6 +23,7 @@ export function ArcCard({ children, className, glowColor = "none", onClick, ...p
     <motion.div
       layout
       onClick={onClick}
+      data-testid={testId}
       whileHover={{ y: -4, scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -32,7 +34,6 @@ export function ArcCard({ children, className, glowColor = "none", onClick, ...p
         glowStyles[glowColor],
         className
       )}
-      {...props}
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-50" />
       
