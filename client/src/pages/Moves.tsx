@@ -732,19 +732,34 @@ export default function Moves() {
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col gradient-bg" data-testid="page-moves">
-        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative">
+      <div className="h-screen flex flex-col bg-[#030309] text-foreground" data-testid="page-moves">
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center">
-              <LayoutGrid className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-lg font-bold text-gradient-purple">Moves</h1>
+          <h1 className="text-lg font-semibold tracking-wider text-gradient-purple">Moves</h1>
+          <div className="flex items-center gap-1">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="mobile-link-chat">
+                <MessageSquare className="h-5 w-5 text-purple-400" />
+              </Button>
+            </Link>
+            <Link href="/metrics">
+              <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10" data-testid="mobile-link-metrics">
+                <BarChart3 className="h-5 w-5 text-cyan-400" />
+              </Button>
+            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setTriageDialogOpen(true)}
+              className="hover:bg-rose-500/10"
+              data-testid="mobile-button-triage"
+            >
+              <ClipboardCheck className="h-5 w-5 text-rose-400" />
+            </Button>
           </div>
-          <ThemeToggle />
         </header>
         
-        <div className="flex-1 overflow-hidden pb-20">
+        <div className="flex-1 overflow-hidden relative z-0">
           <MobileMovesView
             moves={moves}
             clients={clients}
@@ -779,7 +794,6 @@ export default function Moves() {
           }}
         />
 
-        <MobileBottomNav onTriageClick={() => setTriageDialogOpen(true)} />
         <TriageDialog 
           open={triageDialogOpen} 
           onOpenChange={setTriageDialogOpen} 

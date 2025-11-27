@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "wouter";
+import { LayoutGrid, BarChart3, ClipboardCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import GlassSidebar from "@/components/GlassSidebar";
 import ChatMessage, { type ChatMessageProps } from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
@@ -7,7 +10,6 @@ import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
 import { TriageDialog } from "@/components/TriageDialog";
 import IslandLayout from "@/components/IslandLayout";
-import MobileBottomNav from "@/components/MobileBottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -121,26 +123,42 @@ export default function Chat() {
   // Mobile layout - no sidebar
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col gradient-bg" data-testid="page-chat">
-        {/* Mobile Header */}
-        <motion.header 
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="glass-strong px-4 py-3 flex items-center justify-between border-b border-white/5 shrink-0"
-        >
+      <div className="h-screen flex flex-col bg-[#030309] text-foreground" data-testid="page-chat">
+        {/* Mobile Header with Nav */}
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple">
               <span className="text-white text-sm font-bold">W</span>
             </div>
-            <h1 className="text-lg font-bold text-gradient-purple">Work OS</h1>
-          </div>
-          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold tracking-wider text-gradient-purple">Work OS</h1>
             <div className={`status-dot ${isConnected ? 'status-dot-active' : 'status-dot-offline'}`} />
           </div>
-        </motion.header>
+          <div className="flex items-center gap-1">
+            <Link href="/moves">
+              <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10" data-testid="mobile-link-moves">
+                <LayoutGrid className="h-5 w-5 text-cyan-400" />
+              </Button>
+            </Link>
+            <Link href="/metrics">
+              <Button variant="ghost" size="icon" className="hover:bg-emerald-500/10" data-testid="mobile-link-metrics">
+                <BarChart3 className="h-5 w-5 text-emerald-400" />
+              </Button>
+            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setTriageOpen(true)}
+              className="hover:bg-rose-500/10"
+              data-testid="mobile-button-triage"
+            >
+              <ClipboardCheck className="h-5 w-5 text-rose-400" />
+            </Button>
+          </div>
+        </header>
 
-        {/* Content - with padding for bottom nav */}
-        <div className="flex-1 min-h-0 overflow-hidden p-3 pb-24">
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-hidden p-3">
           <div className="h-full island flex flex-col">
             {messages.length === 0 ? (
               <div className="flex-1 overflow-auto">
@@ -170,7 +188,6 @@ export default function Chat() {
           </div>
         </div>
 
-        <MobileBottomNav onTriageClick={() => setTriageOpen(true)} />
         <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
       </div>
     );
