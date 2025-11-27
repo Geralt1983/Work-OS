@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,15 +18,17 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
 import { 
-  MessageSquare, BarChart3, Plus, ChevronUp, ChevronDown, Check, Trash2, 
+  Plus, ChevronUp, ChevronDown, Check, Trash2, 
   Sun, Moon, Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock,
-  LayoutGrid, List, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
-  ClipboardCheck
+  LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, MessageSquare, BarChart3, ClipboardCheck
 } from "lucide-react";
+import { Link } from "wouter";
 import MoveForm from "@/components/MoveForm";
 import MoveDetailSheet from "@/components/MoveDetailSheet";
 import MobileMovesView from "@/components/MobileMovesView";
 import { TriageDialog } from "@/components/TriageDialog";
+import GlassSidebar from "@/components/GlassSidebar";
+import IslandLayout from "@/components/IslandLayout";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -129,9 +131,14 @@ function MoveCard({
   };
 
   return (
+    <motion.div
+      whileHover={{ scale: 1.02, y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+    >
     <Card 
-      className={`group cursor-pointer hover-elevate transition-shadow ${
-        isDragging ? "shadow-lg ring-2 ring-primary/50" : ""
+      className={`group cursor-pointer rounded-2xl bg-white/5 border-white/10 hover:border-purple-500/30 transition-all ${
+        isDragging ? "shadow-glow-purple ring-2 ring-purple-500/50" : ""
       } ${isStale ? "border-orange-400 dark:border-orange-600" : isAging ? "border-yellow-400 dark:border-yellow-600" : ""}`}
       onClick={handleCardClick}
       data-testid={`card-move-${move.id}`}
@@ -204,16 +211,17 @@ function MoveCard({
         
         <div className="flex items-center gap-2 mt-3">
           {effortLevel && (
-            <Badge variant="secondary" className="text-xs" data-testid={`badge-effort-${move.id}`}>
+            <Badge variant="secondary" className="text-xs rounded-full bg-white/10 border-white/10" data-testid={`badge-effort-${move.id}`}>
               {effortLevel.label}
             </Badge>
           )}
           {DrainIcon && (
-            <DrainIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <DrainIcon className="h-3.5 w-3.5 text-purple-400" />
           )}
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -847,79 +855,60 @@ export default function Moves() {
   }
 
   return (
-    <div className="h-screen flex flex-col space-bg" data-testid="page-moves">
-      <header className="h-16 glass-strong border-b border-purple-500/20 flex items-center justify-between px-6 shrink-0 relative">
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-display font-semibold tracking-wider text-gradient-purple">Moves</h1>
-          <nav className="flex items-center gap-1">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="hover:bg-purple-500/10" data-testid="link-chat">
-                <MessageSquare className="h-4 w-4 mr-2 text-purple-400" />
-                Chat
-              </Button>
-            </Link>
-            <Link href="/metrics">
-              <Button variant="ghost" size="sm" className="hover:bg-cyan-500/10" data-testid="link-metrics">
-                <BarChart3 className="h-4 w-4 mr-2 text-cyan-400" />
-                Metrics
-              </Button>
-            </Link>
-          </nav>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 border rounded-md p-1" data-testid="view-toggle">
-            <Button
-              size="icon"
-              variant={viewMode === "board" ? "secondary" : "ghost"}
-              className="h-7 w-7"
-              onClick={() => setViewMode("board")}
-              data-testid="button-view-board"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              className="h-7 w-7"
-              onClick={() => setViewMode("list")}
-              data-testid="button-view-list"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-create-move">
-                <Plus className="h-4 w-4 mr-2" />
-                New Move
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Move</DialogTitle>
-              </DialogHeader>
-              <MoveForm clients={clients} onSuccess={handleMoveCreated} />
-            </DialogContent>
-          </Dialog>
-          
-          <Button 
-            size="sm" 
-            variant="outline"
-            onClick={() => setTriageDialogOpen(true)}
-            data-testid="button-run-triage"
-          >
-            <ClipboardCheck className="h-4 w-4 mr-2" />
-            Triage
-          </Button>
-          
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="h-screen flex" data-testid="page-moves">
+      <GlassSidebar onTriageClick={() => setTriageDialogOpen(true)} />
 
-      <div className="border-b px-6 py-3 flex items-center gap-4 flex-wrap" data-testid="filter-bar">
+      <IslandLayout>
+        <div className="h-full flex flex-col">
+          {/* Island Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold">Moves</h2>
+              <div className="flex items-center gap-2 rounded-2xl bg-white/5 p-1" data-testid="view-toggle">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`h-8 w-8 rounded-xl flex items-center justify-center transition-colors ${viewMode === "board" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setViewMode("board")}
+                  data-testid="button-view-board"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`h-8 w-8 rounded-xl flex items-center justify-center transition-colors ${viewMode === "list" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-view-list"
+                >
+                  <List className="h-4 w-4" />
+                </motion.button>
+              </div>
+            </div>
+
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white text-sm font-medium shadow-glow-purple"
+                  data-testid="button-create-move"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Move
+                </motion.button>
+              </DialogTrigger>
+              <DialogContent className="rounded-3xl border-white/10 bg-background/95 backdrop-blur-xl">
+                <DialogHeader>
+                  <DialogTitle>Create Move</DialogTitle>
+                </DialogHeader>
+                <MoveForm clients={clients} onSuccess={handleMoveCreated} />
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="px-6 py-3 flex items-center gap-4 flex-wrap border-b border-white/5" data-testid="filter-bar">
         <Select value={clientFilter} onValueChange={setClientFilter}>
           <SelectTrigger className="w-[160px]" data-testid="select-client-filter">
             <SelectValue placeholder="All Clients" />
@@ -960,65 +949,68 @@ export default function Moves() {
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-2 ml-auto">
-          <Switch
-            id="show-backlog"
-            checked={showBacklog}
-            onCheckedChange={setShowBacklog}
-            data-testid="switch-show-backlog"
-          />
-          <Label htmlFor="show-backlog" className="text-sm text-muted-foreground cursor-pointer">
-            Show Backlog
-            {backlogCount > 0 && (
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {backlogCount}
-              </Badge>
-            )}
-          </Label>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-auto p-6">
-        {viewMode === "board" ? (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <div className="flex gap-6 min-w-max">
-              <StatusColumn 
-                status="active" 
-                moves={filteredMoves} 
-                clients={clients}
-                onUpdate={() => refetchMoves()}
-                onSelectMove={handleSelectMove}
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch
+                id="show-backlog"
+                checked={showBacklog}
+                onCheckedChange={setShowBacklog}
+                data-testid="switch-show-backlog"
               />
-              <StatusColumn 
-                status="queued" 
-                moves={filteredMoves} 
-                clients={clients}
-                onUpdate={() => refetchMoves()}
-                onSelectMove={handleSelectMove}
-              />
-              {showBacklog && (
-                <StatusColumn 
-                  status="backlog" 
-                  moves={filteredMoves} 
-                  clients={clients}
-                  onUpdate={() => refetchMoves()}
-                  onSelectMove={handleSelectMove}
-                />
-              )}
+              <Label htmlFor="show-backlog" className="text-sm text-muted-foreground cursor-pointer">
+                Show Backlog
+                {backlogCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {backlogCount}
+                  </Badge>
+                )}
+              </Label>
             </div>
-          </DragDropContext>
-        ) : (
-          <ListView 
-            moves={filteredMoves} 
-            clients={clients} 
-            onUpdate={() => refetchMoves()}
-            onSelectMove={handleSelectMove}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-          />
-        )}
-      </div>
+          </div>
+
+          {/* Board/List Content */}
+          <div className="flex-1 overflow-auto p-6">
+            {viewMode === "board" ? (
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <div className="flex gap-6 min-w-max">
+                  <StatusColumn 
+                    status="active" 
+                    moves={filteredMoves} 
+                    clients={clients}
+                    onUpdate={() => refetchMoves()}
+                    onSelectMove={handleSelectMove}
+                  />
+                  <StatusColumn 
+                    status="queued" 
+                    moves={filteredMoves} 
+                    clients={clients}
+                    onUpdate={() => refetchMoves()}
+                    onSelectMove={handleSelectMove}
+                  />
+                  {showBacklog && (
+                    <StatusColumn 
+                      status="backlog" 
+                      moves={filteredMoves} 
+                      clients={clients}
+                      onUpdate={() => refetchMoves()}
+                      onSelectMove={handleSelectMove}
+                    />
+                  )}
+                </div>
+              </DragDropContext>
+            ) : (
+              <ListView 
+                moves={filteredMoves} 
+                clients={clients} 
+                onUpdate={() => refetchMoves()}
+                onSelectMove={handleSelectMove}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+            )}
+          </div>
+        </div>
+      </IslandLayout>
 
       <MoveDetailSheet
         move={selectedMove}

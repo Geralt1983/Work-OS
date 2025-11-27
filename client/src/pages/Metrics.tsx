@@ -1,16 +1,18 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, ArrowLeft, Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
+import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import GlassSidebar from "@/components/GlassSidebar";
+import IslandLayout from "@/components/IslandLayout";
+import { TriageDialog } from "@/components/TriageDialog";
 
 interface TodayMetrics {
   date: string;
@@ -123,6 +125,8 @@ function getImportanceBadgeVariant(importance: string): "default" | "secondary" 
 }
 
 export default function Metrics() {
+  const [triageOpen, setTriageOpen] = useState(false);
+
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({
     queryKey: ["/api/metrics/today"],
   });
@@ -180,24 +184,21 @@ export default function Metrics() {
   });
 
   return (
-    <div className="h-screen flex flex-col space-bg" data-testid="page-metrics">
-      <header className="h-16 glass-strong border-b border-purple-500/20 flex items-center justify-between px-6 shrink-0 relative">
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-        <div className="flex items-center gap-4">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="button-back">
-              <ArrowLeft className="h-5 w-5 text-purple-400" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-xl font-display font-semibold tracking-wider text-gradient-purple" data-testid="text-page-title">Metrics</h1>
-            <p className="text-sm text-muted-foreground">Track your work pacing and client activity</p>
-          </div>
-        </div>
-      </header>
+    <div className="h-screen flex" data-testid="page-metrics">
+      <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
-      <ScrollArea className="flex-1">
-        <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+      <IslandLayout>
+        <div className="h-full flex flex-col">
+          {/* Island Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div>
+              <h2 className="text-lg font-semibold" data-testid="text-page-title">Metrics</h2>
+              <p className="text-sm text-muted-foreground">Track your work pacing and client activity</p>
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1">
+            <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
           
           {/* Today's Pacing */}
           <Card data-testid="card-today-pacing">
@@ -664,8 +665,12 @@ export default function Metrics() {
             </CardContent>
           </Card>
 
+            </div>
+          </ScrollArea>
         </div>
-      </ScrollArea>
+      </IslandLayout>
+
+      <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
     </div>
   );
 }
