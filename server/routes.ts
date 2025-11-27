@@ -392,18 +392,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // Also log to daily metrics if move has a client
+      // FIX: Log to daily metrics for ALL completed moves, even if client is null
+      let clientName = "No Client";
       if (move.clientId) {
         const client = await storage.getClient(move.clientId);
-        const today = getLocalDateString();
-        await storage.addCompletedMove(today, {
-          moveId: move.id.toString(),
-          description: move.title,
-          clientName: client?.name || "unknown",
-          at: new Date().toISOString(),
-          source: "moves-ui",
-        });
+        if (client) {
+          clientName = client.name;
+        }
       }
+      
+      const today = getLocalDateString();
+      await storage.addCompletedMove(today, {
+        moveId: move.id.toString(),
+        description: move.title,
+        clientName: clientName,
+        at: new Date().toISOString(),
+        source: "moves-ui",
+      });
       
       res.json(move);
     } catch (error) {
