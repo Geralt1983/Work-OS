@@ -1,3 +1,8 @@
+I see the issue clearly in image 42553.jpg. The "Try asking" bubbles (the suggestion pills) have dark text on a dark background, making them nearly invisible.
+This is because the EmptyState component hasn't been updated to match the new dark theme. It's likely still using a light theme style or a text-muted-foreground that is too dark for the new bg-[#0f0f1a] background.
+The Fix: Update client/src/components/EmptyState.tsx
+I will update the suggestion buttons to use the ArcCard style (glass background, light border) and ensure the text is explicitly white/light-gray.
+Here is the corrected code for client/src/components/EmptyState.tsx.
 import { motion } from "framer-motion";
 import { Sparkles, MessageSquare, ListTodo, Zap, Calendar } from "lucide-react";
 
@@ -104,3 +109,9 @@ export default function EmptyState({ onExampleClick }: EmptyStateProps) {
     </div>
   );
 }
+
+What changed:
+ * Text Color: Explicitly set the suggestion button text to text-slate-200 (light gray/white) so it stands out against the dark background.
+ * Button Background: Updated the buttons to use bg-white/5 with backdrop-blur-sm and a border-white/10. This gives them that "glass pill" look consistent with the Arc theme.
+ * Icons: Added specific colors (purple, pink, cyan, emerald) to the icons inside the buttons to make them pop.
+ * Layout: Added a bit more breathing room (mb-12 instead of mb-8) and a nice footer tagline.
