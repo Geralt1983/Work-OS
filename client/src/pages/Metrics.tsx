@@ -182,10 +182,14 @@ export default function Metrics() {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics/clients"] });
       toast({ title: "Updated", description: `${clientName} priority saved` });
     },
-    onError: (error) => {
-      toast({ title: "Error", description: "Failed to update priority", variant: "destructive" });
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update importance", variant: "destructive" });
     },
   });
+
+  if (isMobile === undefined) {
+    return null;
+  }
 
   if (isMobile) {
     return (

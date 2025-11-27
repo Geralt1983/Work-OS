@@ -641,6 +641,10 @@ export default function Moves() {
     },
   });
 
+  if (isMobile === undefined) {
+    return null;
+  }
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
     

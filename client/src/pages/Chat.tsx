@@ -120,6 +120,10 @@ export default function Chat() {
     damping: 30,
   };
 
+  if (isMobile === undefined) {
+    return null;
+  }
+
   // Mobile layout - no sidebar
   if (isMobile) {
     return (
