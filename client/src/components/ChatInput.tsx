@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, ImagePlus, X } from "lucide-react";
 
@@ -127,7 +126,7 @@ export default function ChatInput({
   };
 
   return (
-    <div className="p-4 sm:p-6 border-t border-white/5">
+    <div className="p-4 sm:p-6">
       <div className="max-w-3xl mx-auto space-y-3">
         {/* Image Previews */}
         <AnimatePresence>
@@ -136,7 +135,7 @@ export default function ChatInput({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="flex flex-wrap gap-2"
+              className="flex flex-wrap gap-2 mb-2"
             >
               {selectedImages.map((img, index) => (
                 <motion.div 
@@ -150,13 +149,13 @@ export default function ChatInput({
                   <img 
                     src={img.previewUrl} 
                     alt={`Selected ${index + 1}`} 
-                    className="h-20 w-20 object-cover rounded-2xl border border-white/10 shadow-lg"
+                    className="h-16 w-16 object-cover rounded-xl border border-white/10 shadow-lg"
                   />
                   <motion.button
                     type="button"
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-glow-pink"
+                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md z-10"
                     onClick={() => handleRemoveImage(index)}
                     disabled={disabled}
                     data-testid={`button-remove-image-${index}`}
@@ -169,8 +168,16 @@ export default function ChatInput({
           )}
         </AnimatePresence>
 
-        {/* Input Row */}
-        <div className="flex gap-3 items-end">
+        {/* Input Container - The "Command Bar" */}
+        <motion.div 
+          className="relative flex items-end gap-2 p-2 rounded-[24px] bg-[#1a1b26]/80 backdrop-blur-xl border border-white/10 shadow-2xl"
+          initial={false}
+          animate={{ 
+            boxShadow: message.length > 0 || selectedImages.length > 0
+              ? "0 0 0 1px rgba(168, 85, 247, 0.3), 0 8px 40px rgba(0, 0, 0, 0.3)" 
+              : "0 4px 20px rgba(0, 0, 0, 0.2)"
+          }}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -186,55 +193,46 @@ export default function ChatInput({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled || selectedImages.length >= MAX_IMAGES}
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.1)" }}
             whileTap={{ scale: 0.95 }}
-            transition={springTransition}
-            className="h-12 w-12 rounded-2xl shrink-0 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/30 flex items-center justify-center transition-colors disabled:opacity-50"
-            data-testid="button-add-image"
+            className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-purple-400 transition-colors disabled:opacity-50"
+            data-testid="button-attach-image"
           >
-            <ImagePlus className="h-5 w-5 text-purple-400" />
+            <ImagePlus className="h-5 w-5" />
           </motion.button>
 
           {/* Text Input */}
-          <motion.div 
-            className="flex-1 relative"
-            initial={false}
-            animate={{ 
-              boxShadow: message.length > 0 
-                ? "0 8px 32px rgba(168, 85, 247, 0.15)" 
-                : "0 4px 16px rgba(0, 0, 0, 0.1)"
-            }}
-            style={{ borderRadius: "16px" }}
-          >
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={selectedImages.length > 0 ? "Describe what you want to know about these images..." : placeholder}
-              disabled={disabled}
-              className="min-h-[48px] max-h-[200px] resize-none rounded-2xl text-[15px] leading-relaxed bg-white/5 border-white/10 focus:border-purple-500/40 focus:ring-purple-500/20 placeholder:text-muted-foreground/60 transition-all"
-              rows={1}
-              data-testid="input-message"
-            />
-          </motion.div>
+          <Textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={selectedImages.length > 0 ? "Ask about these images..." : placeholder}
+            disabled={disabled}
+            className="flex-1 min-h-[40px] max-h-[200px] py-2.5 px-0 resize-none bg-transparent border-0 focus-visible:ring-0 text-[15px] text-white placeholder:text-muted-foreground/50 shadow-none"
+            rows={1}
+            data-testid="input-message"
+          />
 
           {/* Send Button */}
           <motion.button
             onClick={handleSubmit}
             disabled={disabled || (!message.trim() && selectedImages.length === 0)}
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
-            transition={springTransition}
-            className="h-12 w-12 rounded-2xl shrink-0 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+            whileTap={{ scale: 0.95 }}
+            className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all ${
+              message.trim() || selectedImages.length > 0
+                ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-glow-purple"
+                : "bg-white/5 text-muted-foreground"
+            }`}
             data-testid="button-send"
           >
-            <Send className="h-[18px] w-[18px] text-white" />
+            <Send className="h-5 w-5" />
           </motion.button>
-        </div>
+        </motion.div>
 
-        <p className="text-xs text-muted-foreground/60 text-center">
-          Paste, drop, or click to upload images (up to {MAX_IMAGES})
+        <p className="text-[10px] text-muted-foreground/40 text-center font-medium tracking-wide uppercase">
+          One move per client • Daily momentum
         </p>
       </div>
     </div>

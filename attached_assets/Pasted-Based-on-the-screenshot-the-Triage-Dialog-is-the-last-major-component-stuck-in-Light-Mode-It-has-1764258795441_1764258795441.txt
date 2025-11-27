@@ -1,9 +1,17 @@
+Based on the screenshot, the Triage Dialog is the last major component stuck in "Light Mode." It has a white background that clashes violently with your new "Deep Space" aesthetic.
+To improve this, we need to give it the same Dark Glass treatment as the rest of the app:
+ * Darken the Modal Window: Switch from white to deep blue/black (#0f0f1a) with a backdrop blur.
+ * Glassify the Cards: Replace the white Shadcn cards with your new <ArcCard /> component.
+ * Neon Accents: Change the flat green/orange colors to glowing neon text and borders.
+Here is the fully updated code for client/src/components/TriageDialog.tsx.
+Update client/src/components/TriageDialog.tsx
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ArcCard } from "@/components/ArcCard";
@@ -12,6 +20,7 @@ import {
   Zap, RefreshCw, Loader2, ArrowUpCircle, Sparkles, Edit3, Check
 } from "lucide-react";
 
+// ... (Keep interfaces consistent) ...
 interface AutoAction {
   type: "promote" | "fill_field";
   moveId: number;
@@ -149,6 +158,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
       }
       onOpenChange(newOpen);
     }}>
+      {/* FIX 1: Dark Modal Background */}
       <DialogContent className="max-w-2xl w-[calc(100%-1rem)] sm:w-auto h-[85vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden mx-2 bg-[#0f0f1a]/95 backdrop-blur-2xl border-white/10 text-white shadow-2xl">
         <DialogHeader className="shrink-0 border-b border-white/5 pb-4">
           <div className="flex items-start justify-between gap-2">
@@ -175,7 +185,6 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               onClick={handleRefresh}
               disabled={isFetching}
               className="shrink-0 text-muted-foreground hover:text-white hover:bg-white/10 rounded-full"
-              data-testid="button-triage-refresh"
             >
               {isFetching ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -203,6 +212,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
           <ScrollArea className="flex-1 -mr-4 pr-4 min-h-0">
             <div className="space-y-4 pt-4">
               {promotions.length > 0 && (
+                // FIX 2: Use ArcCard for sections
                 <ArcCard glowColor="cyan" className="bg-cyan-500/5 border-cyan-500/20">
                   <div className="p-4 space-y-3">
                     <div className="flex items-center gap-2 text-cyan-400 font-medium">
@@ -211,7 +221,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                     </div>
                     <div className="space-y-2">
                       {promotions.map((action, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-black/20 border border-white/5" data-testid={`triage-promotion-${idx}`}>
+                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-black/20 border border-white/5">
                           <ArrowUpCircle className="w-4 h-4 text-cyan-500 mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -239,7 +249,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                     </div>
                     <div className="space-y-2">
                       {fieldFills.slice(0, 6).map((action, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-black/20 border border-white/5" data-testid={`triage-field-fill-${idx}`}>
+                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-black/20 border border-white/5">
                           <Sparkles className="w-4 h-4 text-purple-500 mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -251,16 +261,12 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                           </div>
                         </div>
                       ))}
-                      {fieldFills.length > 6 && (
-                        <p className="text-xs text-muted-foreground pl-6">
-                          +{fieldFills.length - 6} more
-                        </p>
-                      )}
                     </div>
                   </div>
                 </ArcCard>
               )}
 
+              {/* Pipeline Health Section */}
               <ArcCard glowColor="none" className="bg-white/5">
                 <div className="p-4 space-y-4">
                   <div className="flex items-center gap-2 text-white/80 font-medium">
@@ -280,7 +286,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                   {triage.pipelineHealth.clientsWithIssues.length > 0 ? (
                     <div className="space-y-2">
                       {triage.pipelineHealth.clientsWithIssues.map((client, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20" data-testid={`triage-client-issue-${idx}`}>
+                        <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
                           <XCircle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
                           <div>
                             <span className="font-medium text-rose-200">{client.clientName}</span>
@@ -299,20 +305,10 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                       <span className="text-sm">All clients have active, queued, and backlog tasks</span>
                     </div>
                   )}
-
-                  {remainingGaps.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-white/5">
-                      <p className="text-sm text-muted-foreground mb-2">Could not auto-fix:</p>
-                      {remainingGaps.map((gap, idx) => (
-                        <div key={idx} className="text-sm text-muted-foreground">
-                          • {gap.clientName}: {gap.gap} - <span className="italic">{gap.reason}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </ArcCard>
 
+              {/* Rewrites Section */}
               {vagueRewrites.length > 0 && (
                 <ArcCard glowColor="orange" className="bg-orange-500/5 border-orange-500/20">
                   <div className="p-4 space-y-3">
@@ -333,7 +329,6 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                                 : "bg-black/20 border-white/5 hover:bg-orange-500/10"
                             }`}
                             onClick={() => handleToggleRewrite(item.moveId)}
-                            data-testid={`triage-rewrite-${idx}`}
                           >
                             <div className="flex items-start gap-3">
                               <Checkbox
@@ -341,7 +336,6 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                                 onCheckedChange={() => handleToggleRewrite(item.moveId)}
                                 onClick={(e) => e.stopPropagation()}
                                 className="mt-1 border-orange-500/50 data-[state=checked]:bg-orange-500 data-[state=checked]:text-white"
-                                data-testid={`checkbox-rewrite-${idx}`}
                               />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
@@ -359,64 +353,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                 </ArcCard>
               )}
 
-              {triage.actionabilityIssues.length > 0 && vagueRewrites.length === 0 && (
-                <ArcCard glowColor="none" className="bg-white/5">
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-white/80 font-medium">
-                      <Zap className="w-4 h-4" />
-                      <span>Actionability Check</span>
-                    </div>
-                    <div className="space-y-2">
-                      {triage.actionabilityIssues.map((issue, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20" data-testid={`triage-actionability-issue-${idx}`}>
-                          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="font-medium text-white/90">"{issue.title}"</span>
-                              <Badge variant="secondary" className="text-[10px] bg-white/10 text-white/60 border-0">{issue.clientName}</Badge>
-                              <Badge variant="secondary" className="text-[10px] bg-white/10 text-white/60 border-0">{issue.status}</Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{issue.reason}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </ArcCard>
-              )}
-
-              {triage.missingFields.length > 0 && (
-                <ArcCard glowColor="none" className="bg-white/5">
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-white/80 font-medium">
-                      <FileText className="w-4 h-4" />
-                      <span>Missing Fields</span>
-                    </div>
-                    <div className="space-y-2">
-                      {triage.missingFields.slice(0, 10).map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-black/20 border border-white/5" data-testid={`triage-missing-field-${idx}`}>
-                          <FileText className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="font-medium text-white/90">"{item.title}"</span>
-                              <Badge variant="secondary" className="text-[10px] bg-white/10 text-white/60 border-0">{item.clientName}</Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              Missing: {item.missing.join(", ")}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {triage.missingFields.length > 10 && (
-                        <p className="text-xs text-muted-foreground pl-6">
-                          ...and {triage.missingFields.length - 10} more
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </ArcCard>
-              )}
-
+              {/* Success State */}
               {triage.missingFields.length === 0 && triage.actionabilityIssues.length === 0 && triage.pipelineHealth.clientsWithIssues.length === 0 && (
                 <ArcCard glowColor="emerald" className="bg-emerald-500/10 border-emerald-500/30">
                   <div className="p-8 flex flex-col items-center text-center gap-3">
@@ -429,13 +366,6 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
                 </ArcCard>
               )}
 
-              <div className="text-xs text-muted-foreground/50 text-center pb-2 pt-2">
-                Triage run at {new Date(triage.timestamp).toLocaleString('en-US', { 
-                  timeZone: 'America/New_York',
-                  dateStyle: 'medium',
-                  timeStyle: 'short'
-                })} ET
-              </div>
             </div>
           </ScrollArea>
         ) : null}
@@ -446,7 +376,6 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
               onClick={handleApplySelectedRewrites}
               disabled={applyRewritesMutation.isPending}
               className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-glow-orange transition-all"
-              data-testid="button-apply-rewrites"
             >
               {applyRewritesMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -461,3 +390,4 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
     </Dialog>
   );
 }
+
