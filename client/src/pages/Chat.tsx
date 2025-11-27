@@ -7,6 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
 import { TriageDialog } from "@/components/TriageDialog";
 import IslandLayout from "@/components/IslandLayout";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -120,12 +121,12 @@ export default function Chat() {
   // Mobile layout - no sidebar
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col" data-testid="page-chat">
+      <div className="h-screen flex flex-col gradient-bg" data-testid="page-chat">
         {/* Mobile Header */}
         <motion.header 
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="glass-strong px-4 py-3 flex items-center justify-between border-b border-white/5"
+          className="glass-strong px-4 py-3 flex items-center justify-between border-b border-white/5 shrink-0"
         >
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple">
@@ -138,8 +139,8 @@ export default function Chat() {
           </div>
         </motion.header>
 
-        {/* Content */}
-        <div className="flex-1 min-h-0 overflow-hidden p-3">
+        {/* Content - with padding for bottom nav */}
+        <div className="flex-1 min-h-0 overflow-hidden p-3 pb-24">
           <div className="h-full island flex flex-col">
             {messages.length === 0 ? (
               <div className="flex-1 overflow-auto">
@@ -169,6 +170,7 @@ export default function Chat() {
           </div>
         </div>
 
+        <MobileBottomNav onTriageClick={() => setTriageOpen(true)} />
         <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
       </div>
     );

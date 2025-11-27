@@ -5,14 +5,16 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
+import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2, BarChart3 } from "lucide-react";
 import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
+import MobileBottomNav from "@/components/MobileBottomNav";
 
 interface TodayMetrics {
   date: string;
@@ -126,6 +128,7 @@ function getImportanceBadgeVariant(importance: string): "default" | "secondary" 
 
 export default function Metrics() {
   const [triageOpen, setTriageOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({
     queryKey: ["/api/metrics/today"],
@@ -183,8 +186,128 @@ export default function Metrics() {
     },
   });
 
+  if (isMobile) {
+    return (
+      <div className="h-screen flex flex-col gradient-bg" data-testid="page-metrics">
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="text-lg font-bold text-gradient-purple">Metrics</h1>
+          </div>
+        </header>
+
+        <ScrollArea className="flex-1 pb-24">
+          <div className="p-4 space-y-4">
+            {/* Today's Pacing - Mobile */}
+            <Card data-testid="card-today-pacing">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Today
+                </CardTitle>
+                {loadingToday ? (
+                  <Skeleton className="h-6 w-16" />
+                ) : (
+                  <Badge variant={todayMetrics && todayMetrics.pacingPercent >= 100 ? "default" : "secondary"}>
+                    {todayMetrics?.pacingPercent || 0}%
+                  </Badge>
+                )}
+              </CardHeader>
+              <CardContent>
+                {loadingToday ? (
+                  <Skeleton className="h-4 w-full" />
+                ) : todayMetrics ? (
+                  <div className="space-y-3">
+                    <Progress value={Math.min(todayMetrics.pacingPercent, 100)} className="h-2" />
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>{todayMetrics.movesCompleted} moves</span>
+                      <span>{formatMinutes(todayMetrics.estimatedMinutes)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No data yet</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Weekly Summary - Mobile */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  This Week
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingWeekly ? (
+                  <Skeleton className="h-12 w-full" />
+                ) : weeklyMetrics ? (
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold">{weeklyMetrics.totalMoves}</div>
+                      <div className="text-xs text-muted-foreground">Moves</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{formatMinutes(weeklyMetrics.totalMinutes)}</div>
+                      <div className="text-xs text-muted-foreground">Time</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
+                      <div className="text-xs text-muted-foreground">Avg/Day</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No data yet</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client Activity - Mobile */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Clients
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingClients ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : clientMetrics && clientMetrics.length > 0 ? (
+                  <div className="space-y-2">
+                    {clientMetrics.slice(0, 5).map((client) => (
+                      <div key={client.clientName} className="flex items-center justify-between py-1">
+                        <span className="text-sm font-medium truncate">{client.clientName}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {client.daysSinceLastMove}d
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No client data</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </ScrollArea>
+
+        <MobileBottomNav onTriageClick={() => setTriageOpen(true)} />
+        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen flex" data-testid="page-metrics">
+    <div className="h-screen flex gradient-bg" data-testid="page-metrics">
       <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
       <IslandLayout>
