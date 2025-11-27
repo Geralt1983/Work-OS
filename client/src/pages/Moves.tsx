@@ -87,28 +87,7 @@ function MoveCard({
   const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
   
   const daysOld = getDaysOld(move.createdAt);
-  const isAging = daysOld >= 7 && move.status === "backlog";
   const isStale = daysOld >= 10 && move.status === "backlog";
-
-  const promoteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/moves/${move.id}/promote`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      onUpdate();
-    },
-  });
-
-  const demoteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/moves/${move.id}/demote`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      onUpdate();
-    },
-  });
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -122,111 +101,72 @@ function MoveCard({
     },
   });
 
-  const canPromote = move.status !== "active" && move.status !== "done";
-  const canDemote = move.status !== "backlog" && move.status !== "done";
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('button')) return;
-    onSelect();
-  };
-
   const getGlow = () => {
     if (move.status === 'active') return 'purple' as const;
     if (normalizedDrainType === 'deep') return 'cyan' as const;
     if (normalizedDrainType === 'admin') return 'orange' as const;
+    if (normalizedDrainType === 'creative') return 'pink' as const;
     return 'none' as const;
   };
 
   return (
-    <div className="py-1" data-testid={`card-move-${move.id}`}>
+    <div className="py-3 px-1" data-testid={`card-move-${move.id}`}>
       <ArcCard 
         glowColor={getGlow()} 
-        onClick={handleCardClick}
-        className={`${isDragging ? "ring-2 ring-purple-500 shadow-2xl" : ""} ${
-          isStale ? "border-orange-400" : isAging ? "border-yellow-400" : ""
-        }`}
+        onClick={onSelect}
+        className={isDragging ? "ring-2 ring-purple-500 shadow-2xl z-50 rotate-2 scale-105" : ""}
       >
-        <div className="p-5 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1.5 flex-1 min-w-0">
-              <h4 className="font-medium text-[15px] leading-snug text-white/90 truncate" data-testid={`text-move-title-${move.id}`}>
-                {move.title}
-              </h4>
-              
-              <div className="flex items-center gap-2 text-xs">
+        <div className="p-5 flex flex-col gap-4">
+          <div className="flex justify-between items-start gap-3">
+            <div className="flex-1 space-y-2">
+              {/* Client Pill */}
+              <div className="flex items-center gap-2">
                 {client && (
-                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-muted-foreground font-medium">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold bg-white/5 border border-white/10 text-muted-foreground/80">
                     {client.name}
                   </span>
                 )}
                 {isStale && (
-                  <span className="flex items-center gap-1 text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full" data-testid={`badge-stale-${move.id}`}>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20" data-testid={`badge-stale-${move.id}`}>
                     <AlertCircle className="w-3 h-3" /> {daysOld}d
                   </span>
                 )}
-                {isAging && !isStale && (
-                  <span className="flex items-center gap-1 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full" data-testid={`badge-aging-${move.id}`}>
-                    <Clock className="w-3 h-3" /> {daysOld}d
-                  </span>
-                )}
               </div>
+              
+              {/* Title */}
+              <h4 className="font-semibold text-[15px] leading-snug text-white/90" data-testid={`text-move-title-${move.id}`}>
+                {move.title}
+              </h4>
             </div>
 
-            <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
-              {canPromote && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-full hover:bg-white/10"
-                  onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
-                  disabled={promoteMutation.isPending}
-                  data-testid={`button-promote-${move.id}`}
-                >
-                  <ChevronUp className="w-4 h-4" />
-                </Button>
-              )}
-              {canDemote && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-full hover:bg-white/10"
-                  onClick={(e) => { e.stopPropagation(); demoteMutation.mutate(); }}
-                  disabled={demoteMutation.isPending}
-                  data-testid={`button-demote-${move.id}`}
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              )}
-              {move.status !== "done" && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-full hover:bg-emerald-500/20 hover:text-emerald-400"
-                  onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
-                  disabled={completeMutation.isPending}
-                  data-testid={`button-complete-${move.id}`}
-                >
-                  <Check className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+            {/* Checkbox Action */}
+            {move.status !== "done" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 rounded-full border border-white/10 bg-white/5 text-muted-foreground hover:bg-emerald-500 hover:text-white hover:border-emerald-400 transition-all duration-300"
+                onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
+                disabled={completeMutation.isPending}
+                data-testid={`button-complete-${move.id}`}
+              >
+                <Check className="w-4 h-4" />
+              </Button>
+            )}
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-white/5">
-            <div className="flex items-center gap-3 text-muted-foreground/60">
+          {/* Footer Metadata */}
+          <div className="flex items-center justify-between pt-3 border-t border-white/5">
+            <div className="flex items-center gap-3">
               {effortLevel && (
-                <div className="flex items-center gap-1.5 text-xs" data-testid={`badge-effort-${move.id}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${
-                    (move.effortEstimate || 0) > 2 ? 'bg-rose-400' : 'bg-emerald-400'
-                  }`} />
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground" data-testid={`badge-effort-${move.id}`}>
+                  <div className={`w-2 h-2 rounded-full ${(move.effortEstimate || 0) > 2 ? 'bg-orange-400 shadow-glow-yellow' : 'bg-emerald-400 shadow-glow-emerald'}`} />
                   {effortLevel.label}
                 </div>
               )}
             </div>
             
             {DrainIcon && (
-              <div className="text-white/20" title={move.drainType || undefined}>
+              <div className={`p-1.5 rounded-lg bg-white/5 ${normalizedDrainType === 'deep' ? 'text-cyan-400' : 'text-muted-foreground'}`} title={move.drainType || ''}>
                 <DrainIcon className="w-4 h-4" />
               </div>
             )}
@@ -250,61 +190,57 @@ function StatusColumn({
   onUpdate: () => void;
   onSelectMove: (move: Move) => void;
 }) {
-  const statusInfo = STATUS_LABELS[status];
+  const labels: Record<string, string> = { active: "Today", queued: "Up Next", backlog: "Backlog" };
   const columnMoves = moves.filter(m => m.status === status);
 
   return (
-    <div className="flex-1 min-w-[280px] max-w-[350px]" data-testid={`column-${status}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{statusInfo.label}</h3>
-          <Badge variant="secondary" className="text-xs">
-            {columnMoves.length}
-          </Badge>
-        </div>
+    <div className="flex-1 min-w-[300px] max-w-[380px] flex flex-col h-full" data-testid={`column-${status}`}>
+      <div className="flex items-center justify-between mb-4 px-2">
+        <h3 className="font-bold text-lg text-white/80 tracking-tight">{labels[status]}</h3>
+        <span className="px-2.5 py-0.5 rounded-full bg-white/5 text-xs font-medium text-muted-foreground border border-white/10">
+          {columnMoves.length}
+        </span>
       </div>
       
-      <Droppable droppableId={status}>
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`min-h-[200px] rounded-2xl transition-colors p-2 ${
-              snapshot.isDraggingOver ? "bg-white/5" : ""
-            }`}
-          >
-            <ScrollArea className="h-[calc(100vh-260px)]">
-              <div className="space-y-3 pr-4">
-                {columnMoves.map((move, index) => (
-                  <Draggable key={move.id} draggableId={move.id.toString()} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                      >
-                        <MoveCard 
-                          move={move} 
-                          clients={clients}
-                          onUpdate={onUpdate}
-                          onSelect={() => onSelectMove(move)}
-                          isDragging={snapshot.isDragging}
-                        />
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-                {columnMoves.length === 0 && !snapshot.isDraggingOver && (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    No moves
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-        )}
-      </Droppable>
+      <div className="flex-1 rounded-[2rem] border border-white/5 bg-black/20 p-2 overflow-hidden">
+        <Droppable droppableId={status}>
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={`h-full overflow-y-auto pr-2 custom-scrollbar transition-colors duration-300 ${
+                snapshot.isDraggingOver ? "bg-white/[0.02]" : ""
+              }`}
+            >
+              {columnMoves.map((move, index) => (
+                <Draggable key={move.id} draggableId={move.id.toString()} index={index}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                    >
+                      <MoveCard 
+                        move={move} 
+                        clients={clients}
+                        onUpdate={onUpdate}
+                        onSelect={() => onSelectMove(move)}
+                        isDragging={snapshot.isDragging}
+                      />
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+              {columnMoves.length === 0 && (
+                <div className="h-32 flex items-center justify-center border-2 border-dashed border-white/5 rounded-3xl m-2">
+                  <p className="text-sm text-muted-foreground/40 font-medium">Empty</p>
+                </div>
+              )}
+            </div>
+          )}
+        </Droppable>
+      </div>
     </div>
   );
 }
