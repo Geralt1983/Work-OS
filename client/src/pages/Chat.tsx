@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import ChatHeader from "@/components/ChatHeader";
+import { motion, AnimatePresence } from "framer-motion";
+import GlassSidebar from "@/components/GlassSidebar";
 import ChatMessage, { type ChatMessageProps } from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
 import EmptyState from "@/components/EmptyState";
 import TypingIndicator from "@/components/TypingIndicator";
 import { TriageDialog } from "@/components/TriageDialog";
+import IslandLayout from "@/components/IslandLayout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
@@ -16,6 +19,7 @@ export default function Chat() {
   const [triageOpen, setTriageOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -94,7 +98,6 @@ export default function Chat() {
   };
 
   const handleExampleClick = (example: string) => {
-    // "Run triage" opens the dialog directly instead of sending a message
     if (example.toLowerCase() === "run triage") {
       setTriageOpen(true);
       return;
@@ -108,32 +111,125 @@ export default function Chat() {
     setIsTyping(false);
   };
 
-  return (
-    <div className="h-screen flex flex-col space-bg" data-testid="page-chat">
-      <ChatHeader 
-        onClearChat={handleClearChat} 
-        onTriageClick={() => setTriageOpen(true)}
-        isConnected={isConnected} 
-      />
+  const springTransition = {
+    type: "spring",
+    stiffness: 300,
+    damping: 30,
+  };
 
-      <div className="flex-1 min-h-0 overflow-auto overscroll-contain">
-        {messages.length === 0 ? (
-          <div className="h-full overflow-auto overscroll-contain">
-            <EmptyState onExampleClick={handleExampleClick} />
-          </div>
-        ) : (
-          <div ref={scrollAreaRef} className="h-full overflow-auto overscroll-contain">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-4">
-              {messages.map((message, index) => (
-                <ChatMessage key={index} {...message} />
-              ))}
-              {isTyping && <TypingIndicator />}
+  // Mobile layout - no sidebar
+  if (isMobile) {
+    return (
+      <div className="h-screen flex flex-col" data-testid="page-chat">
+        {/* Mobile Header */}
+        <motion.header 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="glass-strong px-4 py-3 flex items-center justify-between border-b border-white/5"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple">
+              <span className="text-white text-sm font-bold">W</span>
             </div>
+            <h1 className="text-lg font-bold text-gradient-purple">Work OS</h1>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2">
+            <div className={`status-dot ${isConnected ? 'status-dot-active' : 'status-dot-offline'}`} />
+          </div>
+        </motion.header>
 
-      <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-hidden p-3">
+          <div className="h-full island flex flex-col">
+            {messages.length === 0 ? (
+              <div className="flex-1 overflow-auto">
+                <EmptyState onExampleClick={handleExampleClick} />
+              </div>
+            ) : (
+              <div ref={scrollAreaRef} className="flex-1 overflow-auto">
+                <div className="px-4 py-4 space-y-4">
+                  <AnimatePresence mode="popLayout">
+                    {messages.map((message, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={springTransition}
+                      >
+                        <ChatMessage {...message} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {isTyping && <TypingIndicator />}
+                </div>
+              </div>
+            )}
+            <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+          </div>
+        </div>
+
+        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
+      </div>
+    );
+  }
+
+  // Desktop layout with sidebar
+  return (
+    <div className="h-screen flex" data-testid="page-chat">
+      {/* Glass Sidebar */}
+      <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
+
+      {/* Main Content - Floating Island */}
+      <IslandLayout>
+        <div className="h-full flex flex-col">
+          {/* Island Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">Chat</h2>
+              <div className={`status-dot ${isConnected ? 'status-dot-active' : 'status-dot-offline'}`} />
+            </div>
+            <motion.button
+              onClick={handleClearChat}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              data-testid="button-clear-chat"
+            >
+              Clear
+            </motion.button>
+          </div>
+
+          {/* Chat Content */}
+          {messages.length === 0 ? (
+            <div className="flex-1 overflow-auto">
+              <EmptyState onExampleClick={handleExampleClick} />
+            </div>
+          ) : (
+            <div ref={scrollAreaRef} className="flex-1 overflow-auto">
+              <div className="max-w-3xl mx-auto px-6 py-6 space-y-6">
+                <AnimatePresence mode="popLayout">
+                  {messages.map((message, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={springTransition}
+                    >
+                      <ChatMessage {...message} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                {isTyping && <TypingIndicator />}
+              </div>
+            </div>
+          )}
+
+          {/* Chat Input */}
+          <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+        </div>
+      </IslandLayout>
 
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
     </div>

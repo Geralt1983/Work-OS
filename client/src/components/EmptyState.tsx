@@ -1,67 +1,101 @@
-import { Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
+import { Sparkles, MessageSquare, ListTodo, Zap, Calendar } from "lucide-react";
 
 export interface EmptyStateProps {
   onExampleClick?: (example: string) => void;
 }
 
-const examplePrompts = [
-  "What should I work on next?",
-  "Run triage",
-  "I have 30 minutes and low energy",
-  "Who needs attention?",
+const suggestions = [
+  { text: "What should I work on next?", icon: Zap },
+  { text: "Show me stale clients", icon: Calendar },
+  { text: "Run triage", icon: ListTodo },
+  { text: "Summarize today", icon: MessageSquare },
 ];
+
+const springTransition = {
+  type: "spring",
+  stiffness: 400,
+  damping: 30,
+};
 
 export default function EmptyState({ onExampleClick }: EmptyStateProps) {
   return (
-    <div className="flex-1 flex items-center justify-center p-8 min-h-full">
-      <div className="max-w-2xl w-full space-y-8 text-center">
-        {/* Glowing Logo with Geometric Frame */}
-        <div className="flex justify-center">
-          <div className="relative">
-            {/* Outer rotating ring */}
-            <div className="absolute inset-0 rounded-full animate-[spin_10s_linear_infinite]">
-              <div className="w-full h-full rounded-full border-2 border-dashed border-purple-500/30" />
-            </div>
-            
-            {/* Diamond decorations */}
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 border-2 border-cyan-500/50" />
-            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 border-2 border-cyan-500/50" />
-            <div className="absolute top-1/2 -left-6 -translate-y-1/2 w-4 h-4 rotate-45 border-2 border-purple-500/50" />
-            <div className="absolute top-1/2 -right-6 -translate-y-1/2 w-4 h-4 rotate-45 border-2 border-purple-500/50" />
-            
-            {/* Main glow circle */}
-            <div className="relative hex-frame rounded-full bg-gradient-to-br from-purple-600/20 to-cyan-600/20 p-8 border border-purple-500/40">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-purple-600/10 to-cyan-600/10 animate-pulse" />
-              <Sparkles className="h-12 w-12 text-cyan-400 relative z-10" />
-            </div>
+    <div className="h-full flex flex-col items-center justify-center p-6 sm:p-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...springTransition, delay: 0.1 }}
+        className="text-center max-w-md"
+      >
+        {/* Animated Logo */}
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ ...springTransition, delay: 0.2 }}
+          className="relative mx-auto mb-6 w-20 h-20"
+        >
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-cyan-500 opacity-20 blur-xl"
+          />
+          <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple">
+            <Sparkles className="w-9 h-9 text-white" />
           </div>
-        </div>
+        </motion.div>
 
-        <div className="space-y-3">
-          <h2 className="text-3xl font-display font-semibold tracking-wider text-gradient-purple" data-testid="text-welcome-title">
-            Your Work OS
-          </h2>
-          <p className="text-[15px] text-muted-foreground leading-relaxed max-w-lg mx-auto">
-            One move per client, every day. Just tell me what to do and I'll execute immediately.
-          </p>
-        </div>
+        {/* Title */}
+        <motion.h2
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...springTransition, delay: 0.3 }}
+          className="text-2xl sm:text-3xl font-bold text-gradient-purple mb-3"
+          data-testid="text-welcome-title"
+        >
+          Your Work OS
+        </motion.h2>
 
-        <div className="space-y-4 pt-4">
-          <p className="text-sm font-medium text-cyan-400/80">Try asking:</p>
-          <div className="grid gap-3">
-            {examplePrompts.map((prompt, index) => (
-              <button
-                key={index}
-                className="suggestion-pill p-4 rounded-xl cursor-pointer text-left"
-                onClick={() => onExampleClick?.(prompt)}
-                data-testid={`card-example-${index}`}
-              >
-                <p className="text-[15px] leading-relaxed text-foreground/90">{prompt}</p>
-              </button>
-            ))}
+        {/* Subtitle */}
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...springTransition, delay: 0.4 }}
+          className="text-muted-foreground text-sm sm:text-base mb-8"
+        >
+          One move per client, every day. Just tell me what to do and I'll execute immediately.
+        </motion.p>
+
+        {/* Suggestions */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...springTransition, delay: 0.5 }}
+          className="space-y-2"
+        >
+          <p className="text-sm text-muted-foreground/60 mb-3">Try asking:</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {suggestions.map((suggestion, index) => {
+              const Icon = suggestion.icon;
+              return (
+                <motion.button
+                  key={suggestion.text}
+                  onClick={() => onExampleClick?.(suggestion.text)}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ ...springTransition, delay: 0.6 + index * 0.1 }}
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/30 text-sm transition-colors shadow-lg hover:shadow-glow-purple"
+                  data-testid={`card-example-${index}`}
+                >
+                  <Icon className="w-4 h-4 text-purple-400" />
+                  <span>{suggestion.text}</span>
+                </motion.button>
+              );
+            })}
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

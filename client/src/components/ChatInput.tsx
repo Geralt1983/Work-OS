@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, ImagePlus, X } from "lucide-react";
@@ -16,6 +17,12 @@ export interface ChatInputProps {
 }
 
 const MAX_IMAGES = 5;
+
+const springTransition = {
+  type: "spring",
+  stiffness: 400,
+  damping: 25,
+};
 
 export default function ChatInput({
   onSendMessage,
@@ -120,35 +127,49 @@ export default function ChatInput({
   };
 
   return (
-    <div className="glass-strong border-t border-purple-500/20 p-4 sm:p-6 relative">
-      {/* Top glow line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-      
-      <div className="max-w-4xl mx-auto space-y-3">
-        {selectedImages.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {selectedImages.map((img, index) => (
-              <div key={`${img.file.name}-${index}`} className="relative inline-block">
-                <img 
-                  src={img.previewUrl} 
-                  alt={`Selected ${index + 1}`} 
-                  className="h-20 w-20 object-cover rounded-lg border border-purple-500/30"
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="destructive"
-                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
-                  onClick={() => handleRemoveImage(index)}
-                  disabled={disabled}
-                  data-testid={`button-remove-image-${index}`}
+    <div className="p-4 sm:p-6 border-t border-white/5">
+      <div className="max-w-3xl mx-auto space-y-3">
+        {/* Image Previews */}
+        <AnimatePresence>
+          {selectedImages.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex flex-wrap gap-2"
+            >
+              {selectedImages.map((img, index) => (
+                <motion.div 
+                  key={`${img.file.name}-${index}`} 
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={springTransition}
+                  className="relative inline-block"
                 >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
+                  <img 
+                    src={img.previewUrl} 
+                    alt={`Selected ${index + 1}`} 
+                    className="h-20 w-20 object-cover rounded-2xl border border-white/10 shadow-lg"
+                  />
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-glow-pink"
+                    onClick={() => handleRemoveImage(index)}
+                    disabled={disabled}
+                    data-testid={`button-remove-image-${index}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </motion.button>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Input Row */}
         <div className="flex gap-3 items-end">
           <input
             ref={fileInputRef}
@@ -159,18 +180,32 @@ export default function ChatInput({
             className="hidden"
             data-testid="input-image-file"
           />
-          <Button
+          
+          {/* Image Upload Button */}
+          <motion.button
             type="button"
-            size="icon"
-            variant="ghost"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled || selectedImages.length >= MAX_IMAGES}
-            className="h-12 w-12 rounded-full shrink-0 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 transition-all"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={springTransition}
+            className="h-12 w-12 rounded-2xl shrink-0 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/30 flex items-center justify-center transition-colors disabled:opacity-50"
             data-testid="button-add-image"
           >
             <ImagePlus className="h-5 w-5 text-purple-400" />
-          </Button>
-          <div className="flex-1 relative">
+          </motion.button>
+
+          {/* Text Input */}
+          <motion.div 
+            className="flex-1 relative"
+            initial={false}
+            animate={{ 
+              boxShadow: message.length > 0 
+                ? "0 8px 32px rgba(168, 85, 247, 0.15)" 
+                : "0 4px 16px rgba(0, 0, 0, 0.1)"
+            }}
+            style={{ borderRadius: "16px" }}
+          >
             <Textarea
               ref={textareaRef}
               value={message}
@@ -178,21 +213,27 @@ export default function ChatInput({
               onKeyDown={handleKeyDown}
               placeholder={selectedImages.length > 0 ? "Describe what you want to know about these images..." : placeholder}
               disabled={disabled}
-              className="min-h-[48px] max-h-[200px] resize-none rounded-xl text-[15px] leading-relaxed bg-background/50 border-purple-500/30 focus:border-cyan-500/60 focus:ring-cyan-500/20 transition-all"
+              className="min-h-[48px] max-h-[200px] resize-none rounded-2xl text-[15px] leading-relaxed bg-white/5 border-white/10 focus:border-purple-500/40 focus:ring-purple-500/20 placeholder:text-muted-foreground/60 transition-all"
               rows={1}
               data-testid="input-message"
             />
-          </div>
-          <button
+          </motion.div>
+
+          {/* Send Button */}
+          <motion.button
             onClick={handleSubmit}
             disabled={disabled || (!message.trim() && selectedImages.length === 0)}
-            className="send-button-glow rounded-full h-12 w-12 shrink-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            transition={springTransition}
+            className="h-12 w-12 rounded-2xl shrink-0 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
             data-testid="button-send"
           >
             <Send className="h-[18px] w-[18px] text-white" />
-          </button>
+          </motion.button>
         </div>
-        <p className="text-xs text-muted-foreground text-center">
+
+        <p className="text-xs text-muted-foreground/60 text-center">
           Paste, drop, or click to upload images (up to {MAX_IMAGES})
         </p>
       </div>

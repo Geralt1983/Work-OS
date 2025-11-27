@@ -1,198 +1,206 @@
-# Design Guidelines: WorkOS - Cyberpunk Task Management Chat Interface
+# Design Guidelines: WorkOS - Arc+Amie Hybrid Task Management
 
 ## Design Approach
 
-**Selected Approach:** Cyberpunk/Sci-Fi Design Language
+**Selected Approach:** Futuristic OS meets Playful Productivity
 
-**Justification:** Immersive futuristic aesthetic inspired by Blade Runner and cyberpunk interfaces. Creates an engaging, game-like experience for task management with high-tech visual language while maintaining functional clarity.
+**Justification:** Combines Arc's sophisticated OS-style layout with glassmorphism and floating islands, merged with Amie's delightful spring physics and playful interactions. Creates a premium, "juicy" experience that feels both professional and joyful.
 
 **Core Principles:**
-- Deep space atmospheric backgrounds with subtle nebula/galaxy effects
-- Neon glow accents as primary interaction signals
-- Frosted glass transparency for depth and hierarchy
-- Geometric hexagonal motifs as decorative elements
-- High contrast for readability in dark environment
+- Floating island layouts with breathing room around edges
+- Animated grain-textured gradients for depth
+- Spring physics on all interactions (bounce, elasticity)
+- Colored glows replace harsh borders
+- Heavy rounded corners (rounded-3xl) for softness
+- Confetti celebrations on achievements
 
 ---
 
 ## Color Palette
 
 **Backgrounds:**
-- Primary: #0a0a14 (deep space black)
-- Secondary: #0f0f1a (slightly lighter black)
-- Card overlays: rgba(15, 15, 26, 0.7) with backdrop-blur
+- Base: Animated gradient (#0f0f1a → #1a1a2e → #16213e) with grain texture overlay
+- Sidebar: rgba(17, 17, 26, 0.6) with backdrop-blur-xl
+- Islands: rgba(20, 20, 32, 0.7) with backdrop-blur-2xl
+- Floating cards: rgba(255, 255, 255, 0.03) inner glow
 
-**Accent Colors:**
-- Primary Purple: #9333ea → #a855f7 (gradients)
-- Electric Cyan: #06b6d4 → #22d3ee (highlights)
-- Magenta: #ec4899 (status indicators)
-- Glow effects: Apply as box-shadow and border treatments
+**Accent System:**
+- Primary: Purple-pink gradient (#a855f7 → #ec4899)
+- Secondary: Cyan-blue (#06b6d4 → #3b82f6)
+- Success: Emerald (#10b981)
+- Colored shadows: Multi-layer pink/cyan/blue glows
 
 **Text:**
-- Primary: #f8fafc (near white)
-- Secondary: #94a3b8 (muted slate)
-- Timestamps: #64748b
+- Primary: #f1f5f9
+- Secondary: #94a3b8
+- Muted: #64748b
 
 ---
 
 ## Typography
 
-**Font Family:**
-- Primary: 'Orbitron' or 'Exo 2' (Google Fonts) for headers
-- Body: 'Inter' for message text
+**Font Families:**
+- Headers: 'Inter' (700-800 weight) with tight tracking
+- Body: 'Inter' (400-500)
 - Monospace: 'JetBrains Mono' for task IDs
 
-**Hierarchy:**
-- App title: text-2xl font-bold tracking-wider uppercase
-- Message text: text-base font-normal
-- Task confirmations: text-sm font-semibold
-- Input placeholder: text-base opacity-60
+**Scale:**
+- App title: text-xl font-bold
+- Section headers: text-lg font-semibold
+- Task titles: text-base font-medium
+- Body: text-sm
+- Captions: text-xs
 
 ---
 
 ## Layout System
 
-**Spacing Primitives:** Tailwind units of 2, 3, 4, 6, 8
+**Spacing:** Tailwind units of 3, 4, 6, 8, 12
 
-**Container Strategy:**
-- Full viewport (h-screen) with gradient background overlay
-- Header: h-20 with frosted glass effect
-- Chat area: flex-grow with custom scrollbar styling
-- Input footer: min-h-24 with elevated frosted panel
-- Message max-width: max-w-4xl centered
+**OS-Style Grid:**
+- Sidebar: Fixed w-64, collapsible to w-16 (icon-only)
+- Main area: Inset from edges by p-6 creating floating effect
+- Card grids: gap-4 between island cards
+- Islands float with subtle shadow beneath
 
 ---
 
 ## Component Library
 
-### Background Treatment
-**Main Container:**
-- Base: Deep black gradient (from #0a0a14 to #0f0f1a)
-- Overlay: Subtle animated nebula/star field effect via CSS radial gradients
-- Decorative hexagons: Scattered semi-transparent geometric shapes
+### Background Layer
+**Animated Gradient:**
+- Multi-stop gradient with slow position shift (30s loop)
+- CSS grain texture overlay (opacity 0.03)
+- Subtle radial light sources at corners
 
-### Header
-**Left Section:**
-- Glowing star logo in hexagonal frame with cyan glow
-- App title in Orbitron font with letter-spacing
-- Frosted glass background with border-b glow (cyan)
+### Collapsible Sidebar
+**Structure:**
+- Frosted glass panel (backdrop-blur-xl)
+- Colored glow on left edge (2px gradient purple→cyan)
+- Sections: Quick Actions, Projects, Tags
+- Collapse button: Circular with spring bounce
 
-**Right Section:**
-- Settings icon with hexagonal button frame
-- Clear chat button with neon border
-- Connection status: Pulsing glow dot (cyan=connected, magenta=error)
+**Items:**
+- Rounded-2xl with hover lift (translateY(-2px))
+- Active state: Colored shadow (0 8px 32px rgba(168, 85, 247, 0.4))
+- Icons with gradient fills
+- Badge counts in rounded-full pills
 
-### Chat Messages
+### Main Content Area
 
-**User Messages:**
-- Right-aligned with frosted glass background
-- Border: 1px neon purple with subtle glow
-- Padding: p-4
-- Rounded corners with slight geometric clip
-- Timestamp with cyan color
+**Floating Islands:**
+- Each section in rounded-3xl glass card
+- Margin from viewport edges (p-6)
+- Box-shadow: Multi-layer colored (pink/cyan 20px blur, 40px spread)
+- Hover: Gentle lift with spring animation
 
-**AI Messages:**
-- Left-aligned frosted glass panel
-- Border: 1px cyan with glow effect
-- Include glowing AI icon (Sparkles) in top-left
-- Timestamp with purple accent
+**Task Cards:**
+- Nested rounded-2xl containers
+- Glass background with inner border glow
+- Checkbox: Rounded-lg with spring scale on check
+- Due dates: Colored pill badges
+- Drag handles: Gradient with tactile feedback
 
-**Task Confirmation Cards:**
-- Nested within AI messages
-- Double border: Inner purple, outer cyan
-- Background: Slightly more opaque frosted glass
-- Task ID in monospace with copy-on-click glow feedback
-- Status badges: Hexagonal shapes with neon fills
+### Chat/Command Interface
 
-### Input Area
-**Container:**
-- Elevated frosted glass panel with strong backdrop-blur
-- Border-top: Cyan glow gradient
-- Background: rgba(15, 15, 26, 0.9)
+**Command Palette:**
+- Center-floating island (max-w-2xl)
+- Heavy rounded-3xl with gradient border
+- Auto-expanding input with spring height animation
+- Suggestion pills below with bouncy hover
 
-**Textarea:**
-- Transparent background with frosted inset panel
-- Border: 1px purple with focus glow (cyan)
-- Auto-expanding (min 2, max 6 rows)
-- Custom caret color: cyan
+**Message Bubbles:**
+- User: Right-aligned islands with pink shadow
+- AI: Left-aligned with cyan shadow
+- Task confirmations: Nested cards with success glow
+- Entrance: Spring slide from direction
 
-**Send Button:**
-- Circular button (w-12 h-12) with cyan gradient
-- Box-shadow: Multi-layer cyan glow (0 0 20px, 0 0 40px)
-- Icon: Paper airplane in white
-- Position: Absolute bottom-right of input container
+### Input Controls
 
-**Suggestion Pills:**
-- Horizontal scrollable row above textarea
-- Frosted glass capsules with neon borders
-- Hover: Intensify glow effect
-- Text: text-sm with gradient text effect
+**Primary Buttons:**
+- Rounded-2xl with gradient backgrounds
+- Hover: Scale(1.02) + intensify shadow
+- Active: Scale(0.98) with haptic-like bounce
+- Colored glow shadows match button color
 
-### Status Indicators
-**AI Typing:**
-- Pulsing dots with cyan glow animation
-- Frosted glass container on left side
+**Secondary Actions:**
+- Ghost style with colored border glow
+- Spring hover with slight rotation (-1deg)
+
+**Form Fields:**
+- Rounded-xl glass insets
+- Focus: Colored ring with glow (0 0 0 4px rgba(color, 0.2))
+- Label floats on focus with spring animation
+
+### Status & Feedback
+
+**Task Completion:**
+- Confetti explosion (pink/cyan/purple particles)
+- Card pulses with success glow
+- Checkmark spring pop (scale 0→1.2→1)
 
 **Loading States:**
-- Shimmer effect with purple-to-cyan gradient sweep
+- Shimmer with colored gradient sweep
+- Skeleton cards with spring entrance
+
+**Notifications:**
+- Toast islands from top-right
+- Spring slide-in, pause, spring slide-out
+- Colored left border matching status
 
 ---
 
-## Effects & Micro-interactions
+## Effects & Animations
+
+**Spring Physics:**
+- All state changes use spring timing (tension: 300, friction: 20)
+- Buttons: Bounce on click
+- Cards: Gentle float on hover
+- Sidebar: Smooth elastic collapse
 
 **Glow System:**
-- Input focus: box-shadow cyan glow (0 0 0 3px rgba(6, 182, 212, 0.3))
-- Button hover: Intensify glow (0 0 30px rgba(6, 182, 212, 0.6))
-- Active buttons: Inner glow + slight scale (0.98)
+- Buttons: 0 8px 32px rgba(color, 0.5)
+- Cards: 0 20px 60px rgba(color, 0.3)
+- Active elements: Intensified multi-layer
 
-**Glass Morphism:**
-- backdrop-filter: blur(12px) saturate(150%)
-- Border: 1px rgba(255, 255, 255, 0.1)
-- Background: rgba(15, 15, 26, 0.7)
-
-**Animations:**
-- Message entrance: Fade + slide from right/left (300ms)
-- Glow pulse on new messages (2s ease-in-out)
-- Hexagon rotation: Slow continuous spin (20s)
-- NO excessive motion - keep functional
+**Grain Texture:**
+- SVG noise filter overlay on backgrounds
+- Opacity 0.03, blend-mode: overlay
+- Adds analog warmth to digital aesthetic
 
 ---
 
 ## Responsive Behavior
 
 **Desktop (lg+):**
-- Full effects with particles/nebula background
-- Message max-w-4xl
-- Prominent glows and glass effects
+- Full sidebar + main content grid
+- Larger island spacing (p-6)
+- All spring animations enabled
 
-**Mobile (base):**
-- Simplified background (static gradient)
-- Reduced glow intensity for performance
-- Full-width messages with px-3
-- Smaller hexagonal decorations
+**Tablet (md):**
+- Overlay sidebar (slides in/out)
+- Reduced island margins (p-4)
+- Simplified shadows
+
+**Mobile:**
+- Bottom sheet sidebar
+- Single column islands
+- Full-width cards with px-3
+- Reduced animation complexity
 
 ---
 
-## Images & Icons
+## Images
 
-**No Hero Image** - Immersive background replaces traditional hero.
-
-**Icons:**
-- Use Heroicons via CDN
-- All icons: Stroke-2 with cyan or purple fills
-- Logo: Custom hexagonal geometric star frame
-
-**Background Elements:**
-- CSS-generated nebula gradients (radial, conic)
-- SVG hexagonal patterns as decorative overlays
-- Particle effect layer (low-opacity white dots)
+**No traditional hero image** - The OS-style layout with animated gradient background serves as the visual anchor. Task cards may include optional thumbnail previews for attachments, displayed as rounded-xl insets with subtle colored borders.
 
 ---
 
 ## Key UX Patterns
 
-1. **Empty State:** Centered holographic welcome message with animated glowing border, example prompts as neon pills
-2. **Scroll Behavior:** Auto-scroll with cyan glow trail effect on new messages
-3. **Focus Management:** Cyan glow ring on focused elements, auto-focus input
-4. **Error States:** Magenta glow border with shake animation
-5. **Success Feedback:** Brief cyan pulse on task creation
+1. **Empty States:** Floating island with animated gradient border, playful illustration, bouncy CTA
+2. **Drag & Drop:** Spring physics during drag, colored glow on valid drop zones
+3. **Keyboard Shortcuts:** Command palette with fuzzy search, spring list animations
+4. **Sidebar Collapse:** Icon-only mode with tooltip islands on hover
+5. **Task Creation:** Inline expansion with spring height, auto-focus with glow
+6. **Celebrations:** Confetti on completion + success toast + card glow pulse
