@@ -29,6 +29,7 @@ import MobileMovesView from "@/components/MobileMovesView";
 import { TriageDialog } from "@/components/TriageDialog";
 import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
+import { ArcCard } from "@/components/ArcCard";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -130,98 +131,109 @@ function MoveCard({
     onSelect();
   };
 
+  const getGlow = () => {
+    if (move.status === 'active') return 'purple' as const;
+    if (normalizedDrainType === 'deep') return 'cyan' as const;
+    if (normalizedDrainType === 'admin') return 'orange' as const;
+    return 'none' as const;
+  };
+
   return (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-    >
-    <Card 
-      className={`group cursor-pointer rounded-2xl bg-white/5 border-white/10 hover:border-purple-500/30 transition-all ${
-        isDragging ? "shadow-glow-purple ring-2 ring-purple-500/50" : ""
-      } ${isStale ? "border-orange-400 dark:border-orange-600" : isAging ? "border-yellow-400 dark:border-yellow-600" : ""}`}
-      onClick={handleCardClick}
-      data-testid={`card-move-${move.id}`}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h4 className="font-medium text-sm leading-tight truncate flex-1" data-testid={`text-move-title-${move.id}`}>
+    <div className="py-1" data-testid={`card-move-${move.id}`}>
+      <ArcCard 
+        glowColor={getGlow()} 
+        onClick={handleCardClick}
+        className={`${isDragging ? "ring-2 ring-purple-500 shadow-2xl" : ""} ${
+          isStale ? "border-orange-400" : isAging ? "border-yellow-400" : ""
+        }`}
+      >
+        <div className="p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <h4 className="font-medium text-[15px] leading-snug text-white/90 truncate" data-testid={`text-move-title-${move.id}`}>
                 {move.title}
               </h4>
-              {isStale && (
-                <Badge variant="destructive" className="text-xs gap-1 shrink-0" data-testid={`badge-stale-${move.id}`}>
-                  <AlertCircle className="h-3 w-3" />
-                  {daysOld}d
-                </Badge>
+              
+              <div className="flex items-center gap-2 text-xs">
+                {client && (
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-muted-foreground font-medium">
+                    {client.name}
+                  </span>
+                )}
+                {isStale && (
+                  <span className="flex items-center gap-1 text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full" data-testid={`badge-stale-${move.id}`}>
+                    <AlertCircle className="w-3 h-3" /> {daysOld}d
+                  </span>
+                )}
+                {isAging && !isStale && (
+                  <span className="flex items-center gap-1 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full" data-testid={`badge-aging-${move.id}`}>
+                    <Clock className="w-3 h-3" /> {daysOld}d
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
+              {canPromote && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 rounded-full hover:bg-white/10"
+                  onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
+                  disabled={promoteMutation.isPending}
+                  data-testid={`button-promote-${move.id}`}
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </Button>
               )}
-              {isAging && !isStale && (
-                <Badge variant="outline" className="text-xs gap-1 shrink-0 text-yellow-600 border-yellow-400" data-testid={`badge-aging-${move.id}`}>
-                  <Clock className="h-3 w-3" />
-                  {daysOld}d
-                </Badge>
+              {canDemote && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 rounded-full hover:bg-white/10"
+                  onClick={(e) => { e.stopPropagation(); demoteMutation.mutate(); }}
+                  disabled={demoteMutation.isPending}
+                  data-testid={`button-demote-${move.id}`}
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              )}
+              {move.status !== "done" && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 rounded-full hover:bg-emerald-500/20 hover:text-emerald-400"
+                  onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
+                  disabled={completeMutation.isPending}
+                  data-testid={`button-complete-${move.id}`}
+                >
+                  <Check className="w-4 h-4" />
+                </Button>
               )}
             </div>
-            {client && (
-              <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-client-${move.id}`}>
-                {client.name}
-              </Badge>
-            )}
           </div>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            {canPromote && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
-                disabled={promoteMutation.isPending}
-                data-testid={`button-promote-${move.id}`}
-              >
-                <ChevronUp className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {canDemote && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={(e) => { e.stopPropagation(); demoteMutation.mutate(); }}
-                disabled={demoteMutation.isPending}
-                data-testid={`button-demote-${move.id}`}
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {move.status !== "done" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-green-600"
-                onClick={(e) => { e.stopPropagation(); completeMutation.mutate(); }}
-                disabled={completeMutation.isPending}
-                data-testid={`button-complete-${move.id}`}
-              >
-                <Check className="h-3.5 w-3.5" />
-              </Button>
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/5">
+            <div className="flex items-center gap-3 text-muted-foreground/60">
+              {effortLevel && (
+                <div className="flex items-center gap-1.5 text-xs" data-testid={`badge-effort-${move.id}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${
+                    (move.effortEstimate || 0) > 2 ? 'bg-rose-400' : 'bg-emerald-400'
+                  }`} />
+                  {effortLevel.label}
+                </div>
+              )}
+            </div>
+            
+            {DrainIcon && (
+              <div className="text-white/20" title={move.drainType || undefined}>
+                <DrainIcon className="w-4 h-4" />
+              </div>
             )}
           </div>
         </div>
-        
-        <div className="flex items-center gap-2 mt-3">
-          {effortLevel && (
-            <Badge variant="secondary" className="text-xs rounded-full bg-white/10 border-white/10" data-testid={`badge-effort-${move.id}`}>
-              {effortLevel.label}
-            </Badge>
-          )}
-          {DrainIcon && (
-            <DrainIcon className="h-3.5 w-3.5 text-purple-400" />
-          )}
-        </div>
-      </CardContent>
-    </Card>
-    </motion.div>
+      </ArcCard>
+    </div>
   );
 }
 
@@ -257,8 +269,8 @@ function StatusColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`min-h-[200px] rounded-lg transition-colors ${
-              snapshot.isDraggingOver ? "bg-muted/50" : ""
+            className={`min-h-[200px] rounded-2xl transition-colors p-2 ${
+              snapshot.isDraggingOver ? "bg-white/5" : ""
             }`}
           >
             <ScrollArea className="h-[calc(100vh-260px)]">
