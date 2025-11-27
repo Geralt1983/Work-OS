@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, MessageSquare, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2, BarChart3, LayoutGrid, ClipboardCheck } from "lucide-react";
+import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, MessageSquare, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2, BarChart3, LayoutGrid, ClipboardCheck, List } from "lucide-react";
 import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +15,7 @@ import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
 import { ArcCard } from "@/components/ArcCard";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface TodayMetrics {
   date: string;
@@ -94,6 +95,11 @@ const DRAIN_COLORS: Record<string, string> = {
   unset: "bg-gray-400",
 };
 
+function formatMinutesToHours(minutes: number): string {
+  const hours = (minutes / 60).toFixed(1);
+  return `${hours}h`;
+}
+
 function formatMinutes(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -103,31 +109,14 @@ function formatMinutes(minutes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  // Parse as local date to avoid timezone shift (dateStr is YYYY-MM-DD)
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function getSentimentColor(sentiment: string): string {
-  switch (sentiment) {
-    case "positive": return "text-green-600 dark:text-green-400";
-    case "negative": return "text-red-600 dark:text-red-400";
-    case "complicated": return "text-yellow-600 dark:text-yellow-400";
-    default: return "text-muted-foreground";
-  }
-}
-
-function getImportanceBadgeVariant(importance: string): "default" | "secondary" | "outline" {
-  switch (importance) {
-    case "high": return "default";
-    case "medium": return "secondary";
-    default: return "outline";
-  }
-}
-
 export default function Metrics() {
   const [triageOpen, setTriageOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({
     queryKey: ["/api/metrics/today"],
@@ -185,32 +174,30 @@ export default function Metrics() {
     },
   });
 
-  return (
-    <>
-      {/* === MOBILE VIEW (CSS-hidden on desktop) === */}
-      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-metrics">
-        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
+  // Calculate weekly pacing (Target: 15 hours = 900 minutes)
+  const weeklyTargetMinutes = 900;
+  const weeklyPacing = weeklyMetrics ? Math.min(Math.round((weeklyMetrics.totalMinutes / weeklyTargetMinutes) * 100), 100) : 0;
+  const weeklyHours = weeklyMetrics ? (weeklyMetrics.totalMinutes / 60).toFixed(1) : "0.0";
+
+  if (isMobile) {
+    return (
+      <div className="h-screen flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-metrics">
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-          <h1 className="text-lg font-semibold tracking-wider text-gradient-purple">Metrics</h1>
+          <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Metrics</h1>
           <div className="flex items-center gap-1">
             <Link href="/">
-              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="mobile-link-chat">
-                <MessageSquare className="h-5 w-5 text-purple-400" />
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
+                <MessageSquare className="h-5 w-5" />
               </Button>
             </Link>
             <Link href="/moves">
-              <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10" data-testid="mobile-link-moves">
-                <LayoutGrid className="h-5 w-5 text-cyan-400" />
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
+                <List className="h-5 w-5" />
               </Button>
             </Link>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => setTriageOpen(true)}
-              className="hover:bg-rose-500/10"
-              data-testid="mobile-button-triage"
-            >
-              <ClipboardCheck className="h-5 w-5 text-rose-400" />
+            <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10 text-cyan-400">
+              <BarChart3 className="h-5 w-5" />
             </Button>
           </div>
         </header>
@@ -237,15 +224,15 @@ export default function Metrics() {
                   <Skeleton className="h-4 w-full bg-white/10" />
                 ) : todayMetrics ? (
                   <div className="space-y-3">
+                    <div className="flex justify-between text-sm mb-2 text-white/80">
+                      <span>{formatMinutesToHours(todayMetrics.estimatedMinutes)} of 3.0h target</span>
+                      <span>{todayMetrics.movesCompleted} moves</span>
+                    </div>
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-purple-500 to-pink-500" 
                         style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
                       />
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>{todayMetrics.movesCompleted} moves</span>
-                      <span>{formatMinutes(todayMetrics.estimatedMinutes)}</span>
                     </div>
                   </div>
                 ) : (
@@ -254,28 +241,47 @@ export default function Metrics() {
               </div>
             </ArcCard>
 
-            {/* Weekly Summary - Mobile */}
+            {/* Weekly Trends - Mobile */}
             <ArcCard glowColor="cyan">
               <div className="p-4">
-                <div className="text-base font-semibold flex items-center gap-2 text-white pb-3">
-                  <TrendingUp className="h-4 w-4 text-cyan-400" />
-                  This Week
+                <div className="flex items-center justify-between pb-3">
+                  <div className="text-base font-semibold flex items-center gap-2 text-white">
+                    <TrendingUp className="h-4 w-4 text-cyan-400" />
+                    This Week
+                  </div>
+                  <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/30">
+                    {weeklyHours}h / 15h
+                  </Badge>
                 </div>
                 {loadingWeekly ? (
                   <Skeleton className="h-12 w-full bg-white/10" />
                 ) : weeklyMetrics ? (
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-2xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
-                      <div className="text-xs text-muted-foreground">Moves</div>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="p-2 rounded-xl bg-white/5">
+                        <div className="text-xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Moves</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white/5">
+                        <div className="text-xl font-bold text-cyan-400">{weeklyHours}h</div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Time</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white/5">
+                        <div className="text-xl font-bold text-white">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Avg/Day</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-bold text-white">{formatMinutes(weeklyMetrics.totalMinutes)}</div>
-                      <div className="text-xs text-muted-foreground">Time</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-white">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
-                      <div className="text-xs text-muted-foreground">Avg/Day</div>
+                    
+                    <div className="text-sm text-center">
+                      {weeklyPacing >= 100 ? (
+                        <span className="text-emerald-400 font-medium flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" /> Weekly target hit!
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {Math.round(100 - weeklyPacing)}% to weekly 15h target
+                        </span>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -299,11 +305,16 @@ export default function Metrics() {
                 ) : clientMetrics && clientMetrics.length > 0 ? (
                   <div className="space-y-2">
                     {clientMetrics.slice(0, 5).map((client) => (
-                      <div key={client.clientName} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                      <div key={client.clientName} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/10">
                         <span className="text-sm font-medium truncate text-white/90">{client.clientName}</span>
-                        <Badge variant="outline" className="text-xs bg-white/5 border-white/10 text-white/70">
-                          {client.daysSinceLastMove}d
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{client.totalMoves} moves</span>
+                          {client.daysSinceLastMove >= 2 ? (
+                            <span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">{client.daysSinceLastMove}d</span>
+                          ) : (
+                            <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">Active</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -315,18 +326,21 @@ export default function Metrics() {
           </div>
         </ScrollArea>
 
+        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
       </div>
+    );
+  }
 
-      {/* === DESKTOP VIEW (CSS-hidden on mobile) === */}
-      <div className="h-screen hidden md:flex gradient-bg" data-testid="page-metrics-desktop">
-        <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
+  // Desktop View
+  return (
+    <div className="h-screen flex bg-transparent text-slate-200 font-sans" data-testid="page-metrics">
+      <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
       <IslandLayout>
         <div className="h-full flex flex-col">
-          {/* Island Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
             <div>
-              <h2 className="text-lg font-semibold" data-testid="text-page-title">Metrics</h2>
+              <h2 className="text-lg font-semibold text-white">Metrics</h2>
               <p className="text-sm text-muted-foreground">Track your work pacing and client activity</p>
             </div>
           </div>
@@ -335,471 +349,120 @@ export default function Metrics() {
             <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
           
           {/* Today's Pacing */}
-          <ArcCard glowColor="purple" data-testid="card-today-pacing">
+          <ArcCard glowColor="purple">
             <div className="p-6">
-              <div className="flex flex-row items-center justify-between gap-2 pb-4">
+                <div className="flex flex-row items-center justify-between gap-2 pb-4">
                 <div className="text-lg font-semibold flex items-center gap-2 text-white">
-                  <Target className="h-5 w-5 text-purple-400" />
-                  Today's Pacing
+                    <Target className="h-5 w-5 text-purple-400" />
+                    Today's Pacing
                 </div>
-                {loadingToday ? (
-                  <Skeleton className="h-6 w-20 bg-white/10" />
-                ) : (
-                  <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30" data-testid="badge-pacing-percent">
-                    {todayMetrics?.pacingPercent || 0}%
-                  </Badge>
+                {todayMetrics && (
+                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30">
+                    {todayMetrics.pacingPercent}%
+                    </Badge>
                 )}
-              </div>
-              {loadingToday ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-4 w-full bg-white/10" />
-                  <Skeleton className="h-8 w-32 bg-white/10" />
                 </div>
-              ) : todayMetrics ? (
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">
-                        {formatMinutes(todayMetrics.estimatedMinutes)} of {formatMinutes(todayMetrics.targetMinutes)} target
-                      </span>
-                      <span className="font-medium text-white" data-testid="text-moves-today">
-                        {todayMetrics.movesCompleted} moves
-                      </span>
+                
+                {loadingToday ? (
+                  <Skeleton className="h-4 w-full" />
+                ) : todayMetrics ? (
+                  <>
+                    <div className="flex justify-between text-sm mb-2 text-white/80">
+                        <span>{formatMinutesToHours(todayMetrics.estimatedMinutes)} of 3.0h target</span>
+                        <span>{todayMetrics.movesCompleted} moves</span>
                     </div>
-                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500" 
-                        style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
-                      />
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden mt-2 mb-4">
+                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} />
                     </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 text-sm text-white/80">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span data-testid="text-estimated-time">{formatMinutes(todayMetrics.estimatedMinutes)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      <span>{todayMetrics.backlogMoves} from backlog</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{todayMetrics.clientsTouched?.length || 0} clients touched</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No data for today yet</p>
-              )}
+                  </>
+                ) : <p className="text-muted-foreground">No data</p>}
             </div>
           </ArcCard>
 
           {/* Weekly Trends */}
-          <ArcCard glowColor="cyan" data-testid="card-weekly-trends">
-            <div className="p-6">
-              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                <TrendingUp className="h-5 w-5 text-cyan-400" />
-                Weekly Trends
-              </div>
-              {loadingWeekly ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-10 w-full bg-white/10" />
-                  ))}
+          <ArcCard glowColor="cyan">
+             <div className="p-6">
+                <div className="flex items-center justify-between pb-4">
+                    <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                        <TrendingUp className="h-5 w-5 text-cyan-400" />
+                        Weekly Trends
+                    </div>
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/30">
+                        {weeklyHours}h / 15h
+                    </Badge>
                 </div>
-              ) : weeklyMetrics && Array.isArray(weeklyMetrics.days) && weeklyMetrics.days.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-4 text-sm mb-4">
-                    <div>
-                      <span className="text-muted-foreground">Total moves: </span>
-                      <span className="font-medium text-white" data-testid="text-total-moves">{weeklyMetrics.totalMoves}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Total time: </span>
-                      <span className="font-medium text-white">{formatMinutes(weeklyMetrics.totalMinutes)}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Avg/day: </span>
-                      <span className="font-medium text-white">{weeklyMetrics.averageMovesPerDay} moves</span>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {weeklyMetrics.days.map((day) => (
-                      <div key={day.date} className="flex items-center gap-4" data-testid={`row-day-${day.date}`}>
-                        <div className="w-24 text-sm text-muted-foreground shrink-0">
-                          {formatDate(day.date)}
-                        </div>
-                        <div className="flex-1 h-6 bg-white/10 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-300"
-                            style={{ width: `${Math.min(day.pacingPercent, 100)}%` }}
-                          />
-                        </div>
-                        <div className="w-20 text-sm text-right shrink-0">
-                          <span className="font-medium text-white">{day.movesCompleted}</span>
-                          <span className="text-muted-foreground"> moves</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No weekly data yet</p>
-              )}
-            </div>
-          </ArcCard>
 
-          {/* Work Type Breakdown */}
-          <ArcCard glowColor="pink" data-testid="card-drain-types">
-            <div className="p-6">
-              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                <Brain className="h-5 w-5 text-pink-400" />
-                Work Type Breakdown
-              </div>
-              {loadingDrain ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-8 w-full bg-white/10" />
-                  ))}
-                </div>
-              ) : drainMetrics && drainMetrics.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="flex h-4 rounded-full overflow-hidden">
-                    {drainMetrics.map((metric) => (
-                      <div
-                        key={metric.drainType}
-                        className={`${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset} transition-all`}
-                        style={{ width: `${metric.percentage}%` }}
-                        title={`${DRAIN_TYPE_LABELS[metric.drainType as DrainType]?.label || metric.drainType}: ${metric.percentage}%`}
-                      />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {drainMetrics.map((metric) => {
-                      const DrainIcon = DRAIN_ICONS[metric.drainType];
-                      return (
-                        <div 
-                          key={metric.drainType} 
-                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5"
-                          data-testid={`drain-type-${metric.drainType}`}
-                        >
-                          <div className={`w-3 h-3 rounded-full ${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset}`} />
-                          {DrainIcon && <DrainIcon className="h-4 w-4 text-muted-foreground" />}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate text-white/90">
-                              {DRAIN_TYPE_LABELS[metric.drainType as DrainType]?.label || metric.drainType}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {metric.count} moves ({metric.percentage}%)
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No completed moves yet</p>
-              )}
-            </div>
-          </ArcCard>
-
-          {/* Backlog Health */}
-          <ArcCard glowColor="orange" data-testid="card-backlog-health">
-            <div className="p-6">
-              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                <Archive className="h-5 w-5 text-orange-400" />
-                Backlog Health
-              </div>
-              {loadingBacklog ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-12 w-full bg-white/10" />
-                  ))}
-                </div>
-              ) : backlogHealth && backlogHealth.length > 0 ? (
-                <div className="space-y-3">
-                  {backlogHealth.map((client) => (
-                    <div 
-                      key={client.clientName} 
-                      className="flex items-center justify-between p-3 rounded-lg border border-white/10 bg-white/5"
-                      data-testid={`backlog-client-${client.clientName}`}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium capitalize text-white">{client.clientName}</span>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span>{client.totalCount} in backlog</span>
-                          <span>avg {client.avgDays}d old</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {client.agingCount > 0 ? (
-                          <Badge className="gap-1 bg-rose-500/20 text-rose-300 border-rose-500/30">
-                            <AlertCircle className="h-3 w-3" />
-                            {client.agingCount} aging
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Healthy
-                          </Badge>
-                        )}
-                        {client.oldestDays >= 7 && (
-                          <span className="text-sm text-orange-400">
-                            oldest: {client.oldestDays}d
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No backlog data yet</p>
-              )}
-            </div>
-          </ArcCard>
-
-          {/* Productivity Patterns */}
-          <ArcCard glowColor="none" data-testid="card-productivity">
-            <div className="p-6">
-              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                <Clock className="h-5 w-5 text-purple-400" />
-                Productivity by Time of Day
-              </div>
-              {loadingProductivity ? (
-                <Skeleton className="h-20 w-full bg-white/10" />
-              ) : productivityData && productivityData.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="flex gap-1 h-16 items-end">
-                    {productivityData.filter(h => h.hour >= 6 && h.hour <= 22).map((hourData) => {
-                      const total = hourData.completions + hourData.deferrals;
-                      const height = total > 0 ? Math.max(10, total * 10) : 4;
-                      const isPositive = hourData.completions > hourData.deferrals;
-                      return (
-                        <div
-                          key={hourData.hour}
-                          className="flex-1 flex flex-col items-center"
-                          title={`${hourData.hour}:00 - ${hourData.completions} completions, ${hourData.deferrals} deferrals`}
-                        >
-                          <div
-                            className={`w-full rounded-t ${isPositive ? "bg-emerald-500" : total > 0 ? "bg-rose-400" : "bg-white/10"}`}
-                            style={{ height: `${height}px` }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>6am</span>
-                    <span>12pm</span>
-                    <span>6pm</span>
-                    <span>10pm</span>
-                  </div>
-                  <div className="flex gap-4 text-xs text-white/70">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-emerald-500" />
-                      <span>More completions</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-rose-400" />
-                      <span>More deferrals</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No productivity data yet. Complete some tasks to see patterns.</p>
-              )}
-            </div>
-          </ArcCard>
-
-          {/* Avoided Tasks */}
-          {avoidedTasks && avoidedTasks.length > 0 && (
-            <ArcCard glowColor="orange" data-testid="card-avoided-tasks">
-              <div className="p-6">
-                <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                  <AlertCircle className="h-5 w-5 text-orange-400" />
-                  Avoided Tasks
-                  <Badge className="text-xs bg-orange-500/20 text-orange-300 border-orange-500/30">
-                    {avoidedTasks.length}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  {avoidedTasks.slice(0, 5).map((task) => (
-                    <div 
-                      key={task.taskId} 
-                      className="flex items-center justify-between p-2 rounded-lg border border-white/10 bg-white/5"
-                      data-testid={`avoided-task-${task.taskId}`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate text-white/90">{task.taskName}</div>
-                        <div className="text-xs text-muted-foreground capitalize">{task.clientName}</div>
-                      </div>
-                      <Badge className="text-xs shrink-0 bg-rose-500/20 text-rose-300 border-rose-500/30">
-                        {task.count}x deferred
-                      </Badge>
-                    </div>
-                  ))}
-                  {avoidedTasks.length > 5 && (
-                    <p className="text-xs text-muted-foreground text-center pt-2">
-                      +{avoidedTasks.length - 5} more avoided tasks
-                    </p>
-                  )}
-                </div>
-              </div>
-            </ArcCard>
-          )}
-
-          {/* Client Metrics */}
-          <ArcCard glowColor="emerald" data-testid="card-client-metrics">
-            <div className="p-6">
-              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
-                <Users className="h-5 w-5 text-emerald-400" />
-                Client Activity
-              </div>
-              {loadingClients ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full bg-white/10" />
-                  ))}
-                </div>
-              ) : clientMetrics && Array.isArray(clientMetrics) && clientMetrics.length > 0 ? (
-                <div className="space-y-3">
-                  {clientMetrics.map((client) => (
-                    <div 
-                      key={client.clientName} 
-                      className="p-3 rounded-lg border border-white/10 bg-white/5 space-y-2"
-                      data-testid={`row-client-${client.clientName}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium capitalize text-white">{client.clientName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {client.totalMoves} moves
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {client.daysSinceLastMove >= 2 ? (
-                            <div className="flex items-center gap-1 text-sm text-orange-400">
-                              <AlertCircle className="h-4 w-4" />
-                              <span>{client.daysSinceLastMove}d stale</span>
-                            </div>
-                          ) : client.daysSinceLastMove === 0 ? (
-                            <div className="flex items-center gap-1 text-sm text-emerald-400">
-                              <CheckCircle2 className="h-4 w-4" />
-                              <span>Active today</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">
-                              {client.daysSinceLastMove}d ago
+                {loadingWeekly ? (
+                   <Skeleton className="h-20 w-full" />
+                ) : weeklyMetrics ? (
+                   <div className="space-y-4">
+                     <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                       <div className="p-3 rounded-xl bg-white/5">
+                         <div className="text-2xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
+                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Moves</div>
+                       </div>
+                       <div className="p-3 rounded-xl bg-white/5">
+                         <div className="text-2xl font-bold text-cyan-400">{weeklyHours}h</div>
+                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Time</div>
+                       </div>
+                       <div className="p-3 rounded-xl bg-white/5">
+                         <div className="text-2xl font-bold text-white">{weeklyMetrics.averageMovesPerDay}</div>
+                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Avg/Day</div>
+                       </div>
+                     </div>
+                     
+                     <div className="text-sm text-center">
+                        {weeklyPacing >= 100 ? (
+                            <span className="text-emerald-400 font-medium flex items-center justify-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" /> Weekly target hit!
                             </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Feeling:</span>
-                          <Select
-                            value={client.sentiment}
-                            disabled={updateSentiment.isPending}
-                            onValueChange={(value) => updateSentiment.mutate({ 
-                              clientName: client.clientName, 
-                              sentiment: value 
-                            })}
-                          >
-                            <SelectTrigger className="h-7 w-[110px] text-xs bg-white/5 border-white/10" data-testid={`select-sentiment-${client.clientName}`}>
-                              {updateSentiment.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <SelectValue />
-                              )}
-                            </SelectTrigger>
-                            <SelectContent className="bg-[#1a1b26] border-white/10">
-                              <SelectItem value="positive">
-                                <div className="flex items-center gap-1">
-                                  <ThumbsUp className="h-3 w-3 text-emerald-500" />
-                                  <span>Positive</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="neutral">
-                                <div className="flex items-center gap-1">
-                                  <Minus className="h-3 w-3" />
-                                  <span>Neutral</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="negative">
-                                <div className="flex items-center gap-1">
-                                  <ThumbsDown className="h-3 w-3 text-rose-500" />
-                                  <span>Negative</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="complicated">
-                                <div className="flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                                  <span>Complicated</span>
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Priority:</span>
-                          <Select
-                            value={client.importance}
-                            disabled={updateImportance.isPending}
-                            onValueChange={(value) => updateImportance.mutate({ 
-                              clientName: client.clientName, 
-                              importance: value 
-                            })}
-                          >
-                            <SelectTrigger className="h-7 w-[90px] text-xs bg-white/5 border-white/10" data-testid={`select-importance-${client.clientName}`}>
-                              {updateImportance.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <SelectValue />
-                              )}
-                            </SelectTrigger>
-                            <SelectContent className="bg-[#1a1b26] border-white/10">
-                              <SelectItem value="high">
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-3 w-3 text-amber-500" />
-                                  <span>High</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="medium">
-                                <div className="flex items-center gap-1">
-                                  <span>Medium</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="low">
-                                <div className="flex items-center gap-1">
-                                  <span>Low</span>
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No client data yet</p>
-              )}
-            </div>
+                        ) : (
+                            <span className="text-muted-foreground">
+                                {Math.round(100 - weeklyPacing)}% to weekly 15h target
+                            </span>
+                        )}
+                     </div>
+                   </div>
+                ) : <p>No data</p>}
+             </div>
           </ArcCard>
 
+          {/* Client Activity */}
+          <ArcCard glowColor="none">
+             <div className="p-6">
+                <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                    <Users className="h-5 w-5 text-white/70" />
+                    Client Activity
+                </div>
+                {loadingClients ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+                    </div>
+                ) : clientMetrics && clientMetrics.length > 0 ? (
+                    <div className="space-y-3">
+                      {clientMetrics.map((client) => (
+                        <div key={client.clientName} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                           <span className="font-medium text-white/90 capitalize">{client.clientName}</span>
+                           <div className="flex items-center gap-3">
+                              <span className="text-sm text-muted-foreground">{client.totalMoves} moves</span>
+                              {client.daysSinceLastMove >= 2 ? (
+                                <span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">{client.daysSinceLastMove}d stale</span>
+                              ) : (
+                                <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">Active</span>
+                              )}
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                ) : <p className="text-muted-foreground text-sm">No data</p>}
+             </div>
+          </ArcCard>
+          
             </div>
           </ScrollArea>
         </div>
       </IslandLayout>
-      </div>
-
-      {/* === SHARED DIALOG === */}
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
-    </>
+    </div>
   );
 }
