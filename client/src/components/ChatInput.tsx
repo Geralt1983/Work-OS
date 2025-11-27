@@ -209,7 +209,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             placeholder={selectedImages.length > 0 ? "Ask about these images..." : placeholder}
             disabled={disabled}
-            className="flex-1 min-h-[40px] max-h-[200px] py-2.5 px-0 resize-none bg-transparent border-0 focus-visible:ring-0 text-[15px] text-white placeholder:text-muted-foreground/50 shadow-none"
+            className="flex-1 min-h-[40px] max-h-[200px] py-2.5 px-0 resize-none bg-transparent border-0 focus-visible:ring-0 text-[15px] !text-white placeholder:text-white/40 shadow-none"
             rows={1}
             data-testid="input-message"
           />

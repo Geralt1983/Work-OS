@@ -126,7 +126,7 @@ export default function Chat() {
   return (
     <>
       {/* === MOBILE VIEW (CSS-hidden on desktop) === */}
-      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-chat">
+      <div className="h-screen flex md:hidden flex-col bg-transparent text-slate-200 font-sans" data-testid="page-chat">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <div className="flex items-center gap-3">
@@ -191,7 +191,7 @@ export default function Chat() {
       </div>
 
       {/* === DESKTOP VIEW (CSS-hidden on mobile) === */}
-      <div className="h-screen hidden md:flex gradient-bg" data-testid="page-chat-desktop">
+      <div className="h-screen hidden md:flex gradient-bg text-slate-200 font-sans" data-testid="page-chat-desktop">
         <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
         <IslandLayout>
