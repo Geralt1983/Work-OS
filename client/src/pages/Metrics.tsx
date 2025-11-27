@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
+import { ArcCard } from "@/components/ArcCard";
 
 interface TodayMetrics {
   date: string;
@@ -219,26 +219,31 @@ export default function Metrics() {
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
             {/* Today's Pacing - Mobile */}
-            <Card data-testid="card-today-pacing">
-              <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Today
-                </CardTitle>
+            <ArcCard glowColor="purple" data-testid="card-today-pacing">
+              <div className="p-4">
+                <div className="flex flex-row items-center justify-between gap-2 pb-3">
+                  <div className="text-base font-semibold flex items-center gap-2 text-white">
+                    <Target className="h-4 w-4 text-purple-400" />
+                    Today
+                  </div>
+                  {loadingToday ? (
+                    <Skeleton className="h-6 w-16 bg-white/10" />
+                  ) : (
+                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30">
+                      {todayMetrics?.pacingPercent || 0}%
+                    </Badge>
+                  )}
+                </div>
                 {loadingToday ? (
-                  <Skeleton className="h-6 w-16" />
-                ) : (
-                  <Badge variant={todayMetrics && todayMetrics.pacingPercent >= 100 ? "default" : "secondary"}>
-                    {todayMetrics?.pacingPercent || 0}%
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent>
-                {loadingToday ? (
-                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full bg-white/10" />
                 ) : todayMetrics ? (
                   <div className="space-y-3">
-                    <Progress value={Math.min(todayMetrics.pacingPercent, 100)} className="h-2" />
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500" 
+                        style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
+                      />
+                    </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{todayMetrics.movesCompleted} moves</span>
                       <span>{formatMinutes(todayMetrics.estimatedMinutes)}</span>
@@ -247,73 +252,67 @@ export default function Metrics() {
                 ) : (
                   <p className="text-muted-foreground text-sm">No data yet</p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </ArcCard>
 
             {/* Weekly Summary - Mobile */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
+            <ArcCard glowColor="cyan">
+              <div className="p-4">
+                <div className="text-base font-semibold flex items-center gap-2 text-white pb-3">
+                  <TrendingUp className="h-4 w-4 text-cyan-400" />
                   This Week
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </div>
                 {loadingWeekly ? (
-                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full bg-white/10" />
                 ) : weeklyMetrics ? (
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                      <div className="text-2xl font-bold">{weeklyMetrics.totalMoves}</div>
+                      <div className="text-2xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
                       <div className="text-xs text-muted-foreground">Moves</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{formatMinutes(weeklyMetrics.totalMinutes)}</div>
+                      <div className="text-2xl font-bold text-white">{formatMinutes(weeklyMetrics.totalMinutes)}</div>
                       <div className="text-xs text-muted-foreground">Time</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
+                      <div className="text-2xl font-bold text-white">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
                       <div className="text-xs text-muted-foreground">Avg/Day</div>
                     </div>
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-sm">No data yet</p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </ArcCard>
 
             {/* Client Activity - Mobile */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="h-4 w-4" />
+            <ArcCard glowColor="emerald">
+              <div className="p-4">
+                <div className="text-base font-semibold flex items-center gap-2 text-white pb-3">
+                  <Users className="h-4 w-4 text-emerald-400" />
                   Clients
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </div>
                 {loadingClients ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full bg-white/10" />
+                    <Skeleton className="h-8 w-full bg-white/10" />
                   </div>
                 ) : clientMetrics && clientMetrics.length > 0 ? (
                   <div className="space-y-2">
                     {clientMetrics.slice(0, 5).map((client) => (
-                      <div key={client.clientName} className="flex items-center justify-between py-1">
-                        <span className="text-sm font-medium truncate">{client.clientName}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {client.daysSinceLastMove}d
-                          </Badge>
-                        </div>
+                      <div key={client.clientName} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <span className="text-sm font-medium truncate text-white/90">{client.clientName}</span>
+                        <Badge variant="outline" className="text-xs bg-white/5 border-white/10 text-white/70">
+                          {client.daysSinceLastMove}d
+                        </Badge>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-sm">No client data</p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </ArcCard>
           </div>
         </ScrollArea>
 
@@ -340,25 +339,25 @@ export default function Metrics() {
             <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
           
           {/* Today's Pacing */}
-          <Card data-testid="card-today-pacing">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Today's Pacing
-              </CardTitle>
-              {loadingToday ? (
-                <Skeleton className="h-6 w-20" />
-              ) : (
-                <Badge variant={todayMetrics && todayMetrics.pacingPercent >= 100 ? "default" : "secondary"} data-testid="badge-pacing-percent">
-                  {todayMetrics?.pacingPercent || 0}%
-                </Badge>
-              )}
-            </CardHeader>
-            <CardContent>
+          <ArcCard glowColor="purple" data-testid="card-today-pacing">
+            <div className="p-6">
+              <div className="flex flex-row items-center justify-between gap-2 pb-4">
+                <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                  <Target className="h-5 w-5 text-purple-400" />
+                  Today's Pacing
+                </div>
+                {loadingToday ? (
+                  <Skeleton className="h-6 w-20 bg-white/10" />
+                ) : (
+                  <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30" data-testid="badge-pacing-percent">
+                    {todayMetrics?.pacingPercent || 0}%
+                  </Badge>
+                )}
+              </div>
               {loadingToday ? (
                 <div className="space-y-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-4 w-full bg-white/10" />
+                  <Skeleton className="h-8 w-32 bg-white/10" />
                 </div>
               ) : todayMetrics ? (
                 <div className="space-y-4">
@@ -367,14 +366,19 @@ export default function Metrics() {
                       <span className="text-muted-foreground">
                         {formatMinutes(todayMetrics.estimatedMinutes)} of {formatMinutes(todayMetrics.targetMinutes)} target
                       </span>
-                      <span className="font-medium" data-testid="text-moves-today">
+                      <span className="font-medium text-white" data-testid="text-moves-today">
                         {todayMetrics.movesCompleted} moves
                       </span>
                     </div>
-                    <Progress value={Math.min(todayMetrics.pacingPercent, 100)} className="h-3" data-testid="progress-pacing" />
+                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500" 
+                        style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
+                      />
+                    </div>
                   </div>
                   
-                  <div className="flex flex-wrap gap-4 text-sm">
+                  <div className="flex flex-wrap gap-4 text-sm text-white/80">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span data-testid="text-estimated-time">{formatMinutes(todayMetrics.estimatedMinutes)}</span>
@@ -392,22 +396,20 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No data for today yet</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
           {/* Weekly Trends */}
-          <Card data-testid="card-weekly-trends">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
+          <ArcCard glowColor="cyan" data-testid="card-weekly-trends">
+            <div className="p-6">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                <TrendingUp className="h-5 w-5 text-cyan-400" />
                 Weekly Trends
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
               {loadingWeekly ? (
                 <div className="space-y-3">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
+                    <Skeleton key={i} className="h-10 w-full bg-white/10" />
                   ))}
                 </div>
               ) : weeklyMetrics && Array.isArray(weeklyMetrics.days) && weeklyMetrics.days.length > 0 ? (
@@ -415,15 +417,15 @@ export default function Metrics() {
                   <div className="flex flex-wrap gap-4 text-sm mb-4">
                     <div>
                       <span className="text-muted-foreground">Total moves: </span>
-                      <span className="font-medium" data-testid="text-total-moves">{weeklyMetrics.totalMoves}</span>
+                      <span className="font-medium text-white" data-testid="text-total-moves">{weeklyMetrics.totalMoves}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Total time: </span>
-                      <span className="font-medium">{formatMinutes(weeklyMetrics.totalMinutes)}</span>
+                      <span className="font-medium text-white">{formatMinutes(weeklyMetrics.totalMinutes)}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Avg/day: </span>
-                      <span className="font-medium">{weeklyMetrics.averageMovesPerDay} moves</span>
+                      <span className="font-medium text-white">{weeklyMetrics.averageMovesPerDay} moves</span>
                     </div>
                   </div>
                   
@@ -433,14 +435,14 @@ export default function Metrics() {
                         <div className="w-24 text-sm text-muted-foreground shrink-0">
                           {formatDate(day.date)}
                         </div>
-                        <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+                        <div className="flex-1 h-6 bg-white/10 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-primary transition-all duration-300"
+                            className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-300"
                             style={{ width: `${Math.min(day.pacingPercent, 100)}%` }}
                           />
                         </div>
                         <div className="w-20 text-sm text-right shrink-0">
-                          <span className="font-medium">{day.movesCompleted}</span>
+                          <span className="font-medium text-white">{day.movesCompleted}</span>
                           <span className="text-muted-foreground"> moves</span>
                         </div>
                       </div>
@@ -450,22 +452,20 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No weekly data yet</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
           {/* Work Type Breakdown */}
-          <Card data-testid="card-drain-types">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Brain className="h-5 w-5" />
+          <ArcCard glowColor="pink" data-testid="card-drain-types">
+            <div className="p-6">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                <Brain className="h-5 w-5 text-pink-400" />
                 Work Type Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
               {loadingDrain ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
+                    <Skeleton key={i} className="h-8 w-full bg-white/10" />
                   ))}
                 </div>
               ) : drainMetrics && drainMetrics.length > 0 ? (
@@ -486,13 +486,13 @@ export default function Metrics() {
                       return (
                         <div 
                           key={metric.drainType} 
-                          className="flex items-center gap-2 p-2 rounded-lg border"
+                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5"
                           data-testid={`drain-type-${metric.drainType}`}
                         >
                           <div className={`w-3 h-3 rounded-full ${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset}`} />
                           {DrainIcon && <DrainIcon className="h-4 w-4 text-muted-foreground" />}
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">
+                            <div className="text-sm font-medium truncate text-white/90">
                               {DRAIN_TYPE_LABELS[metric.drainType as DrainType]?.label || metric.drainType}
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -507,22 +507,20 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No completed moves yet</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
           {/* Backlog Health */}
-          <Card data-testid="card-backlog-health">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Archive className="h-5 w-5" />
+          <ArcCard glowColor="orange" data-testid="card-backlog-health">
+            <div className="p-6">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                <Archive className="h-5 w-5 text-orange-400" />
                 Backlog Health
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
               {loadingBacklog ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
+                    <Skeleton key={i} className="h-12 w-full bg-white/10" />
                   ))}
                 </div>
               ) : backlogHealth && backlogHealth.length > 0 ? (
@@ -530,11 +528,11 @@ export default function Metrics() {
                   {backlogHealth.map((client) => (
                     <div 
                       key={client.clientName} 
-                      className="flex items-center justify-between p-3 rounded-lg border"
+                      className="flex items-center justify-between p-3 rounded-lg border border-white/10 bg-white/5"
                       data-testid={`backlog-client-${client.clientName}`}
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium capitalize">{client.clientName}</span>
+                        <span className="font-medium capitalize text-white">{client.clientName}</span>
                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
                           <span>{client.totalCount} in backlog</span>
                           <span>avg {client.avgDays}d old</span>
@@ -542,18 +540,18 @@ export default function Metrics() {
                       </div>
                       <div className="flex items-center gap-2">
                         {client.agingCount > 0 ? (
-                          <Badge variant="destructive" className="gap-1">
+                          <Badge className="gap-1 bg-rose-500/20 text-rose-300 border-rose-500/30">
                             <AlertCircle className="h-3 w-3" />
                             {client.agingCount} aging
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">
+                          <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             Healthy
                           </Badge>
                         )}
                         {client.oldestDays >= 7 && (
-                          <span className="text-sm text-orange-600 dark:text-orange-400">
+                          <span className="text-sm text-orange-400">
                             oldest: {client.oldestDays}d
                           </span>
                         )}
@@ -564,20 +562,18 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No backlog data yet</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
           {/* Productivity Patterns */}
-          <Card data-testid="card-productivity">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Clock className="h-5 w-5" />
+          <ArcCard glowColor="none" data-testid="card-productivity">
+            <div className="p-6">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                <Clock className="h-5 w-5 text-purple-400" />
                 Productivity by Time of Day
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
               {loadingProductivity ? (
-                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full bg-white/10" />
               ) : productivityData && productivityData.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex gap-1 h-16 items-end">
@@ -592,7 +588,7 @@ export default function Metrics() {
                           title={`${hourData.hour}:00 - ${hourData.completions} completions, ${hourData.deferrals} deferrals`}
                         >
                           <div
-                            className={`w-full rounded-t ${isPositive ? "bg-green-500" : total > 0 ? "bg-red-400" : "bg-muted"}`}
+                            className={`w-full rounded-t ${isPositive ? "bg-emerald-500" : total > 0 ? "bg-rose-400" : "bg-white/10"}`}
                             style={{ height: `${height}px` }}
                           />
                         </div>
@@ -605,13 +601,13 @@ export default function Metrics() {
                     <span>6pm</span>
                     <span>10pm</span>
                   </div>
-                  <div className="flex gap-4 text-xs">
+                  <div className="flex gap-4 text-xs text-white/70">
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-green-500" />
+                      <div className="w-3 h-3 rounded bg-emerald-500" />
                       <span>More completions</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-red-400" />
+                      <div className="w-3 h-3 rounded bg-rose-400" />
                       <span>More deferrals</span>
                     </div>
                   </div>
@@ -619,34 +615,32 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No productivity data yet. Complete some tasks to see patterns.</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
           {/* Avoided Tasks */}
           {avoidedTasks && avoidedTasks.length > 0 && (
-            <Card data-testid="card-avoided-tasks">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-orange-500" />
+            <ArcCard glowColor="orange" data-testid="card-avoided-tasks">
+              <div className="p-6">
+                <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                  <AlertCircle className="h-5 w-5 text-orange-400" />
                   Avoided Tasks
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge className="text-xs bg-orange-500/20 text-orange-300 border-orange-500/30">
                     {avoidedTasks.length}
                   </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </div>
                 <div className="space-y-2">
                   {avoidedTasks.slice(0, 5).map((task) => (
                     <div 
                       key={task.taskId} 
-                      className="flex items-center justify-between p-2 rounded-lg border"
+                      className="flex items-center justify-between p-2 rounded-lg border border-white/10 bg-white/5"
                       data-testid={`avoided-task-${task.taskId}`}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{task.taskName}</div>
+                        <div className="text-sm font-medium truncate text-white/90">{task.taskName}</div>
                         <div className="text-xs text-muted-foreground capitalize">{task.clientName}</div>
                       </div>
-                      <Badge variant="destructive" className="text-xs shrink-0">
+                      <Badge className="text-xs shrink-0 bg-rose-500/20 text-rose-300 border-rose-500/30">
                         {task.count}x deferred
                       </Badge>
                     </div>
@@ -657,23 +651,21 @@ export default function Metrics() {
                     </p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </ArcCard>
           )}
 
           {/* Client Metrics */}
-          <Card data-testid="card-client-metrics">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" />
+          <ArcCard glowColor="emerald" data-testid="card-client-metrics">
+            <div className="p-6">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                <Users className="h-5 w-5 text-emerald-400" />
                 Client Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
               {loadingClients ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
+                    <Skeleton key={i} className="h-16 w-full bg-white/10" />
                   ))}
                 </div>
               ) : clientMetrics && Array.isArray(clientMetrics) && clientMetrics.length > 0 ? (
@@ -681,24 +673,24 @@ export default function Metrics() {
                   {clientMetrics.map((client) => (
                     <div 
                       key={client.clientName} 
-                      className="p-3 rounded-lg border space-y-2"
+                      className="p-3 rounded-lg border border-white/10 bg-white/5 space-y-2"
                       data-testid={`row-client-${client.clientName}`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium capitalize">{client.clientName}</span>
+                          <span className="font-medium capitalize text-white">{client.clientName}</span>
                           <span className="text-sm text-muted-foreground">
                             {client.totalMoves} moves
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           {client.daysSinceLastMove >= 2 ? (
-                            <div className="flex items-center gap-1 text-sm text-orange-600 dark:text-orange-400">
+                            <div className="flex items-center gap-1 text-sm text-orange-400">
                               <AlertCircle className="h-4 w-4" />
                               <span>{client.daysSinceLastMove}d stale</span>
                             </div>
                           ) : client.daysSinceLastMove === 0 ? (
-                            <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+                            <div className="flex items-center gap-1 text-sm text-emerald-400">
                               <CheckCircle2 className="h-4 w-4" />
                               <span>Active today</span>
                             </div>
@@ -721,17 +713,17 @@ export default function Metrics() {
                               sentiment: value 
                             })}
                           >
-                            <SelectTrigger className="h-7 w-[110px] text-xs" data-testid={`select-sentiment-${client.clientName}`}>
+                            <SelectTrigger className="h-7 w-[110px] text-xs bg-white/5 border-white/10" data-testid={`select-sentiment-${client.clientName}`}>
                               {updateSentiment.isPending ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <SelectValue />
                               )}
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-[#1a1b26] border-white/10">
                               <SelectItem value="positive">
                                 <div className="flex items-center gap-1">
-                                  <ThumbsUp className="h-3 w-3 text-green-500" />
+                                  <ThumbsUp className="h-3 w-3 text-emerald-500" />
                                   <span>Positive</span>
                                 </div>
                               </SelectItem>
@@ -743,13 +735,13 @@ export default function Metrics() {
                               </SelectItem>
                               <SelectItem value="negative">
                                 <div className="flex items-center gap-1">
-                                  <ThumbsDown className="h-3 w-3 text-red-500" />
+                                  <ThumbsDown className="h-3 w-3 text-rose-500" />
                                   <span>Negative</span>
                                 </div>
                               </SelectItem>
                               <SelectItem value="complicated">
                                 <div className="flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                                  <AlertTriangle className="h-3 w-3 text-amber-500" />
                                   <span>Complicated</span>
                                 </div>
                               </SelectItem>
@@ -767,17 +759,17 @@ export default function Metrics() {
                               importance: value 
                             })}
                           >
-                            <SelectTrigger className="h-7 w-[90px] text-xs" data-testid={`select-importance-${client.clientName}`}>
+                            <SelectTrigger className="h-7 w-[90px] text-xs bg-white/5 border-white/10" data-testid={`select-importance-${client.clientName}`}>
                               {updateImportance.isPending ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <SelectValue />
                               )}
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-[#1a1b26] border-white/10">
                               <SelectItem value="high">
                                 <div className="flex items-center gap-1">
-                                  <Star className="h-3 w-3 text-yellow-500" />
+                                  <Star className="h-3 w-3 text-amber-500" />
                                   <span>High</span>
                                 </div>
                               </SelectItem>
@@ -801,8 +793,8 @@ export default function Metrics() {
               ) : (
                 <p className="text-muted-foreground text-sm">No client data yet</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ArcCard>
 
             </div>
           </ScrollArea>
