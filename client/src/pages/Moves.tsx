@@ -777,27 +777,29 @@ export default function Moves() {
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
-        <header className="h-14 border-b flex items-center justify-between px-4 shrink-0">
-          <h1 className="text-lg font-semibold">Moves</h1>
+      <div className="h-screen flex flex-col space-bg" data-testid="page-moves">
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Moves</h1>
           <div className="flex items-center gap-1">
             <Link href="/">
-              <Button variant="ghost" size="icon" data-testid="mobile-link-chat">
-                <MessageSquare className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="mobile-link-chat">
+                <MessageSquare className="h-5 w-5 text-purple-400" />
               </Button>
             </Link>
             <Link href="/metrics">
-              <Button variant="ghost" size="icon" data-testid="mobile-link-metrics">
-                <BarChart3 className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10" data-testid="mobile-link-metrics">
+                <BarChart3 className="h-5 w-5 text-cyan-400" />
               </Button>
             </Link>
             <Button 
               variant="ghost" 
               size="icon"
               onClick={() => setTriageDialogOpen(true)}
+              className="hover:bg-rose-500/10"
               data-testid="mobile-button-triage"
             >
-              <ClipboardCheck className="h-5 w-5" />
+              <ClipboardCheck className="h-5 w-5 text-rose-400" />
             </Button>
             <ThemeToggle />
           </div>
@@ -845,20 +847,21 @@ export default function Moves() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
-      <header className="h-16 border-b flex items-center justify-between px-6 shrink-0">
+    <div className="h-screen flex flex-col space-bg" data-testid="page-moves">
+      <header className="h-16 glass-strong border-b border-purple-500/20 flex items-center justify-between px-6 shrink-0 relative">
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold tracking-tight">Moves</h1>
+          <h1 className="text-xl font-display font-semibold tracking-wider text-gradient-purple">Moves</h1>
           <nav className="flex items-center gap-1">
             <Link href="/">
-              <Button variant="ghost" size="sm" data-testid="link-chat">
-                <MessageSquare className="h-4 w-4 mr-2" />
+              <Button variant="ghost" size="sm" className="hover:bg-purple-500/10" data-testid="link-chat">
+                <MessageSquare className="h-4 w-4 mr-2 text-purple-400" />
                 Chat
               </Button>
             </Link>
             <Link href="/metrics">
-              <Button variant="ghost" size="sm" data-testid="link-metrics">
-                <BarChart3 className="h-4 w-4 mr-2" />
+              <Button variant="ghost" size="sm" className="hover:bg-cyan-500/10" data-testid="link-metrics">
+                <BarChart3 className="h-4 w-4 mr-2 text-cyan-400" />
                 Metrics
               </Button>
             </Link>

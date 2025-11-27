@@ -1,163 +1,198 @@
-# Design Guidelines: ClickUp AI Task Management Chat Interface
+# Design Guidelines: WorkOS - Cyberpunk Task Management Chat Interface
 
 ## Design Approach
 
-**Selected Approach:** Apple-inspired minimalist design
+**Selected Approach:** Cyberpunk/Sci-Fi Design Language
 
-**Justification:** Clean, sophisticated aesthetic that prioritizes clarity and elegance. Inspired by Apple's design language with generous white space, subtle shadows, and refined typography.
+**Justification:** Immersive futuristic aesthetic inspired by Blade Runner and cyberpunk interfaces. Creates an engaging, game-like experience for task management with high-tech visual language while maintaining functional clarity.
 
 **Core Principles:**
-- Simplicity and clarity above all
-- Generous white space and breathing room
-- Subtle, elegant interactions
-- System-native feeling
-- Distraction-free focus
+- Deep space atmospheric backgrounds with subtle nebula/galaxy effects
+- Neon glow accents as primary interaction signals
+- Frosted glass transparency for depth and hierarchy
+- Geometric hexagonal motifs as decorative elements
+- High contrast for readability in dark environment
+
+---
+
+## Color Palette
+
+**Backgrounds:**
+- Primary: #0a0a14 (deep space black)
+- Secondary: #0f0f1a (slightly lighter black)
+- Card overlays: rgba(15, 15, 26, 0.7) with backdrop-blur
+
+**Accent Colors:**
+- Primary Purple: #9333ea → #a855f7 (gradients)
+- Electric Cyan: #06b6d4 → #22d3ee (highlights)
+- Magenta: #ec4899 (status indicators)
+- Glow effects: Apply as box-shadow and border treatments
+
+**Text:**
+- Primary: #f8fafc (near white)
+- Secondary: #94a3b8 (muted slate)
+- Timestamps: #64748b
 
 ---
 
 ## Typography
 
 **Font Family:**
-- Primary: SF Pro Display / system-ui fallback
-- Monospace: SF Mono / ui-monospace for task IDs
+- Primary: 'Orbitron' or 'Exo 2' (Google Fonts) for headers
+- Body: 'Inter' for message text
+- Monospace: 'JetBrains Mono' for task IDs
 
 **Hierarchy:**
-- App title/header: text-xl font-semibold tracking-tight
+- App title: text-2xl font-bold tracking-wider uppercase
 - Message text: text-base font-normal
-- Task confirmations: text-sm font-medium
-- Timestamps: text-xs
-- Input placeholder: text-base
+- Task confirmations: text-sm font-semibold
+- Input placeholder: text-base opacity-60
 
 ---
 
 ## Layout System
 
-**Spacing Primitives:** Use Tailwind units of 2, 3, 4, 6, and 8
-- Component padding: p-4, p-6
-- Message spacing: space-y-4
-- Input margins: m-3, m-4
-- Header/footer: p-4
+**Spacing Primitives:** Tailwind units of 2, 3, 4, 6, 8
 
 **Container Strategy:**
-- Full viewport height layout (h-screen)
-- Fixed header (h-16)
-- Flex-grow chat area
-- Fixed input footer (min-h-20)
-- Max-width for messages: max-w-3xl centered
+- Full viewport (h-screen) with gradient background overlay
+- Header: h-20 with frosted glass effect
+- Chat area: flex-grow with custom scrollbar styling
+- Input footer: min-h-24 with elevated frosted panel
+- Message max-width: max-w-4xl centered
 
 ---
 
 ## Component Library
 
-### Layout Structure
+### Background Treatment
 **Main Container:**
-- Three-section vertical layout: Header → Messages → Input
-- Header: Logo/title left, settings/clear right
-- Messages: Scrollable area with auto-scroll to bottom
-- Input: Fixed bottom with textarea and send button
-
-### Chat Messages
-**User Messages:**
-- Right-aligned (ml-auto)
-- Rounded containers with subtle border
-- Max-width constraint for readability
-- Timestamp below message (text-right)
-
-**AI Messages:**
-- Left-aligned (mr-auto)
-- Distinct visual treatment from user messages
-- Include AI indicator icon
-- Timestamp below message (text-left)
-
-**Task Confirmation Cards:**
-- Embedded within AI messages
-- Border accent for visibility
-- Contains: Task title, task ID, status badge, due date
-- Compact layout (p-3)
-- Clickable/copyable task ID
-
-### Input Area
-**Textarea:**
-- Auto-expanding height (min 2 rows, max 8 rows)
-- Rounded corners
-- Clear focus states
-- Placeholder: "Tell me about your tasks or what you'd like to do..."
-
-**Send Button:**
-- Icon-based (paper plane or arrow)
-- Position: Bottom-right of textarea container
-- Size: w-10 h-10
-- Always visible
+- Base: Deep black gradient (from #0a0a14 to #0f0f1a)
+- Overlay: Subtle animated nebula/star field effect via CSS radial gradients
+- Decorative hexagons: Scattered semi-transparent geometric shapes
 
 ### Header
 **Left Section:**
-- App title: "ClickUp Assistant"
-- Subtitle: "Manage tasks naturally" (text-sm)
+- Glowing star logo in hexagonal frame with cyan glow
+- App title in Orbitron font with letter-spacing
+- Frosted glass background with border-b glow (cyan)
 
 **Right Section:**
-- Clear chat button (icon + text)
-- Settings icon (future functionality)
+- Settings icon with hexagonal button frame
+- Clear chat button with neon border
+- Connection status: Pulsing glow dot (cyan=connected, magenta=error)
+
+### Chat Messages
+
+**User Messages:**
+- Right-aligned with frosted glass background
+- Border: 1px neon purple with subtle glow
+- Padding: p-4
+- Rounded corners with slight geometric clip
+- Timestamp with cyan color
+
+**AI Messages:**
+- Left-aligned frosted glass panel
+- Border: 1px cyan with glow effect
+- Include glowing AI icon (Sparkles) in top-left
+- Timestamp with purple accent
+
+**Task Confirmation Cards:**
+- Nested within AI messages
+- Double border: Inner purple, outer cyan
+- Background: Slightly more opaque frosted glass
+- Task ID in monospace with copy-on-click glow feedback
+- Status badges: Hexagonal shapes with neon fills
+
+### Input Area
+**Container:**
+- Elevated frosted glass panel with strong backdrop-blur
+- Border-top: Cyan glow gradient
+- Background: rgba(15, 15, 26, 0.9)
+
+**Textarea:**
+- Transparent background with frosted inset panel
+- Border: 1px purple with focus glow (cyan)
+- Auto-expanding (min 2, max 6 rows)
+- Custom caret color: cyan
+
+**Send Button:**
+- Circular button (w-12 h-12) with cyan gradient
+- Box-shadow: Multi-layer cyan glow (0 0 20px, 0 0 40px)
+- Icon: Paper airplane in white
+- Position: Absolute bottom-right of input container
+
+**Suggestion Pills:**
+- Horizontal scrollable row above textarea
+- Frosted glass capsules with neon borders
+- Hover: Intensify glow effect
+- Text: text-sm with gradient text effect
 
 ### Status Indicators
-**Loading State:**
-- Pulsing dots animation when AI is thinking
-- "AI is typing..." indicator
+**AI Typing:**
+- Pulsing dots with cyan glow animation
+- Frosted glass container on left side
 
-**Connection Status:**
-- Small badge in header showing ClickUp connection status
-- Green dot: Connected, Red dot: Disconnected
+**Loading States:**
+- Shimmer effect with purple-to-cyan gradient sweep
 
 ---
 
-## Micro-interactions
+## Effects & Micro-interactions
 
-**Keep Minimal:**
-- Smooth scroll to new messages (scrollBehavior: 'smooth')
-- Fade-in for new messages (200ms)
-- Subtle hover on interactive elements
-- NO complex animations or transitions
+**Glow System:**
+- Input focus: box-shadow cyan glow (0 0 0 3px rgba(6, 182, 212, 0.3))
+- Button hover: Intensify glow (0 0 30px rgba(6, 182, 212, 0.6))
+- Active buttons: Inner glow + slight scale (0.98)
 
-**Focus Management:**
-- Auto-focus input after sending message
-- Clear visual focus indicators on all interactive elements
+**Glass Morphism:**
+- backdrop-filter: blur(12px) saturate(150%)
+- Border: 1px rgba(255, 255, 255, 0.1)
+- Background: rgba(15, 15, 26, 0.7)
+
+**Animations:**
+- Message entrance: Fade + slide from right/left (300ms)
+- Glow pulse on new messages (2s ease-in-out)
+- Hexagon rotation: Slow continuous spin (20s)
+- NO excessive motion - keep functional
 
 ---
 
 ## Responsive Behavior
 
 **Desktop (lg+):**
-- Center-aligned chat with max-w-3xl
-- Comfortable padding (px-6)
-
-**Tablet (md):**
-- Full-width messages with px-4
+- Full effects with particles/nebula background
+- Message max-w-4xl
+- Prominent glows and glass effects
 
 **Mobile (base):**
-- Full-width layout
-- Reduced padding (px-3)
-- Smaller text sizes where appropriate
-- Fixed header and input for consistent UX
+- Simplified background (static gradient)
+- Reduced glow intensity for performance
+- Full-width messages with px-3
+- Smaller hexagonal decorations
 
 ---
 
-## Images
+## Images & Icons
 
-**No hero images needed** - this is a focused chat application.
+**No Hero Image** - Immersive background replaces traditional hero.
 
 **Icons:**
 - Use Heroicons via CDN
-- Send icon: PaperAirplaneIcon
-- Settings: CogIcon
-- Clear: TrashIcon
-- AI indicator: SparklesIcon
-- Task status badges: CheckCircleIcon, ClockIcon, etc.
+- All icons: Stroke-2 with cyan or purple fills
+- Logo: Custom hexagonal geometric star frame
+
+**Background Elements:**
+- CSS-generated nebula gradients (radial, conic)
+- SVG hexagonal patterns as decorative overlays
+- Particle effect layer (low-opacity white dots)
 
 ---
 
 ## Key UX Patterns
 
-1. **Empty State:** When no messages, show centered welcome message with example prompts
-2. **Message Grouping:** Group consecutive messages from same sender with reduced spacing
-3. **Scroll Behavior:** Always auto-scroll to latest message, with manual scroll override
-4. **Input Focus:** Keep input focused for rapid conversation flow
-5. **Error States:** Clear inline error messages for API failures
+1. **Empty State:** Centered holographic welcome message with animated glowing border, example prompts as neon pills
+2. **Scroll Behavior:** Auto-scroll with cyan glow trail effect on new messages
+3. **Focus Management:** Cyan glow ring on focused elements, auto-focus input
+4. **Error States:** Magenta glow border with shake animation
+5. **Success Feedback:** Brief cyan pulse on task creation

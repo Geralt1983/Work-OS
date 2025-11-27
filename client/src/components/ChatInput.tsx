@@ -120,7 +120,10 @@ export default function ChatInput({
   };
 
   return (
-    <div className="border-t bg-background/95 backdrop-blur-lg p-6">
+    <div className="glass-strong border-t border-purple-500/20 p-4 sm:p-6 relative">
+      {/* Top glow line */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+      
       <div className="max-w-4xl mx-auto space-y-3">
         {selectedImages.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -129,7 +132,7 @@ export default function ChatInput({
                 <img 
                   src={img.previewUrl} 
                   alt={`Selected ${index + 1}`} 
-                  className="h-20 w-20 object-cover rounded-lg border"
+                  className="h-20 w-20 object-cover rounded-lg border border-purple-500/30"
                 />
                 <Button
                   type="button"
@@ -162,31 +165,32 @@ export default function ChatInput({
             variant="ghost"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled || selectedImages.length >= MAX_IMAGES}
-            className="h-12 w-12 rounded-full shrink-0"
+            className="h-12 w-12 rounded-full shrink-0 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 transition-all"
             data-testid="button-add-image"
           >
-            <ImagePlus className="h-5 w-5" />
+            <ImagePlus className="h-5 w-5 text-purple-400" />
           </Button>
-          <Textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={selectedImages.length > 0 ? "Describe what you want to know about these images..." : placeholder}
-            disabled={disabled}
-            className="min-h-[48px] max-h-[200px] resize-none rounded-xl text-[15px] leading-relaxed"
-            rows={1}
-            data-testid="input-message"
-          />
-          <Button
+          <div className="flex-1 relative">
+            <Textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={selectedImages.length > 0 ? "Describe what you want to know about these images..." : placeholder}
+              disabled={disabled}
+              className="min-h-[48px] max-h-[200px] resize-none rounded-xl text-[15px] leading-relaxed bg-background/50 border-purple-500/30 focus:border-cyan-500/60 focus:ring-cyan-500/20 transition-all"
+              rows={1}
+              data-testid="input-message"
+            />
+          </div>
+          <button
             onClick={handleSubmit}
             disabled={disabled || (!message.trim() && selectedImages.length === 0)}
-            size="icon"
-            className="rounded-full h-12 w-12 shrink-0"
+            className="send-button-glow rounded-full h-12 w-12 shrink-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
             data-testid="button-send"
           >
-            <Send className="h-[18px] w-[18px]" />
-          </Button>
+            <Send className="h-[18px] w-[18px] text-white" />
+          </button>
         </div>
         <p className="text-xs text-muted-foreground text-center">
           Paste, drop, or click to upload images (up to {MAX_IMAGES})

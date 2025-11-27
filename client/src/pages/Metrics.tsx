@@ -180,16 +180,17 @@ export default function Metrics() {
   });
 
   return (
-    <div className="h-screen flex flex-col bg-background" data-testid="page-metrics">
-      <header className="h-16 border-b flex items-center justify-between px-6 shrink-0">
+    <div className="h-screen flex flex-col space-bg" data-testid="page-metrics">
+      <header className="h-16 glass-strong border-b border-purple-500/20 flex items-center justify-between px-6 shrink-0 relative">
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
         <div className="flex items-center gap-4">
           <Link href="/">
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="button-back">
+              <ArrowLeft className="h-5 w-5 text-purple-400" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-page-title">Metrics</h1>
+            <h1 className="text-xl font-display font-semibold tracking-wider text-gradient-purple" data-testid="text-page-title">Metrics</h1>
             <p className="text-sm text-muted-foreground">Track your work pacing and client activity</p>
           </div>
         </div>

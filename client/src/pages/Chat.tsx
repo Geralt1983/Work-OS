@@ -109,7 +109,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background" data-testid="page-chat">
+    <div className="h-screen flex flex-col space-bg" data-testid="page-chat">
       <ChatHeader 
         onClearChat={handleClearChat} 
         onTriageClick={() => setTriageOpen(true)}
@@ -133,9 +133,7 @@ export default function Chat() {
         )}
       </div>
 
-      <div className="shrink-0 border-t bg-background">
-        <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
-      </div>
+      <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
 
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
     </div>
