@@ -58,14 +58,14 @@ export default function ChatHeader({ onClearChat, onTriageClick, isConnected = t
             <Button
               variant="ghost"
               onClick={onTriageClick}
-              className="rounded-full h-9 w-9 sm:w-auto sm:px-3 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent transition-all group"
+              className="rounded-full h-9 w-9 sm:w-auto sm:px-3 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent transition-all group p-1"
               data-testid="button-triage"
               title="Run Triage"
             >
               <img 
                 src={magnetoIcon} 
                 alt="Triage" 
-                className="h-6 w-6 sm:mr-2 rounded group-hover:drop-shadow-[0_0_8px_rgba(220,38,38,0.6)] transition-all" 
+                className="min-w-[24px] min-h-[24px] w-6 h-6 sm:mr-2 rounded object-cover object-center group-hover:drop-shadow-[0_0_8px_rgba(220,38,38,0.6)] transition-all shrink-0" 
               />
               <span className="hidden sm:inline text-red-400">Triage</span>
             </Button>
