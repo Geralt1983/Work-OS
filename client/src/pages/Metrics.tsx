@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, Brain, MessageCircle, MessageSquare, FileText, Lightbulb, Zap, Archive, Star, Minus, AlertTriangle, ThumbsUp, ThumbsDown, Loader2, BarChart3, LayoutGrid, ClipboardCheck, List } from "lucide-react";
+import { 
+  Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, 
+  Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, 
+  ThumbsUp, ThumbsDown, Minus, AlertTriangle, Star, Loader2 
+} from "lucide-react";
 import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +16,6 @@ import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
 import { ArcCard } from "@/components/ArcCard";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface TodayMetrics {
   date: string;
@@ -65,13 +65,6 @@ interface BacklogHealthMetric {
   avgDays: number;
 }
 
-interface AvoidedTask {
-  taskId: string;
-  taskName: string;
-  clientName: string;
-  count: number;
-}
-
 interface ProductivityHour {
   hour: number;
   completions: number;
@@ -87,12 +80,12 @@ const DRAIN_ICONS: Record<string, typeof Brain> = {
 };
 
 const DRAIN_COLORS: Record<string, string> = {
-  deep: "bg-blue-500",
+  deep: "bg-cyan-500",
   comms: "bg-green-500",
   admin: "bg-orange-500",
   creative: "bg-purple-500",
   easy: "bg-yellow-500",
-  unset: "bg-gray-400",
+  unset: "bg-gray-500",
 };
 
 function formatMinutesToHours(minutes: number): string {
@@ -100,23 +93,9 @@ function formatMinutesToHours(minutes: number): string {
   return `${hours}h`;
 }
 
-function formatMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours === 0) return `${mins}m`;
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}m`;
-}
-
-function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
 export default function Metrics() {
   const [triageOpen, setTriageOpen] = useState(false);
-  const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({
     queryKey: ["/api/metrics/today"],
@@ -138,15 +117,9 @@ export default function Metrics() {
     queryKey: ["/api/metrics/backlog-health"],
   });
 
-  const { data: avoidedTasks, isLoading: loadingAvoided } = useQuery<AvoidedTask[]>({
-    queryKey: ["/api/metrics/avoided-tasks"],
-  });
-
   const { data: productivityData, isLoading: loadingProductivity } = useQuery<ProductivityHour[]>({
     queryKey: ["/api/metrics/productivity"],
   });
-
-  const { toast } = useToast();
 
   const updateSentiment = useMutation({
     mutationFn: async ({ clientName, sentiment }: { clientName: string; sentiment: string }) => {
@@ -155,9 +128,6 @@ export default function Metrics() {
     onSuccess: (_, { clientName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics/clients"] });
       toast({ title: "Updated", description: `${clientName} sentiment saved` });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: "Failed to update sentiment", variant: "destructive" });
     },
   });
 
@@ -169,171 +139,13 @@ export default function Metrics() {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics/clients"] });
       toast({ title: "Updated", description: `${clientName} priority saved` });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update importance", variant: "destructive" });
-    },
   });
 
-  // Calculate weekly pacing (Target: 15 hours = 900 minutes)
-  const weeklyTargetMinutes = 900;
-  const weeklyPacing = weeklyMetrics ? Math.min(Math.round((weeklyMetrics.totalMinutes / weeklyTargetMinutes) * 100), 100) : 0;
+  const weeklyTargetMinutes = 900; // 15 hours
   const weeklyHours = weeklyMetrics ? (weeklyMetrics.totalMinutes / 60).toFixed(1) : "0.0";
 
-  if (isMobile) {
-    return (
-      <div className="h-screen flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-metrics">
-        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 z-50">
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-          <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Metrics</h1>
-          <div className="flex items-center gap-1">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/moves">
-              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
-                <List className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10 text-cyan-400">
-              <BarChart3 className="h-5 w-5" />
-            </Button>
-          </div>
-        </header>
-
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-4">
-            {/* Today's Pacing - Mobile */}
-            <ArcCard glowColor="purple" data-testid="card-today-pacing">
-              <div className="p-4">
-                <div className="flex flex-row items-center justify-between gap-2 pb-3">
-                  <div className="text-base font-semibold flex items-center gap-2 text-white">
-                    <Target className="h-4 w-4 text-purple-400" />
-                    Today
-                  </div>
-                  {loadingToday ? (
-                    <Skeleton className="h-6 w-16 bg-white/10" />
-                  ) : (
-                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30">
-                      {todayMetrics?.pacingPercent || 0}%
-                    </Badge>
-                  )}
-                </div>
-                {loadingToday ? (
-                  <Skeleton className="h-4 w-full bg-white/10" />
-                ) : todayMetrics ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm mb-2 text-white/80">
-                      <span>{formatMinutesToHours(todayMetrics.estimatedMinutes)} of 3.0h target</span>
-                      <span>{todayMetrics.movesCompleted} moves</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500" 
-                        style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No data yet</p>
-                )}
-              </div>
-            </ArcCard>
-
-            {/* Weekly Trends - Mobile */}
-            <ArcCard glowColor="cyan">
-              <div className="p-4">
-                <div className="flex items-center justify-between pb-3">
-                  <div className="text-base font-semibold flex items-center gap-2 text-white">
-                    <TrendingUp className="h-4 w-4 text-cyan-400" />
-                    This Week
-                  </div>
-                  <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/30">
-                    {weeklyHours}h / 15h
-                  </Badge>
-                </div>
-                {loadingWeekly ? (
-                  <Skeleton className="h-12 w-full bg-white/10" />
-                ) : weeklyMetrics ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="p-2 rounded-xl bg-white/5">
-                        <div className="text-xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Moves</div>
-                      </div>
-                      <div className="p-2 rounded-xl bg-white/5">
-                        <div className="text-xl font-bold text-cyan-400">{weeklyHours}h</div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Time</div>
-                      </div>
-                      <div className="p-2 rounded-xl bg-white/5">
-                        <div className="text-xl font-bold text-white">{weeklyMetrics.averageMovesPerDay.toFixed(1)}</div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider">Avg/Day</div>
-                      </div>
-                    </div>
-                    
-                    <div className="text-sm text-center">
-                      {weeklyPacing >= 100 ? (
-                        <span className="text-emerald-400 font-medium flex items-center justify-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" /> Weekly target hit!
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {Math.round(100 - weeklyPacing)}% to weekly 15h target
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No data yet</p>
-                )}
-              </div>
-            </ArcCard>
-
-            {/* Client Activity - Mobile */}
-            <ArcCard glowColor="emerald">
-              <div className="p-4">
-                <div className="text-base font-semibold flex items-center gap-2 text-white pb-3">
-                  <Users className="h-4 w-4 text-emerald-400" />
-                  Clients
-                </div>
-                {loadingClients ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-8 w-full bg-white/10" />
-                    <Skeleton className="h-8 w-full bg-white/10" />
-                  </div>
-                ) : clientMetrics && clientMetrics.length > 0 ? (
-                  <div className="space-y-2">
-                    {clientMetrics.slice(0, 5).map((client) => (
-                      <div key={client.clientName} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/10">
-                        <span className="text-sm font-medium truncate text-white/90">{client.clientName}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{client.totalMoves} moves</span>
-                          {client.daysSinceLastMove >= 2 ? (
-                            <span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">{client.daysSinceLastMove}d</span>
-                          ) : (
-                            <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">Active</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No client data</p>
-                )}
-              </div>
-            </ArcCard>
-          </div>
-        </ScrollArea>
-
-        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
-      </div>
-    );
-  }
-
-  // Desktop View
   return (
-    <div className="h-screen flex bg-transparent text-slate-200 font-sans" data-testid="page-metrics">
+    <div className="h-screen flex bg-transparent text-foreground font-sans">
       <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
       <IslandLayout>
@@ -348,120 +160,304 @@ export default function Metrics() {
           <ScrollArea className="flex-1">
             <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
           
-          {/* Today's Pacing */}
-          <ArcCard glowColor="purple">
-            <div className="p-6">
-                <div className="flex flex-row items-center justify-between gap-2 pb-4">
-                <div className="text-lg font-semibold flex items-center gap-2 text-white">
-                    <Target className="h-5 w-5 text-purple-400" />
-                    Today's Pacing
-                </div>
-                {todayMetrics && (
-                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30">
-                    {todayMetrics.pacingPercent}%
-                    </Badge>
-                )}
-                </div>
-                
-                {loadingToday ? (
-                  <Skeleton className="h-4 w-full" />
-                ) : todayMetrics ? (
-                  <>
-                    <div className="flex justify-between text-sm mb-2 text-white/80">
+              {/* Today's Pacing */}
+              <ArcCard glowColor="purple">
+                <div className="p-6">
+                  <div className="flex flex-row items-center justify-between gap-2 pb-4">
+                    <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                      <Target className="h-5 w-5 text-purple-400" />
+                      Today's Pacing
+                    </div>
+                    {todayMetrics && (
+                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                        {todayMetrics.pacingPercent}%
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {loadingToday ? (
+                    <Skeleton className="h-12 w-full bg-white/5" />
+                  ) : todayMetrics ? (
+                    <>
+                      <div className="flex justify-between text-sm mb-2 text-white/80">
                         <span>{formatMinutesToHours(todayMetrics.estimatedMinutes)} of 3.0h target</span>
                         <span>{todayMetrics.movesCompleted} moves</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden mt-2 mb-4">
-                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} />
-                    </div>
-                  </>
-                ) : <p className="text-muted-foreground">No data</p>}
-            </div>
-          </ArcCard>
-
-          {/* Weekly Trends */}
-          <ArcCard glowColor="cyan">
-             <div className="p-6">
-                <div className="flex items-center justify-between pb-4">
-                    <div className="text-lg font-semibold flex items-center gap-2 text-white">
-                        <TrendingUp className="h-5 w-5 text-cyan-400" />
-                        Weekly Trends
-                    </div>
-                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/30">
-                        {weeklyHours}h / 15h
-                    </Badge>
+                      </div>
+                      <div className="h-3 bg-black/40 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" 
+                          style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
+                        />
+                      </div>
+                      <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
+                        <span>{todayMetrics.backlogMoves} from backlog</span>
+                        <span>{todayMetrics.clientsTouched.length} clients touched</span>
+                      </div>
+                    </>
+                  ) : <p className="text-muted-foreground">No data</p>}
                 </div>
+              </ArcCard>
 
-                {loadingWeekly ? (
-                   <Skeleton className="h-20 w-full" />
-                ) : weeklyMetrics ? (
-                   <div className="space-y-4">
-                     <div className="grid grid-cols-3 gap-4 text-center mb-4">
-                       <div className="p-3 rounded-xl bg-white/5">
-                         <div className="text-2xl font-bold text-white">{weeklyMetrics.totalMoves}</div>
-                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Moves</div>
-                       </div>
-                       <div className="p-3 rounded-xl bg-white/5">
-                         <div className="text-2xl font-bold text-cyan-400">{weeklyHours}h</div>
-                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Time</div>
-                       </div>
-                       <div className="p-3 rounded-xl bg-white/5">
-                         <div className="text-2xl font-bold text-white">{weeklyMetrics.averageMovesPerDay}</div>
-                         <div className="text-xs text-muted-foreground uppercase tracking-wider">Avg/Day</div>
-                       </div>
-                     </div>
-                     
-                     <div className="text-sm text-center">
-                        {weeklyPacing >= 100 ? (
-                            <span className="text-emerald-400 font-medium flex items-center justify-center gap-2">
-                                <CheckCircle2 className="w-4 h-4" /> Weekly target hit!
-                            </span>
-                        ) : (
-                            <span className="text-muted-foreground">
-                                {Math.round(100 - weeklyPacing)}% to weekly 15h target
-                            </span>
-                        )}
-                     </div>
-                   </div>
-                ) : <p>No data</p>}
-             </div>
-          </ArcCard>
+              {/* Weekly Trends */}
+              <ArcCard glowColor="cyan">
+                <div className="p-6">
+                  <div className="flex items-center justify-between pb-4">
+                    <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                      <TrendingUp className="h-5 w-5 text-cyan-400" />
+                      Weekly Trends
+                    </div>
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
+                      {weeklyHours}h / 15h
+                    </Badge>
+                  </div>
 
-          {/* Client Activity */}
-          <ArcCard glowColor="none">
-             <div className="p-6">
-                <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                  {loadingWeekly ? (
+                    <Skeleton className="h-24 w-full bg-white/5" />
+                  ) : weeklyMetrics ? (
+                    <div className="space-y-4">
+                      <div className="flex items-end gap-2 h-32 pt-4">
+                        {weeklyMetrics.days.map((day) => (
+                          <div key={day.date} className="flex-1 flex flex-col items-center gap-2 group">
+                            <div className="w-full bg-black/40 rounded-t-lg relative h-full overflow-hidden">
+                              <div 
+                                className="absolute bottom-0 left-0 right-0 bg-cyan-500/50 group-hover:bg-cyan-400 transition-all duration-300"
+                                style={{ height: `${Math.min(day.pacingPercent, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground uppercase">
+                              {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground border-t border-white/5 pt-4">
+                        <div className="text-center">
+                          <div className="text-white font-bold">{weeklyMetrics.totalMoves}</div>
+                          <div className="text-[10px] uppercase tracking-wider">Moves</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-cyan-400 font-bold">{weeklyMetrics.averageMovesPerDay}</div>
+                          <div className="text-[10px] uppercase tracking-wider">Avg/Day</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-white font-bold">{weeklyHours}h</div>
+                          <div className="text-[10px] uppercase tracking-wider">Total</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : <p className="text-muted-foreground">No data</p>}
+                </div>
+              </ArcCard>
+
+              {/* Work Type Breakdown */}
+              <ArcCard glowColor="orange">
+                <div className="p-6">
+                  <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                    <Brain className="h-5 w-5 text-orange-400" />
+                    Work Type Breakdown
+                  </div>
+                  
+                  {loadingDrain ? (
+                    <Skeleton className="h-24 w-full bg-white/5" />
+                  ) : drainMetrics && drainMetrics.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex h-3 rounded-full overflow-hidden bg-black/40">
+                        {drainMetrics.map((metric) => (
+                          <div
+                            key={metric.drainType}
+                            className={`${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset} transition-all opacity-80 hover:opacity-100`}
+                            style={{ width: `${metric.percentage}%` }}
+                            title={`${DRAIN_TYPE_LABELS[metric.drainType as DrainType]?.label || metric.drainType}: ${metric.percentage}%`}
+                          />
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {drainMetrics.map((metric) => {
+                          const DrainIcon = DRAIN_ICONS[metric.drainType];
+                          return (
+                            <div key={metric.drainType} className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+                              <div className={`w-2 h-2 rounded-full ${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset}`} />
+                              {DrainIcon && <DrainIcon className="h-3 w-3 text-muted-foreground" />}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium truncate text-white/90">
+                                  {DRAIN_TYPE_LABELS[metric.drainType as DrainType]?.label || metric.drainType}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {metric.count} moves ({metric.percentage}%)
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : <p className="text-muted-foreground text-sm">No completed moves yet</p>}
+                </div>
+              </ArcCard>
+
+              {/* Productivity by Time of Day */}
+              <ArcCard glowColor="emerald">
+                <div className="p-6">
+                  <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                    <Clock className="h-5 w-5 text-emerald-400" />
+                    Productivity Rhythm
+                  </div>
+
+                  {loadingProductivity ? (
+                    <Skeleton className="h-32 w-full bg-white/5" />
+                  ) : productivityData && productivityData.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex gap-1 h-24 items-end px-2">
+                        {productivityData.filter(h => h.hour >= 6 && h.hour <= 22).map((hourData) => {
+                          const total = hourData.completions + hourData.deferrals;
+                          const height = total > 0 ? Math.max(10, total * 10) : 4;
+                          const isPositive = hourData.completions >= hourData.deferrals;
+                          return (
+                            <div
+                              key={hourData.hour}
+                              className="flex-1 flex flex-col items-center group relative"
+                            >
+                              <div
+                                className={`w-full rounded-t-sm transition-all duration-300 ${isPositive ? "bg-emerald-500/60 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500/60 group-hover:bg-rose-400" : "bg-white/5"}`}
+                                style={{ height: `${height}%` }}
+                              />
+                              {/* Tooltip on hover */}
+                              <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 text-[10px] bg-black/80 px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none z-10">
+                                {hourData.hour}:00
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground uppercase tracking-wider px-2">
+                        <span>6am</span>
+                        <span>12pm</span>
+                        <span>6pm</span>
+                        <span>10pm</span>
+                      </div>
+                    </div>
+                  ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
+                </div>
+              </ArcCard>
+
+              {/* Client Activity List */}
+              <ArcCard glowColor="none">
+                <div className="p-6">
+                  <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
                     <Users className="h-5 w-5 text-white/70" />
                     Client Activity
-                </div>
-                {loadingClients ? (
+                  </div>
+                  
+                  {loadingClients ? (
                     <div className="space-y-3">
-                      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+                      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full bg-white/5" />)}
                     </div>
-                ) : clientMetrics && clientMetrics.length > 0 ? (
+                  ) : clientMetrics && clientMetrics.length > 0 ? (
                     <div className="space-y-3">
                       {clientMetrics.map((client) => (
-                        <div key={client.clientName} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                           <span className="font-medium text-white/90 capitalize">{client.clientName}</span>
-                           <div className="flex items-center gap-3">
-                              <span className="text-sm text-muted-foreground">{client.totalMoves} moves</span>
+                        <div key={client.clientName} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3 hover:bg-white/[0.07] transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-white tracking-wide capitalize">{client.clientName}</span>
+                              <span className="text-xs text-muted-foreground">{client.totalMoves} moves</span>
+                            </div>
+                            <div className="flex items-center gap-2">
                               {client.daysSinceLastMove >= 2 ? (
-                                <span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">{client.daysSinceLastMove}d stale</span>
+                                <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full border border-rose-400/20">
+                                  <AlertCircle className="w-3 h-3" /> {client.daysSinceLastMove}d stale
+                                </span>
+                              ) : client.daysSinceLastMove === 0 ? (
+                                <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                                  <CheckCircle2 className="w-3 h-3" /> Active
+                                </span>
                               ) : (
-                                <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">Active</span>
+                                <span className="text-xs text-muted-foreground">{client.daysSinceLastMove}d ago</span>
                               )}
-                           </div>
+                            </div>
+                          </div>
+                          
+                          {/* Controls Row */}
+                          <div className="flex items-center gap-4 pt-2 border-t border-white/5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Feeling</span>
+                              <Select
+                                value={client.sentiment}
+                                onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}
+                              >
+                                <SelectTrigger className="h-7 w-[110px] text-xs bg-black/20 border-white/10 text-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
+                                  <SelectItem value="positive"><div className="flex gap-1"><ThumbsUp className="w-3 h-3 text-emerald-400"/> Positive</div></SelectItem>
+                                  <SelectItem value="neutral"><div className="flex gap-1"><Minus className="w-3 h-3"/> Neutral</div></SelectItem>
+                                  <SelectItem value="negative"><div className="flex gap-1"><ThumbsDown className="w-3 h-3 text-rose-400"/> Negative</div></SelectItem>
+                                  <SelectItem value="complicated"><div className="flex gap-1"><AlertTriangle className="w-3 h-3 text-orange-400"/> Complicated</div></SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Priority</span>
+                              <Select
+                                value={client.importance}
+                                onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}
+                              >
+                                <SelectTrigger className="h-7 w-[90px] text-xs bg-black/20 border-white/10 text-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
+                                  <SelectItem value="high"><div className="flex gap-1"><Star className="w-3 h-3 text-yellow-400"/> High</div></SelectItem>
+                                  <SelectItem value="medium">Medium</SelectItem>
+                                  <SelectItem value="low">Low</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
-                ) : <p className="text-muted-foreground text-sm">No data</p>}
-             </div>
-          </ArcCard>
-          
+                  ) : <p className="text-muted-foreground text-sm">No client data yet</p>}
+                </div>
+              </ArcCard>
+
+              {/* Backlog Health */}
+              <ArcCard glowColor="none">
+                <div className="p-6">
+                  <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+                    <Archive className="h-5 w-5 text-white/70" />
+                    Backlog Health
+                  </div>
+                  {loadingBacklog ? (
+                    <Skeleton className="h-20 w-full bg-white/5" />
+                  ) : backlogHealth && backlogHealth.length > 0 ? (
+                    <div className="space-y-2">
+                      {backlogHealth.map((client) => (
+                        <div key={client.clientName} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white/90 capitalize">{client.clientName}</span>
+                            <span className="text-xs text-muted-foreground">{client.totalCount} tasks • avg {client.avgDays}d old</span>
+                          </div>
+                          {client.agingCount > 0 ? (
+                            <Badge variant="destructive" className="bg-rose-500/20 text-rose-300 border-rose-500/30 hover:bg-rose-500/30">
+                              {client.agingCount} aging
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30">
+                              Healthy
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-muted-foreground text-sm">No backlog data yet</p>}
+                </div>
+              </ArcCard>
+
             </div>
           </ScrollArea>
         </div>
       </IslandLayout>
+
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
     </div>
   );
