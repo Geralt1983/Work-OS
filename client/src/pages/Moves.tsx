@@ -127,7 +127,7 @@ function MoveCard({
             <div className="flex items-center gap-3">
               {effortLevel && (
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <div className={`w-2 h-2 rounded-full ${move.effortEstimate > 2 ? 'bg-orange-400 shadow-glow-yellow' : 'bg-emerald-400 shadow-glow-emerald'}`} />
+                  <div className={`w-2 h-2 rounded-full ${(move.effortEstimate || 0) > 2 ? 'bg-orange-400 shadow-glow-yellow' : 'bg-emerald-400 shadow-glow-emerald'}`} />
                   {effortLevel.label}
                 </div>
               )}
