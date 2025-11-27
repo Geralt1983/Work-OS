@@ -12,7 +12,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
@@ -589,7 +588,6 @@ function ThemeToggle() {
 }
 
 export default function Moves() {
-  const isMobile = useIsMobile();
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [drainFilter, setDrainFilter] = useState<string>("all");
@@ -640,10 +638,6 @@ export default function Moves() {
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
     },
   });
-
-  if (isMobile === undefined) {
-    return null;
-  }
 
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -701,41 +695,46 @@ export default function Moves() {
 
   if (movesLoading || clientsLoading) {
     return (
-      <div className="h-screen flex flex-col bg-background" data-testid="page-moves">
-        <header className="h-16 border-b flex items-center justify-between px-6">
-          <Skeleton className="h-6 w-32" />
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-24" />
-            <Skeleton className="h-9 w-9" />
-          </div>
-        </header>
-        <div className="flex-1 p-6">
-          {isMobile ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
+      <>
+        {/* Mobile Loading Skeleton */}
+        <div className="h-screen flex md:hidden flex-col bg-[#030309]" data-testid="page-moves-loading">
+          <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4">
+            <Skeleton className="h-6 w-24 bg-white/10" />
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-8 bg-white/10" />
+              <Skeleton className="h-8 w-8 bg-white/10" />
             </div>
-          ) : (
+          </header>
+          <div className="flex-1 p-4 space-y-3">
+            <Skeleton className="h-12 w-full bg-white/10" />
+            <Skeleton className="h-24 w-full bg-white/10" />
+            <Skeleton className="h-24 w-full bg-white/10" />
+          </div>
+        </div>
+        {/* Desktop Loading Skeleton */}
+        <div className="h-screen hidden md:flex gradient-bg" data-testid="page-moves-loading">
+          <div className="w-20 glass-strong" />
+          <div className="flex-1 p-6">
             <div className="flex gap-6">
               {[1, 2, 3].map(i => (
                 <div key={i} className="flex-1 min-w-[280px]">
-                  <Skeleton className="h-6 w-20 mb-4" />
+                  <Skeleton className="h-6 w-20 mb-4 bg-white/10" />
                   <div className="space-y-3">
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full bg-white/10" />
+                    <Skeleton className="h-24 w-full bg-white/10" />
                   </div>
                 </div>
               ))}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (isMobile) {
-    return (
+  return (
+    <>
+      {/* === MOBILE VIEW (CSS-hidden on desktop) === */}
       <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-moves">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
@@ -774,41 +773,11 @@ export default function Moves() {
             onEditMove={handleEditMove}
           />
         </div>
-
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Move</DialogTitle>
-            </DialogHeader>
-            <MoveForm clients={clients} onSuccess={handleMoveCreated} />
-          </DialogContent>
-        </Dialog>
-
-        <MoveDetailSheet
-          move={selectedMove}
-          clients={clients}
-          open={detailSheetOpen}
-          onOpenChange={setDetailSheetOpen}
-          onUpdate={() => {
-            refetchMoves();
-            if (selectedMove) {
-              const updatedMove = moves.find(m => m.id === selectedMove.id);
-              if (updatedMove) setSelectedMove(updatedMove);
-            }
-          }}
-        />
-
-        <TriageDialog 
-          open={triageDialogOpen} 
-          onOpenChange={setTriageDialogOpen} 
-        />
       </div>
-    );
-  }
 
-  return (
-    <div className="h-screen hidden md:flex gradient-bg" data-testid="page-moves">
-      <GlassSidebar onTriageClick={() => setTriageDialogOpen(true)} />
+      {/* === DESKTOP VIEW (CSS-hidden on mobile) === */}
+      <div className="h-screen hidden md:flex gradient-bg" data-testid="page-moves-desktop">
+        <GlassSidebar onTriageClick={() => setTriageDialogOpen(true)} />
 
       <IslandLayout>
         <div className="h-full flex flex-col">
@@ -838,25 +807,16 @@ export default function Moves() {
               </div>
             </div>
 
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white text-sm font-medium shadow-glow-purple"
-                  data-testid="button-create-move"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Move
-                </motion.button>
-              </DialogTrigger>
-              <DialogContent className="rounded-3xl border-white/10 bg-background/95 backdrop-blur-xl">
-                <DialogHeader>
-                  <DialogTitle>Create Move</DialogTitle>
-                </DialogHeader>
-                <MoveForm clients={clients} onSuccess={handleMoveCreated} />
-              </DialogContent>
-            </Dialog>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white text-sm font-medium shadow-glow-purple"
+              onClick={() => setCreateDialogOpen(true)}
+              data-testid="button-create-move"
+            >
+              <Plus className="h-4 w-4" />
+              New Move
+            </motion.button>
           </div>
 
           {/* Filter Bar */}
@@ -963,6 +923,17 @@ export default function Moves() {
           </div>
         </div>
       </IslandLayout>
+      </div>
+
+      {/* === SHARED DIALOGS (render once, work for both layouts) === */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="rounded-3xl border-white/10 bg-background/95 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle>Create Move</DialogTitle>
+          </DialogHeader>
+          <MoveForm clients={clients} onSuccess={handleMoveCreated} />
+        </DialogContent>
+      </Dialog>
 
       <MoveDetailSheet
         move={selectedMove}
@@ -982,6 +953,6 @@ export default function Moves() {
         open={triageDialogOpen} 
         onOpenChange={setTriageDialogOpen} 
       />
-    </div>
+    </>
   );
 }

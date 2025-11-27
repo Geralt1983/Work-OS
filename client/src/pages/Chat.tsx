@@ -12,7 +12,6 @@ import { TriageDialog } from "@/components/TriageDialog";
 import IslandLayout from "@/components/IslandLayout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
@@ -20,14 +19,18 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(true);
   const [triageOpen, setTriageOpen] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
+  const desktopScrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const isMobile = useIsMobile();
 
   const scrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
+    const scrollElement = (ref: HTMLDivElement | null) => {
+      if (ref && ref.offsetParent !== null) {
+        ref.scrollTop = ref.scrollHeight;
+      }
+    };
+    scrollElement(mobileScrollRef.current);
+    scrollElement(desktopScrollRef.current);
   };
 
   useEffect(() => {
@@ -120,15 +123,10 @@ export default function Chat() {
     damping: 30,
   };
 
-  if (isMobile === undefined) {
-    return null;
-  }
-
-  // Mobile layout - no sidebar
-  if (isMobile) {
-    return (
+  return (
+    <>
+      {/* === MOBILE VIEW (CSS-hidden on desktop) === */}
       <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-chat">
-        {/* Mobile Header with Nav */}
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <div className="flex items-center gap-3">
@@ -161,7 +159,6 @@ export default function Chat() {
           </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 min-h-0 overflow-hidden p-3">
           <div className="h-full island flex flex-col">
             {messages.length === 0 ? (
@@ -169,7 +166,7 @@ export default function Chat() {
                 <EmptyState onExampleClick={handleExampleClick} />
               </div>
             ) : (
-              <div ref={scrollAreaRef} className="flex-1 overflow-auto">
+              <div ref={mobileScrollRef} className="flex-1 overflow-auto">
                 <div className="px-4 py-4 space-y-4">
                   <AnimatePresence mode="popLayout">
                     {messages.map((message, index) => (
@@ -191,70 +188,62 @@ export default function Chat() {
             <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
           </div>
         </div>
-
-        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
       </div>
-    );
-  }
 
-  // Desktop layout with sidebar
-  return (
-    <div className="h-screen hidden md:flex gradient-bg" data-testid="page-chat">
-      {/* Glass Sidebar */}
-      <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
+      {/* === DESKTOP VIEW (CSS-hidden on mobile) === */}
+      <div className="h-screen hidden md:flex gradient-bg" data-testid="page-chat-desktop">
+        <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
-      {/* Main Content - Floating Island */}
-      <IslandLayout>
-        <div className="h-full flex flex-col">
-          {/* Island Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">Chat</h2>
-              <div className={`status-dot ${isConnected ? 'status-dot-active' : 'status-dot-offline'}`} />
-            </div>
-            <motion.button
-              onClick={handleClearChat}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              data-testid="button-clear-chat"
-            >
-              Clear
-            </motion.button>
-          </div>
-
-          {/* Chat Content */}
-          {messages.length === 0 ? (
-            <div className="flex-1 overflow-auto">
-              <EmptyState onExampleClick={handleExampleClick} />
-            </div>
-          ) : (
-            <div ref={scrollAreaRef} className="flex-1 overflow-auto">
-              <div className="max-w-3xl mx-auto px-6 py-6 space-y-6">
-                <AnimatePresence mode="popLayout">
-                  {messages.map((message, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={springTransition}
-                    >
-                      <ChatMessage {...message} />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {isTyping && <TypingIndicator />}
+        <IslandLayout>
+          <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">Chat</h2>
+                <div className={`status-dot ${isConnected ? 'status-dot-active' : 'status-dot-offline'}`} />
               </div>
+              <motion.button
+                onClick={handleClearChat}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                data-testid="button-clear-chat"
+              >
+                Clear
+              </motion.button>
             </div>
-          )}
 
-          {/* Chat Input */}
-          <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
-        </div>
-      </IslandLayout>
+            {messages.length === 0 ? (
+              <div className="flex-1 overflow-auto">
+                <EmptyState onExampleClick={handleExampleClick} />
+              </div>
+            ) : (
+              <div ref={desktopScrollRef} className="flex-1 overflow-auto">
+                <div className="max-w-3xl mx-auto px-6 py-6 space-y-6">
+                  <AnimatePresence mode="popLayout">
+                    {messages.map((message, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={springTransition}
+                      >
+                        <ChatMessage {...message} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {isTyping && <TypingIndicator />}
+                </div>
+              </div>
+            )}
 
+            <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+          </div>
+        </IslandLayout>
+      </div>
+
+      {/* === SHARED DIALOG === */}
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
-    </div>
+    </>
   );
 }

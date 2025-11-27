@@ -11,7 +11,6 @@ import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
 import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
@@ -129,7 +128,6 @@ function getImportanceBadgeVariant(importance: string): "default" | "secondary" 
 
 export default function Metrics() {
   const [triageOpen, setTriageOpen] = useState(false);
-  const isMobile = useIsMobile();
 
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({
     queryKey: ["/api/metrics/today"],
@@ -187,12 +185,9 @@ export default function Metrics() {
     },
   });
 
-  if (isMobile === undefined) {
-    return null;
-  }
-
-  if (isMobile) {
-    return (
+  return (
+    <>
+      {/* === MOBILE VIEW (CSS-hidden on desktop) === */}
       <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-metrics">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
@@ -320,14 +315,11 @@ export default function Metrics() {
           </div>
         </ScrollArea>
 
-        <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
       </div>
-    );
-  }
 
-  return (
-    <div className="h-screen hidden md:flex gradient-bg" data-testid="page-metrics">
-      <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
+      {/* === DESKTOP VIEW (CSS-hidden on mobile) === */}
+      <div className="h-screen hidden md:flex gradient-bg" data-testid="page-metrics-desktop">
+        <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
       <IslandLayout>
         <div className="h-full flex flex-col">
@@ -804,8 +796,10 @@ export default function Metrics() {
           </ScrollArea>
         </div>
       </IslandLayout>
+      </div>
 
+      {/* === SHARED DIALOG === */}
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
-    </div>
+    </>
   );
 }
