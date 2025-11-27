@@ -197,7 +197,7 @@ function StatusColumn({
         </span>
       </div>
       
-      <div className="flex-1 rounded-[2rem] border border-white/5 bg-black/20 p-2 overflow-hidden">
+      <div className="flex-1 rounded-[2rem] border border-white/[0.03] bg-black/40 p-2 overflow-hidden shadow-inner">
         <Droppable droppableId={status}>
           {(provided, snapshot) => (
             <div
@@ -731,7 +731,7 @@ export default function Moves() {
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col space-bg" data-testid="page-moves">
+      <div className="h-screen flex flex-col gradient-bg" data-testid="page-moves">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Moves</h1>
@@ -801,7 +801,7 @@ export default function Moves() {
   }
 
   return (
-    <div className="h-screen flex" data-testid="page-moves">
+    <div className="h-screen flex gradient-bg" data-testid="page-moves">
       <GlassSidebar onTriageClick={() => setTriageDialogOpen(true)} />
 
       <IslandLayout>

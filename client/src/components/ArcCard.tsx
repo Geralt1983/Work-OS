@@ -1,39 +1,20 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-interface ArcCardProps {
+interface ArcCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   glowColor?: "purple" | "cyan" | "pink" | "orange" | "emerald" | "none";
   onClick?: (e: React.MouseEvent) => void;
   className?: string;
-  "data-testid"?: string;
-  id?: string;
-  "aria-label"?: string;
-  "aria-labelledby"?: string;
-  "aria-describedby"?: string;
-  role?: string;
-  tabIndex?: number;
 }
 
-export function ArcCard({ 
-  children, 
-  className, 
-  glowColor = "none", 
-  onClick, 
-  "data-testid": testId,
-  id,
-  "aria-label": ariaLabel,
-  "aria-labelledby": ariaLabelledBy,
-  "aria-describedby": ariaDescribedBy,
-  role,
-  tabIndex
-}: ArcCardProps) {
+export function ArcCard({ children, className, glowColor = "none", onClick, ...props }: ArcCardProps) {
   const glowStyles = {
-    purple: "hover:shadow-glow-purple hover:border-purple-500/40 group-hover:shadow-glow-purple",
-    cyan: "hover:shadow-glow-cyan hover:border-cyan-500/40 group-hover:shadow-glow-cyan",
-    pink: "hover:shadow-glow-pink hover:border-pink-500/40 group-hover:shadow-glow-pink",
-    orange: "hover:shadow-glow-yellow hover:border-yellow-500/40 group-hover:shadow-glow-yellow",
-    emerald: "hover:shadow-glow-emerald hover:border-emerald-500/40 group-hover:shadow-glow-emerald",
+    purple: "hover:shadow-[0_0_30px_-5px_rgba(168,85,247,0.3)] hover:border-purple-500/50",
+    cyan: "hover:shadow-[0_0_30px_-5px_rgba(6,182,212,0.3)] hover:border-cyan-500/50",
+    pink: "hover:shadow-[0_0_30px_-5px_rgba(236,72,153,0.3)] hover:border-pink-500/50",
+    orange: "hover:shadow-[0_0_30px_-5px_rgba(249,115,22,0.3)] hover:border-orange-500/50",
+    emerald: "hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] hover:border-emerald-500/50",
     none: "hover:border-white/20",
   };
 
@@ -44,22 +25,16 @@ export function ArcCard({
       whileHover={{ y: -4, scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      data-testid={testId}
-      id={id}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      aria-describedby={ariaDescribedBy}
-      role={role}
-      tabIndex={tabIndex}
       className={cn(
-        "relative rounded-3xl bg-[#141420]/80 backdrop-blur-xl border border-white/5",
+        "relative rounded-3xl bg-[#13131f]/70 backdrop-blur-xl",
+        "border border-white/[0.08]",
         "transition-all duration-300 cursor-pointer overflow-hidden",
-        "after:absolute after:inset-0 after:rounded-3xl after:ring-1 after:ring-inset after:ring-white/10 after:pointer-events-none",
         glowStyles[glowColor],
         className
       )}
+      {...props}
     >
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-noise mix-blend-overlay" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-50" />
       
       <div className="relative z-10">
         {children}
