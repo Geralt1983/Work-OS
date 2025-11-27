@@ -2,35 +2,63 @@ import { Button } from "@/components/ui/button";
 import { Trash2, BarChart3, ListTodo } from "lucide-react";
 import { Link } from "wouter";
 
-// Magneto helmet icon - cyberpunk triage button
+// Magneto helmet icon - based on the classic X-Men design
 function MagnetoIcon({ className }: { className?: string }) {
   return (
     <svg 
       viewBox="0 0 24 24" 
-      fill="currentColor" 
+      fill="none" 
       className={className}
       aria-label="Triage"
     >
-      {/* Helmet base */}
+      {/* Main helmet - crimson red */}
       <path 
-        d="M12 2C7 2 3 6.5 3 11v2c0 1.5.5 3 1.5 4.2L6 19v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2l1.5-1.8c1-1.2 1.5-2.7 1.5-4.2v-2c0-4.5-4-9-9-9z" 
+        d="M12 1L10 3C8.5 3 6 5 5 8L4 11V15L5 18L7 21H17L19 18L20 15V11L19 8C18 5 15.5 3 14 3L12 1Z" 
+        fill="#b91c1c"
+      />
+      {/* Crown point/crest at top */}
+      <path 
+        d="M12 1L10.5 4L12 2.5L13.5 4L12 1Z" 
         fill="#dc2626"
       />
-      {/* Helmet shine */}
+      {/* Left purple side guard */}
       <path 
-        d="M6 8c0-3 2.7-5.5 6-5.5s6 2.5 6 5.5" 
-        fill="none" 
+        d="M5 8L4 11V15L5 18L7 17V10L5 8Z" 
+        fill="#7c3aed"
+      />
+      {/* Right purple side guard */}
+      <path 
+        d="M19 8L20 11V15L19 18L17 17V10L19 8Z" 
+        fill="#7c3aed"
+      />
+      {/* Face opening - dark void */}
+      <path 
+        d="M8 10C8 9 9.5 7 12 7C14.5 7 16 9 16 10V16C16 17 15 18 14 18H10C9 18 8 17 8 16V10Z" 
+        fill="#0a0a14"
+      />
+      {/* Left eye - glowing cyan */}
+      <ellipse cx="9.5" cy="12" rx="1" ry="0.6" fill="#22d3d3">
+        <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+      </ellipse>
+      {/* Right eye - glowing cyan */}
+      <ellipse cx="14.5" cy="12" rx="1" ry="0.6" fill="#22d3d3">
+        <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+      </ellipse>
+      {/* Purple accent line down center forehead */}
+      <path 
+        d="M12 4L12 7" 
+        stroke="#a855f7" 
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      {/* Helmet shine highlight */}
+      <path 
+        d="M8 5C9 4 10.5 3.5 12 3.5C13.5 3.5 15 4 16 5" 
         stroke="#ef4444" 
-        strokeWidth="1.5"
+        strokeWidth="0.5"
+        fill="none"
+        opacity="0.6"
       />
-      {/* Face opening */}
-      <path 
-        d="M8 12c0-2.2 1.8-4 4-4s4 1.8 4 4v3c0 .5-.5 1-1 1H9c-.5 0-1-.5-1-1v-3z" 
-        fill="#0a0a14" 
-      />
-      {/* Eye slits */}
-      <rect x="9" y="11" width="2" height="1.5" rx="0.5" fill="#dc2626" />
-      <rect x="13" y="11" width="2" height="1.5" rx="0.5" fill="#dc2626" />
     </svg>
   );
 }
