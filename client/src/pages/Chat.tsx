@@ -178,7 +178,7 @@ export default function Chat() {
 
   // Desktop layout with sidebar
   return (
-    <div className="h-screen flex" data-testid="page-chat">
+    <div className="h-screen flex gradient-bg" data-testid="page-chat">
       {/* Glass Sidebar */}
       <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
