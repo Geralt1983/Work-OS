@@ -101,6 +101,11 @@ export interface IStorage {
     averageMovesPerDay: number;
     totalMoves: number;
     totalMinutes: number;
+    momentum: {
+      trend: "up" | "down" | "stable";
+      percentChange: number;
+      message: string;
+    };
   }>;
   getClientMetrics(): Promise<Array<{
     clientName: string;
@@ -695,8 +700,14 @@ class DatabaseStorage implements IStorage {
     averageMovesPerDay: number;
     totalMoves: number;
     totalMinutes: number;
+    momentum: {
+      trend: "up" | "down" | "stable";
+      percentChange: number;
+      message: string;
+    };
   }> {
-    const logs = await this.getWeeklyLogs(7);
+    // Fetch 14 days to compare this week vs last week
+    const logs = await this.getWeeklyLogs(14);
     const targetMinutes = 180;
     
     // Create a map of existing logs by date
@@ -705,7 +716,7 @@ class DatabaseStorage implements IStorage {
       logsByDate.set(log.date, log);
     }
     
-    // Generate array of last 7 days in chronological order
+    // Generate array of last 7 days in chronological order (current week)
     const days: Array<{
       date: string;
       movesCompleted: number;
@@ -713,14 +724,21 @@ class DatabaseStorage implements IStorage {
       pacingPercent: number;
     }> = [];
     
+    let currentWeekMoves = 0;
+    let previousWeekMoves = 0;
+    const today = new Date();
+    
+    // Calculate Current Week (Last 7 days including today)
     for (let i = 6; i >= 0; i--) {
-      const date = new Date();
+      const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = getLocalDateString(date);
       
       const log = logsByDate.get(dateStr);
       const completedMoves = log ? (log.completedMoves as string[] || []) : [];
       const movesCompleted = completedMoves.length;
+      currentWeekMoves += movesCompleted;
+      
       const estimatedMinutes = movesCompleted * 20;
       const pacingPercent = targetMinutes > 0 
         ? Math.min(Math.round((estimatedMinutes / targetMinutes) * 100), 100)
@@ -734,7 +752,41 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    const totalMoves = days.reduce((sum, d) => sum + d.movesCompleted, 0);
+    // Calculate Previous Week (Days 8-14)
+    for (let i = 13; i >= 7; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = getLocalDateString(date);
+      const log = logsByDate.get(dateStr);
+      const movesCompleted = log ? (log.completedMoves as string[] || []).length : 0;
+      previousWeekMoves += movesCompleted;
+    }
+    
+    // Calculate Momentum
+    let trend: "up" | "down" | "stable" = "stable";
+    let percentChange = 0;
+    let message = "Steady flow";
+    
+    if (previousWeekMoves === 0) {
+      if (currentWeekMoves > 0) {
+        trend = "up";
+        percentChange = 100;
+        message = "Building momentum";
+      }
+    } else {
+      const rawChange = ((currentWeekMoves - previousWeekMoves) / previousWeekMoves) * 100;
+      percentChange = Math.round(Math.abs(rawChange));
+      
+      if (rawChange >= 10) {
+        trend = "up";
+        message = "Accelerating";
+      } else if (rawChange <= -10) {
+        trend = "down";
+        message = "Cooling down";
+      }
+    }
+    
+    const totalMoves = currentWeekMoves;
     const totalMinutes = totalMoves * 20;
     // Average over days with actual data
     const daysWithData = days.filter(d => d.movesCompleted > 0).length;
@@ -745,6 +797,11 @@ class DatabaseStorage implements IStorage {
       averageMovesPerDay,
       totalMoves,
       totalMinutes,
+      momentum: {
+        trend,
+        percentChange,
+        message,
+      },
     };
   }
 

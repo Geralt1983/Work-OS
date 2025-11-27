@@ -8,7 +8,7 @@ import {
   Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, 
   Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, 
   ThumbsUp, ThumbsDown, Minus, AlertTriangle, Star, Loader2,
-  MessageSquare, List, BarChart3
+  MessageSquare, List, BarChart3, ArrowUpRight, ArrowDownRight, Activity
 } from "lucide-react";
 import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -41,6 +41,11 @@ interface WeeklyMetrics {
   averageMovesPerDay: number;
   totalMoves: number;
   totalMinutes: number;
+  momentum: {
+    trend: "up" | "down" | "stable";
+    percentChange: number;
+    message: string;
+  };
 }
 
 interface ClientMetric {
@@ -176,9 +181,34 @@ export default function Metrics() {
       <ArcCard glowColor="cyan" className="w-full">
         <div className="p-5 sm:p-6">
           <div className="flex items-center justify-between pb-6">
-            <div className="text-lg font-semibold flex items-center gap-2 text-white">
-              <TrendingUp className="h-5 w-5 text-cyan-400" />
-              Weekly Trends
+            <div className="flex flex-col gap-1">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                <TrendingUp className="h-5 w-5 text-cyan-400" />
+                Weekly Trends
+              </div>
+              {/* Momentum Velocity Indicator */}
+              {weeklyMetrics && (
+                <div className="flex items-center gap-1.5">
+                  {weeklyMetrics.momentum.trend === "up" && (
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                      <ArrowUpRight className="w-3 h-3" />
+                      {weeklyMetrics.momentum.percentChange}% {weeklyMetrics.momentum.message}
+                    </span>
+                  )}
+                  {weeklyMetrics.momentum.trend === "down" && (
+                    <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                      <ArrowDownRight className="w-3 h-3" />
+                      {weeklyMetrics.momentum.percentChange}% {weeklyMetrics.momentum.message}
+                    </span>
+                  )}
+                  {weeklyMetrics.momentum.trend === "stable" && (
+                    <span className="flex items-center gap-1 text-xs font-bold text-cyan-400">
+                      <Activity className="w-3 h-3" />
+                      {weeklyMetrics.momentum.message}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
               {weeklyHours}h / 15h
