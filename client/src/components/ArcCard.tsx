@@ -7,9 +7,27 @@ interface ArcCardProps {
   onClick?: (e: React.MouseEvent) => void;
   className?: string;
   "data-testid"?: string;
+  id?: string;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  role?: string;
+  tabIndex?: number;
 }
 
-export function ArcCard({ children, className, glowColor = "none", onClick, "data-testid": testId }: ArcCardProps) {
+export function ArcCard({ 
+  children, 
+  className, 
+  glowColor = "none", 
+  onClick, 
+  "data-testid": testId,
+  id,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+  "aria-describedby": ariaDescribedBy,
+  role,
+  tabIndex
+}: ArcCardProps) {
   const glowStyles = {
     purple: "hover:shadow-glow-purple hover:border-purple-500/40 group-hover:shadow-glow-purple",
     cyan: "hover:shadow-glow-cyan hover:border-cyan-500/40 group-hover:shadow-glow-cyan",
@@ -27,6 +45,12 @@ export function ArcCard({ children, className, glowColor = "none", onClick, "dat
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
       data-testid={testId}
+      id={id}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
+      role={role}
+      tabIndex={tabIndex}
       className={cn(
         "relative rounded-3xl bg-[#141420]/80 backdrop-blur-xl border border-white/5",
         "transition-all duration-300 cursor-pointer overflow-hidden",

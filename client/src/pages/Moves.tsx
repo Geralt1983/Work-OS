@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -85,7 +84,6 @@ function MoveCard({
   const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
   const normalizedDrainType = normalizeDrainType(move.drainType);
   const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
-  
   const daysOld = getDaysOld(move.createdAt);
   const isStale = daysOld >= 10 && move.status === "backlog";
 
@@ -114,12 +112,12 @@ function MoveCard({
       <ArcCard 
         glowColor={getGlow()} 
         onClick={onSelect}
+        data-testid={`arccard-move-${move.id}`}
         className={isDragging ? "ring-2 ring-purple-500 shadow-2xl z-50 rotate-2 scale-105" : ""}
       >
         <div className="p-5 flex flex-col gap-4">
           <div className="flex justify-between items-start gap-3">
             <div className="flex-1 space-y-2">
-              {/* Client Pill */}
               <div className="flex items-center gap-2">
                 {client && (
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold bg-white/5 border border-white/10 text-muted-foreground/80">
@@ -133,13 +131,11 @@ function MoveCard({
                 )}
               </div>
               
-              {/* Title */}
               <h4 className="font-semibold text-[15px] leading-snug text-white/90" data-testid={`text-move-title-${move.id}`}>
                 {move.title}
               </h4>
             </div>
 
-            {/* Checkbox Action */}
             {move.status !== "done" && (
               <Button
                 size="icon"
@@ -154,7 +150,6 @@ function MoveCard({
             )}
           </div>
 
-          {/* Footer Metadata */}
           <div className="flex items-center justify-between pt-3 border-t border-white/5">
             <div className="flex items-center gap-3">
               {effortLevel && (
@@ -616,7 +611,10 @@ export default function Moves() {
 
   useEffect(() => {
     localStorage.setItem("moves-show-backlog", String(showBacklog));
-  }, [showBacklog]);
+    if (!showBacklog && statusFilter === "backlog") {
+      setStatusFilter("all");
+    }
+  }, [showBacklog, statusFilter]);
 
   useEffect(() => {
     localStorage.setItem("moves-view-mode", viewMode);
@@ -857,45 +855,45 @@ export default function Moves() {
 
           {/* Filter Bar */}
           <div className="px-6 py-3 flex items-center gap-4 flex-wrap border-b border-white/5" data-testid="filter-bar">
-        <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="w-[160px]" data-testid="select-client-filter">
-            <SelectValue placeholder="All Clients" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Clients</SelectItem>
-            {clients.map(client => (
-              <SelectItem key={client.id} value={client.id.toString()}>
-                {client.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select value={clientFilter} onValueChange={setClientFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="select-client-filter">
+                <SelectValue placeholder="All Clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Clients</SelectItem>
+                {clients.map(client => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="queued">Queued</SelectItem>
-            {showBacklog && <SelectItem value="backlog">Backlog</SelectItem>}
-          </SelectContent>
-        </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="queued">Queued</SelectItem>
+                {showBacklog && <SelectItem value="backlog">Backlog</SelectItem>}
+              </SelectContent>
+            </Select>
 
-        <Select value={drainFilter} onValueChange={setDrainFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="select-drain-filter">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {DRAIN_TYPES.map(drain => (
-              <SelectItem key={drain} value={drain}>
-                {DRAIN_LABELS[drain]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select value={drainFilter} onValueChange={setDrainFilter}>
+              <SelectTrigger className="w-[140px]" data-testid="select-drain-filter">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {DRAIN_TYPES.map(drain => (
+                  <SelectItem key={drain} value={drain}>
+                    {DRAIN_LABELS[drain]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <div className="flex items-center gap-2 ml-auto">
               <Switch
@@ -919,7 +917,7 @@ export default function Moves() {
           <div className="flex-1 overflow-auto p-6">
             {viewMode === "board" ? (
               <DragDropContext onDragEnd={handleDragEnd}>
-                <div className="flex gap-6 min-w-max">
+                <div className="flex gap-6 min-w-max h-full">
                   <StatusColumn 
                     status="active" 
                     moves={filteredMoves} 
