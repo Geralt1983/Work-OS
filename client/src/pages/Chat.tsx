@@ -127,7 +127,7 @@ export default function Chat() {
   // Mobile layout - no sidebar
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-[#030309] text-foreground" data-testid="page-chat">
+      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-chat">
         {/* Mobile Header with Nav */}
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
@@ -199,7 +199,7 @@ export default function Chat() {
 
   // Desktop layout with sidebar
   return (
-    <div className="h-screen flex gradient-bg" data-testid="page-chat">
+    <div className="h-screen hidden md:flex gradient-bg" data-testid="page-chat">
       {/* Glass Sidebar */}
       <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 

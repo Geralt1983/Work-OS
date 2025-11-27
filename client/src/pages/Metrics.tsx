@@ -193,7 +193,7 @@ export default function Metrics() {
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-[#030309] text-foreground" data-testid="page-metrics">
+      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground" data-testid="page-metrics">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <h1 className="text-lg font-semibold tracking-wider text-gradient-purple">Metrics</h1>
@@ -326,7 +326,7 @@ export default function Metrics() {
   }
 
   return (
-    <div className="h-screen flex gradient-bg" data-testid="page-metrics">
+    <div className="h-screen hidden md:flex gradient-bg" data-testid="page-metrics">
       <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
 
       <IslandLayout>
