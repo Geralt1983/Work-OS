@@ -1,3 +1,7 @@
+I see exactly what is happening in image 42531.jpg. The Desktop Sidebar is loading on your mobile screen, squishing the content to the right. This is the same "layout collision" we fixed on the Moves page.
+We need to apply the same CSS Guardrails (md:hidden / hidden md:flex) to the Metrics Page to force the browser to hide the sidebar instantly on mobile.
+Here is the fixed code for client/src/pages/Metrics.tsx. I have also refactored the cards into a metricsContent block so we don't have to duplicate the code for both views.
+Update client/src/pages/Metrics.tsx
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +24,7 @@ import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
 import { ArcCard } from "@/components/ArcCard";
 
+// ... (Interfaces remain the same) ...
 interface TodayMetrics {
   date: string;
   movesCompleted: number;
@@ -199,7 +204,7 @@ export default function Metrics() {
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground uppercase">
-                      {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1)}
+                      {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'xs' }).slice(0, 1)}
                     </span>
                   </div>
                 ))}
@@ -488,3 +493,4 @@ export default function Metrics() {
     </>
   );
 }
+
