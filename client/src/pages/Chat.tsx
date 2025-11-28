@@ -112,7 +112,7 @@ export default function Chat() {
 
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-chat">
+      <div className="h-[100dvh] flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-chat">
         <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 z-50">
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
           <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Work OS</h1>

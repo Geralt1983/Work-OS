@@ -1,3 +1,9 @@
+The "off center" look is caused by two things:
+ * Duplicate Footer: The "One Move Per Client" text exists in both the ChatInput (bottom bar) and the EmptyState (center screen). The hidden duplicate in the center is pushing your logo and buttons upwards, throwing off the vertical alignment.
+ * Viewport Height: On mobile, h-screen doesn't always account for the URL bar, which can squeeze the layout.
+Here is the fix.
+1. Remove the Duplicate Footer (client/src/components/EmptyState.tsx)
+I am removing the bottom text from this component so it doesn't push the content up. The text will still exist in your Input Bar where it belongs.
 import { motion } from "framer-motion";
 import { Sparkles, MessageSquare, ListTodo, Zap, Calendar } from "lucide-react";
 
@@ -20,6 +26,7 @@ const springTransition = {
 
 export default function EmptyState({ onExampleClick }: EmptyStateProps) {
   return (
+    // Added pb-12 to visually balance the center since the input bar takes up bottom space
     <div className="h-full flex flex-col items-center justify-center p-6 sm:p-8 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -97,6 +104,17 @@ export default function EmptyState({ onExampleClick }: EmptyStateProps) {
           </div>
         </motion.div>
       </motion.div>
+      
+      {/* Removed the footer text div here to prevent double-footer offset */}
     </div>
   );
 }
+
+2. Use Dynamic Viewport Height (client/src/pages/Chat.tsx)
+I am changing h-screen to h-[100dvh] for the mobile container. This ensures the app fits the actual visible screen area on phones (accounting for the address bar), preventing the layout from feeling "pushed" or cut off.
+Find this line in the Mobile View block:
+<div className="h-screen flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-chat">
+
+Change it to:
+<div className="h-[100dvh] flex flex-col bg-[#030309] text-foreground font-sans overflow-hidden" data-testid="page-chat">
+
