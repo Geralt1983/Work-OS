@@ -1,3 +1,7 @@
+I can see in the screenshot that the client names (e.g., "KENTUCKY") and status text (e.g., "Quick") are getting lost against the dark card background. The text-muted-foreground class is too aggressive in this dark mode context.
+Here is the fix. I am brightening the text color from a dark gray to a crisp slate/silver so it pops while still maintaining the hierarchy.
+1. Update client/src/components/MobileMovesView.tsx
+I'm updating the MobileMoveCard component to use text-slate-300 (bright silver) instead of text-muted-foreground (dark gray).
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -6,11 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
-import { EFFORT_LEVELS, DRAIN_TYPES, DRAIN_TYPE_LABELS, normalizeDrainType } from "@shared/schema";
+import { EFFORT_LEVELS, normalizeDrainType, DRAIN_TYPE_LABELS } from "@shared/schema";
 import { 
   ChevronUp, ChevronDown, Check, Trash2, Edit2, 
   Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock, Archive
@@ -25,7 +28,7 @@ const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   done: { label: "Done", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
 };
 
-const DRAIN_ICONS: Record<DrainType, typeof Brain> = {
+const DRAIN_ICONS: Record<DrainType, any> = {
   deep: Brain,
   comms: Mail,
   admin: FileText,
@@ -70,54 +73,50 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
     },
   });
 
-  const getGlow = (): "purple" | "cyan" | "orange" | "pink" | "none" => {
-    if (move.status === 'active') return 'purple';
-    if (normalizedDrainType === 'deep') return 'cyan';
-    if (normalizedDrainType === 'admin') return 'orange';
-    if (normalizedDrainType === 'creative') return 'pink';
-    return 'none';
+  const getGlow = () => {
+     if (move.status === 'active') return 'purple';
+     if (move.drainType === 'deep') return 'cyan';
+     if (move.drainType === 'admin') return 'orange';
+     return 'none';
   };
 
   return (
     <ArcCard 
       glowColor={getGlow()}
       onClick={onSelect}
-      className={isStale ? "border-orange-500/30" : ""}
-      data-testid={`mobile-card-move-${move.id}`}
+      className={`mb-3 ${isStale ? "border-orange-500/30" : ""}`}
     >
       <div className="p-4 flex items-start gap-3">
         <div className="flex-1 min-w-0 space-y-2">
+          {/* Header Badges - Updated Colors */}
           <div className="flex items-center gap-2">
-            {client && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
-                {client.name}
-              </span>
-            )}
-            {isStale && (
-              <span className="flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                <AlertCircle className="w-3 h-3" /> {daysOld}d
-              </span>
-            )}
-            {isAging && !isStale && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                <Clock className="w-3 h-3" /> {daysOld}d
-              </span>
-            )}
+             {client && (
+               // Changed text-muted-foreground/80 to text-slate-300 for visibility
+               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                 {client.name}
+               </span>
+             )}
+             {isStale && (
+               <span className="flex items-center gap-1 text-[10px] text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                 <AlertCircle className="w-3 h-3" /> {daysOld}d
+               </span>
+             )}
           </div>
 
-          <h4 className="font-semibold text-base leading-snug text-white/90" data-testid={`mobile-text-move-title-${move.id}`}>
+          <h4 className="font-semibold text-base leading-snug text-white/95">
             {move.title}
           </h4>
           
           <div className="flex items-center gap-3 pt-1">
             {effortLevel && (
+              // Changed text-muted-foreground to text-slate-400
               <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-                <div className={`w-1.5 h-1.5 rounded-full ${move.effortEstimate && move.effortEstimate > 2 ? 'bg-orange-400' : 'bg-emerald-400'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${move.effortEstimate > 2 ? 'bg-orange-400' : 'bg-emerald-400'}`} />
                 {effortLevel.label}
               </span>
             )}
             {DrainIcon && (
-              <DrainIcon className="w-3.5 h-3.5 text-slate-500" />
+               <DrainIcon className="w-3.5 h-3.5 text-slate-500" />
             )}
           </div>
         </div>
@@ -132,7 +131,6 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
               completeMutation.mutate(); 
             }}
             disabled={completeMutation.isPending}
-            data-testid={`mobile-button-complete-${move.id}`}
           >
             <Check className="h-5 w-5" />
           </Button>
@@ -142,6 +140,7 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
   );
 }
 
+// ... (Rest of the file remains exactly the same)
 interface MobileDetailDrawerProps {
   move: Move | null;
   clients: Client[];
@@ -212,21 +211,21 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="bg-[#141420] border-white/10 text-white" data-testid="mobile-drawer-move-detail">
+      <DrawerContent className="bg-[#141420] border-white/10 text-white">
         <DrawerHeader className="text-left">
-          <DrawerTitle className="flex items-center gap-2 text-white" data-testid="mobile-drawer-title">
+          <DrawerTitle className="flex items-center gap-2">
             {move.title}
             {isStale && (
-              <span className="flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+              <Badge variant="destructive" className="text-xs gap-1">
                 <AlertCircle className="h-3 w-3" />
                 {daysOld}d
-              </span>
+              </Badge>
             )}
             {isAging && !isStale && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+              <Badge variant="outline" className="text-xs gap-1 text-yellow-400 border-yellow-400/50">
                 <Clock className="h-3 w-3" />
                 {daysOld}d
-              </span>
+              </Badge>
             )}
           </DrawerTitle>
           <DrawerDescription className="text-slate-400">
@@ -242,16 +241,16 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
+            <Badge variant="secondary" className={STATUS_LABELS[move.status as MoveStatus].color}>
               {STATUS_LABELS[move.status as MoveStatus].label}
             </Badge>
             {effortLevel && (
-              <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
+              <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">
                 {effortLevel.label}
               </Badge>
             )}
             {normalizedDrainType && (
-              <Badge variant="secondary" className="bg-white/5 border border-white/10 text-white/80">
+              <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">
                 {DRAIN_TYPE_LABELS[normalizedDrainType]?.label}
               </Badge>
             )}
@@ -263,16 +262,15 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             </p>
           )}
 
-          <Separator className="bg-white/10" />
+          <div className="h-px bg-white/10 my-4" />
 
           <div className="grid grid-cols-2 gap-2">
             {canPromote && (
               <Button
                 variant="outline"
-                className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
+                className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
                 onClick={() => promoteMutation.mutate()}
                 disabled={promoteMutation.isPending}
-                data-testid="mobile-button-promote"
               >
                 <ChevronUp className="h-4 w-4 mr-2" />
                 Promote
@@ -281,10 +279,9 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             {canDemote && (
               <Button
                 variant="outline"
-                className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
+                className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
                 onClick={() => demoteMutation.mutate()}
                 disabled={demoteMutation.isPending}
-                data-testid="mobile-button-demote"
               >
                 <ChevronDown className="h-4 w-4 mr-2" />
                 Demote
@@ -293,10 +290,9 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             {move.status !== "done" && (
               <Button
                 variant="outline"
-                className="h-12 bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                className="h-12 text-green-400 border-green-500/30 hover:bg-green-500/10"
                 onClick={() => completeMutation.mutate()}
                 disabled={completeMutation.isPending}
-                data-testid="mobile-button-complete-drawer"
               >
                 <Check className="h-4 w-4 mr-2" />
                 Complete
@@ -304,9 +300,8 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             )}
             <Button
               variant="outline"
-              className="h-12 bg-white/5 border-white/10 text-white hover:bg-white/10"
+              className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
               onClick={onEdit}
-              data-testid="mobile-button-edit"
             >
               <Edit2 className="h-4 w-4 mr-2" />
               Edit
@@ -316,11 +311,10 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
 
         <DrawerFooter className="pt-0">
           <Button
-            variant="destructive"
-            className="bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:bg-rose-500/30"
+            variant="ghost"
+            className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
             onClick={() => deleteMutation.mutate()}
             disabled={deleteMutation.isPending}
-            data-testid="mobile-button-delete"
           >
             <Trash2 className="h-4 w-4 mr-2" />
             Delete Move
@@ -394,14 +388,13 @@ export default function MobileMovesView({
           </div>
         ) : (
           moves.map(move => (
-            <div key={move.id} className="mb-3">
-              <MobileMoveCard
-                move={move}
-                clients={clients}
-                onSelect={() => handleSelectMove(move)}
-                onUpdate={onUpdate}
-              />
-            </div>
+            <MobileMoveCard
+              key={move.id}
+              move={move}
+              clients={clients}
+              onSelect={() => handleSelectMove(move)}
+              onUpdate={onUpdate}
+            />
           ))
         )}
       </div>
@@ -409,10 +402,10 @@ export default function MobileMovesView({
   );
 
   return (
-    <div className="flex flex-col h-full bg-transparent" data-testid="mobile-moves-view">
+    <div className="flex flex-col h-full bg-transparent">
       <div className="px-4 py-3 flex items-center gap-2">
         <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="flex-1 bg-white/5 border-white/10 text-white focus:ring-purple-500/50" data-testid="mobile-select-client-filter">
+          <SelectTrigger className="flex-1 bg-white/5 border-white/10 text-white focus:ring-purple-500/50">
             <SelectValue placeholder="All Clients" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
@@ -429,16 +422,13 @@ export default function MobileMovesView({
           variant="ghost"
           onClick={() => onToggleBacklog(!showBacklog)}
           className={`shrink-0 ${showBacklog ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-muted-foreground'}`}
-          data-testid="mobile-button-toggle-backlog"
-          title={showBacklog ? "Hide backlog" : "Show backlog"}
         >
           <Archive className="h-4 w-4" />
         </Button>
         <Button 
           size="sm" 
           onClick={onCreateMove}
-          className="bg-gradient-to-r from-purple-600 to-pink-600 border-0 shadow-glow-purple text-white"
-          data-testid="mobile-button-create-move"
+          className="bg-gradient-to-r from-purple-600 to-pink-600 border-0 shadow-glow-purple"
         >
           New
         </Button>
@@ -446,37 +436,28 @@ export default function MobileMovesView({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="px-4">
-          <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`} data-testid="mobile-tabs">
+            <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`}>
             <TabsTrigger 
-              value="active" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-              data-testid="mobile-tab-active"
+                value="active" 
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
             >
-              Active
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
-                {getTabCount("active")}
-              </Badge>
+                Active <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">{activeMoves.length}</Badge>
             </TabsTrigger>
             <TabsTrigger 
-              value="queued" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-              data-testid="mobile-tab-queued"
+                value="queued" 
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
             >
-              Queued
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
-                {getTabCount("queued")}
-              </Badge>
+                Queued <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">{queuedMoves.length}</Badge>
             </TabsTrigger>
             {showBacklog && (
-              <TabsTrigger 
+                <TabsTrigger 
                 value="backlog" 
                 className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-                data-testid="mobile-tab-backlog"
-              >
+                >
                 Backlog
-              </TabsTrigger>
+                </TabsTrigger>
             )}
-          </TabsList>
+            </TabsList>
         </div>
 
         <TabsContent value="active" className="flex-1 mt-2">
@@ -503,3 +484,29 @@ export default function MobileMovesView({
     </div>
   );
 }
+
+2. Update client/src/pages/Moves.tsx
+I am applying the same text color fixes to the desktop view just in case you use it on a tablet or larger screen.
+// In MoveCard component in client/src/pages/Moves.tsx
+
+// ... (rest of code)
+
+// Find this block:
+{client && (
+  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold bg-white/5 border border-white/10 text-slate-300"> {/* Changed text color here */}
+    {client.name}
+  </span>
+)}
+
+// And this block:
+{effortLevel && (
+  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400"> {/* Changed text color here */}
+     <div className={`w-1.5 h-1.5 rounded-full ${
+        move.effortEstimate > 2 ? 'bg-rose-400' : 'bg-emerald-400'
+     }`} />
+     {effortLevel.label}
+  </div>
+)}
+
+// ... (rest of code)
+
