@@ -573,29 +573,55 @@ class DatabaseStorage implements IStorage {
   }
 
   async getBacklogHealth(): Promise<{ clientName: string; oldestDays: number; agingCount: number; totalCount: number; avgDays: number }[]> {
-    const entries = await this.getActiveBacklogEntries();
+    // 1. Get all active clients to map IDs to Names
+    const allClients = await this.getAllClientsEntity();
     
-    const clientStats = new Map<string, { tasks: number[]; }>();
+    // 2. Get ALL moves that are currently in backlog (Source of Truth)
+    const backlogMoves = await db.select().from(moves)
+      .where(eq(moves.status, "backlog"));
+
+    // 3. Get precise "entered backlog" timestamps if available
+    const entries = await db.select().from(backlogEntries)
+      .where(isNull(backlogEntries.promotedAt));
     
-    for (const entry of entries) {
-      const client = entry.clientName.toLowerCase();
-      if (!clientStats.has(client)) {
-        clientStats.set(client, { tasks: [] });
-      }
-      clientStats.get(client)!.tasks.push(entry.daysInBacklog || 0);
-    }
-    
-    return Array.from(clientStats.entries()).map(([clientName, stats]) => {
-      const tasks = stats.tasks;
-      const oldestDays = Math.max(...tasks, 0);
-      const agingCount = tasks.filter(d => d >= 7).length;
-      const avgDays = tasks.length > 0 ? Math.round(tasks.reduce((a, b) => a + b, 0) / tasks.length) : 0;
+    const entryMap = new Map<string, Date>();
+    entries.forEach(e => entryMap.set(e.taskId, e.enteredAt));
+
+    const clientStats = new Map<string, { ages: number[] }>();
+    const now = new Date();
+
+    for (const move of backlogMoves) {
+      if (!move.clientId) continue;
       
+      const client = allClients.find(c => c.id === move.clientId);
+      if (!client) continue;
+      
+      const clientName = client.name;
+      
+      // Determine age: Use precise "entered backlog" time if we have it,
+      // otherwise fall back to the Move's creation date.
+      const startDate = entryMap.get(String(move.id)) || move.createdAt;
+      const daysOld = Math.floor((now.getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (!clientStats.has(clientName)) {
+        clientStats.set(clientName, { ages: [] });
+      }
+      clientStats.get(clientName)!.ages.push(daysOld);
+    }
+
+    // 4. Aggregate stats
+    return Array.from(clientStats.entries()).map(([clientName, stats]) => {
+      const ages = stats.ages;
+      const oldestDays = ages.length > 0 ? Math.max(...ages) : 0;
+      const agingCount = ages.filter(d => d >= 7).length;
+      const totalCount = ages.length;
+      const avgDays = totalCount > 0 ? Math.round(ages.reduce((a, b) => a + b, 0) / totalCount) : 0;
+
       return {
         clientName,
         oldestDays,
         agingCount,
-        totalCount: tasks.length,
+        totalCount,
         avgDays
       };
     }).sort((a, b) => b.oldestDays - a.oldestDays);
