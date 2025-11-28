@@ -927,9 +927,9 @@ export default function Moves() {
 
       {/* === SHARED DIALOGS (render once, work for both layouts) === */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="rounded-3xl border-white/10 bg-background/95 backdrop-blur-xl">
+        <DialogContent className="bg-[#141420] border-white/10 text-white sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Create Move</DialogTitle>
+            <DialogTitle className="text-white">Create Move</DialogTitle>
           </DialogHeader>
           <MoveForm clients={clients} onSuccess={handleMoveCreated} />
         </DialogContent>

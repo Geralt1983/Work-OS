@@ -69,10 +69,11 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel className="text-slate-400">Title</FormLabel>
               <FormControl>
                 <Input 
                   placeholder="What needs to be done?" 
+                  className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-purple-500/50"
                   {...field} 
                   data-testid="input-move-title"
                 />
@@ -87,11 +88,11 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description (optional)</FormLabel>
+              <FormLabel className="text-slate-400">Description (optional)</FormLabel>
               <FormControl>
                 <Textarea 
                   placeholder="Add more details..." 
-                  className="resize-none"
+                  className="resize-none bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-purple-500/50"
                   {...field} 
                   data-testid="input-move-description"
                 />
@@ -107,14 +108,14 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
             name="clientId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Client</FormLabel>
+                <FormLabel className="text-slate-400">Client</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger data-testid="select-move-client">
+                    <SelectTrigger className="bg-black/20 border-white/10 text-white" data-testid="select-move-client">
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
                     <SelectItem value="none">No client</SelectItem>
                     {clients.map(client => (
                       <SelectItem key={client.id} value={client.id.toString()}>
@@ -133,14 +134,14 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
             name="status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Status</FormLabel>
+                <FormLabel className="text-slate-400">Status</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger data-testid="select-move-status">
+                    <SelectTrigger className="bg-black/20 border-white/10 text-white" data-testid="select-move-status">
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="queued">Queued</SelectItem>
                     <SelectItem value="backlog">Backlog</SelectItem>
@@ -158,17 +159,17 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
             name="effortEstimate"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Effort</FormLabel>
+                <FormLabel className="text-slate-400">Effort</FormLabel>
                 <Select 
                   onValueChange={(v) => field.onChange(parseInt(v))} 
                   value={field.value?.toString()}
                 >
                   <FormControl>
-                    <SelectTrigger data-testid="select-move-effort">
+                    <SelectTrigger className="bg-black/20 border-white/10 text-white" data-testid="select-move-effort">
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
                     {EFFORT_LEVELS.map(level => (
                       <SelectItem key={level.value} value={level.value.toString()}>
                         {level.label} ({level.description})
@@ -186,14 +187,14 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
             name="drainType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Drain Type</FormLabel>
+                <FormLabel className="text-slate-400">Drain Type</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger data-testid="select-move-drain">
+                    <SelectTrigger className="bg-black/20 border-white/10 text-white" data-testid="select-move-drain">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
                     <SelectItem value="none">None</SelectItem>
                     {DRAIN_TYPES.map(type => (
                       <SelectItem key={type} value={type}>
@@ -211,6 +212,7 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
         <div className="flex justify-end gap-2 pt-4">
           <Button 
             type="submit" 
+            className="bg-gradient-to-r from-purple-600 to-pink-600 border-0 text-white"
             disabled={createMutation.isPending}
             data-testid="button-submit-move"
           >
