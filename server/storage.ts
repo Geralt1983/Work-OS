@@ -842,26 +842,45 @@ class DatabaseStorage implements IStorage {
     importance: string;
     tier: string;
   }>> {
-    const clients = await this.getAllClients();
+    const allClients = await this.getAllClientsEntity();
+    const memories = await this.getAllClients();
+    const memoryMap = new Map(memories.map(m => [m.clientName.toLowerCase(), m]));
     const now = new Date();
-    
-    return clients.map(client => {
+
+    const metrics = await Promise.all(allClients.map(async (client) => {
+      const completedMoves = await db.select().from(moves)
+        .where(and(
+          eq(moves.clientId, client.id),
+          eq(moves.status, "done")
+        ))
+        .orderBy(desc(moves.completedAt));
+        
+      const lastMove = completedMoves[0];
+      const totalMoves = completedMoves.length;
+      
       let daysSinceLastMove = 999;
-      if (client.lastMoveAt) {
-        const lastMove = new Date(client.lastMoveAt);
-        daysSinceLastMove = Math.floor((now.getTime() - lastMove.getTime()) / (1000 * 60 * 60 * 24));
+      if (lastMove?.completedAt) {
+        const lastDate = new Date(lastMove.completedAt);
+        daysSinceLastMove = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      } else {
+        const createdDate = new Date(client.createdAt);
+        daysSinceLastMove = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
       }
       
+      const memory = memoryMap.get(client.name.toLowerCase());
+      
       return {
-        clientName: client.clientName,
-        totalMoves: client.totalMoves || 0,
-        lastMoveAt: client.lastMoveAt,
+        clientName: client.name,
+        totalMoves,
+        lastMoveAt: lastMove?.completedAt || null,
         daysSinceLastMove,
-        sentiment: client.sentiment || "neutral",
-        importance: client.importance || "medium",
-        tier: client.tier || "active",
+        sentiment: memory?.sentiment || "neutral",
+        importance: memory?.importance || "medium",
+        tier: memory?.tier || "active",
       };
-    });
+    }));
+    
+    return metrics.sort((a, b) => b.daysSinceLastMove - a.daysSinceLastMove);
   }
 
   async getDrainTypeMetrics(daysBack: number = 30): Promise<Array<{
