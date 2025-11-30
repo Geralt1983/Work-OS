@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage, getLocalDateString } from "./storage";
+import { storage as defaultStorage, getLocalDateString, type IStorage } from "./storage";
 import { processChat, generateMorningBriefing } from "./openai-service";
 import { runTriage, runTriageWithAutoRemediation } from "./pipeline-tools";
 import { z } from "zod";
@@ -32,7 +32,8 @@ const updateClientSchema = z.object({
   isActive: z.number().optional(),
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, storageArg?: IStorage): Promise<Server> {
+  const storage = storageArg || defaultStorage;
 
   app.post("/api/sessions", async (req, res) => {
     try {
