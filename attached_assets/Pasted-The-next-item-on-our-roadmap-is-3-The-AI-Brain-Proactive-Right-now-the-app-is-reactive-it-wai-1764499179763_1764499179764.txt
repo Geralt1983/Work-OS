@@ -1,0 +1,174 @@
+The next item on our roadmap is 3. The "AI" Brain (Proactive).
+Right now, the app is reactive—it waits for you to tell it what to do. We are going to make it proactive so it manages you.
+We will implement:
+ * The Morning Briefing: On your first login of the day, the AI will automatically analyze your board, fix stale tasks, and present a prioritized plan for your 3-hour block.
+ * Smart De-Clutter: It will automatically demote "Active" tasks that you didn't finish yesterday back to "Queued," keeping your "Today" list fresh.
+Here is the implementation.
+1. Update server/storage.ts
+We need a method to find and demote "Active" tasks that are older than 24 hours (stuck).
+// ... existing imports
+import { moves } from "@shared/schema"; // Ensure 'moves' is imported
+// ... inside DatabaseStorage class
+
+  // Add this new method to DatabaseStorage class
+  async demoteStaleActiveMoves(): Promise<string[]> {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1); // 24 hours ago
+
+    // Find active moves created more than 24h ago (simplified "stale" check)
+    // Ideally we'd track 'lastMovedAt', but createdAt works for 'Active' since they should be short-lived
+    const staleMoves = await db.select().from(moves).where(
+      and(
+        eq(moves.status, "active"),
+        // In a real app we'd use a specific 'statusUpdatedAt' field, 
+        // but for now we assume if it was created >24h ago and is still active, it's stale.
+        // A better metric might be checking if it wasn't touched in the last daily log.
+        // For safety, let's just grab ACTIVE moves created before Today (00:00).
+        // Actually, let's just return them for the AI to decide, or auto-demote.
+        // Let's auto-demote for the "Magic" feel.
+        gte(moves.createdAt, new Date(0)) // Just a placeholder clause if needed, but we filter in memory or query
+      )
+    );
+
+    const demotedTitles: string[] = [];
+    const now = new Date();
+    
+    for (const move of staleMoves) {
+        // Check if created before today (start of day)
+        const moveDate = new Date(move.createdAt);
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+
+        if (moveDate < startOfToday) {
+             await this.updateMove(move.id, { status: 'queued' });
+             demotedTitles.push(move.title);
+        }
+    }
+    
+    return demotedTitles;
+  }
+
+2. Update server/openai-service.ts
+We need a function to generate the briefing text.
+// ... imports
+import { storage } from "./storage"; // Ensure storage is imported
+
+// Add this new export function
+export async function generateMorningBriefing(sessionId: string) {
+  // 1. Run Smart De-Clutter (Auto-demote yesterdays active tasks)
+  const demoted = await storage.demoteStaleActiveMoves();
+  
+  // 2. Run Triage (Get health stats)
+  const health = await storage.getBacklogHealth();
+  const todayMetrics = await storage.getTodayMetrics();
+  
+  // 3. Construct the Prompt
+  const prompt = `
+    You are Work OS. It is morning. Generate a brief, punchy morning briefing.
+    
+    Context:
+    - You just auto-demoted these tasks from 'Active' to 'Queued' because they weren't finished yesterday: ${JSON.stringify(demoted)}
+    - Backlog Health: ${JSON.stringify(health.slice(0, 3))} (showing top 3 clients)
+    - Today's Target: ${todayMetrics.targetMinutes} minutes.
+    
+    Task:
+    1. Greeting (Good morning).
+    2. If tasks were demoted, mention "I moved X stale tasks back to queue to clear your board."
+    3. Suggest 1 high-impact move to start the day based on the backlog health or a random client.
+    4. Keep it under 3 sentences. Make it motivating.
+  `;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "system", content: prompt }],
+  });
+
+  const content = response.choices[0].message.content || "Good morning. Ready to move clients forward?";
+
+  // Save to history
+  await storage.createMessage({
+    sessionId,
+    role: "assistant",
+    content,
+  });
+
+  return content;
+}
+
+3. Update server/routes.ts
+Add the endpoint to trigger the briefing.
+// ... existing imports
+import { generateMorningBriefing } from "./openai-service"; // Import it
+
+// ... inside registerRoutes
+  app.post("/api/briefing", async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) return res.status(400).json({ error: "Session ID required" });
+      
+      const briefing = await generateMorningBriefing(sessionId);
+      res.json({ content: briefing });
+    } catch (error) {
+      console.error("Briefing error:", error);
+      res.status(500).json({ error: "Failed to generate briefing" });
+    }
+  });
+
+4. Update client/src/pages/Chat.tsx
+Trigger the briefing once per day on the client side.
+// ... imports
+// Add these imports if missing
+import { differenceInCalendarDays } from "date-fns"; 
+
+// ... inside Chat component
+export default function Chat() {
+  // ... existing state
+  const [hasCheckedBriefing, setHasCheckedBriefing] = useState(false);
+
+  // ... existing useEffects
+
+  // NEW: Morning Briefing Effect
+  useEffect(() => {
+    if (!sessionId || hasCheckedBriefing) return;
+
+    const lastBriefing = localStorage.getItem("last_briefing_date");
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // Check if we already ran a briefing today
+    if (lastBriefing !== today) {
+       const runBriefing = async () => {
+          try {
+             // Save immediately to prevent double-fire
+             localStorage.setItem("last_briefing_date", today);
+             setHasCheckedBriefing(true);
+             
+             // Call API
+             await apiRequest("POST", "/api/briefing", { sessionId });
+             
+             // Refresh messages
+             const res = await fetch(`/api/sessions/${sessionId}/messages`);
+             if (res.ok) {
+               const history = await res.json();
+               setMessages(history.map((msg: any) => ({
+                 role: msg.role,
+                 content: msg.content,
+                 timestamp: new Date(msg.timestamp),
+                 taskCard: msg.taskCard
+               })));
+             }
+          } catch (e) {
+             console.error("Briefing failed", e);
+          }
+       };
+       runBriefing();
+    } else {
+       setHasCheckedBriefing(true);
+    }
+  }, [sessionId, hasCheckedBriefing]);
+
+  // ... rest of component
+
+What this does:
+ * Tomorrow Morning: When you open the app, it will know it's a new day.
+ * Auto-Clean: It will take anything you left in "Active" (Today) and push it back to "Queued" (Next) so you start with a fresh slate.
+ * The Briefing: It will send you a chat message: "Good morning. I moved 'Email Raleigh' back to the queue since it wasn't finished. Let's start fresh—how about tackling the Memphis build plan?"

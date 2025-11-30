@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, getLocalDateString } from "./storage";
-import { processChat } from "./openai-service";
+import { processChat, generateMorningBriefing } from "./openai-service";
 import { runTriage, runTriageWithAutoRemediation } from "./pipeline-tools";
 import { z } from "zod";
 import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } from "@shared/schema";
@@ -490,6 +490,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error running triage with auto-fix:", error);
       res.status(500).json({ error: "Failed to run triage with auto-fix" });
+    }
+  });
+
+  app.post("/api/briefing", async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        res.status(400).json({ error: "Session ID required" });
+        return;
+      }
+      
+      const briefing = await generateMorningBriefing(sessionId);
+      res.json({ content: briefing });
+    } catch (error) {
+      console.error("Briefing error:", error);
+      res.status(500).json({ error: "Failed to generate briefing" });
     }
   });
 

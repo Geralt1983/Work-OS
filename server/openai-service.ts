@@ -3,6 +3,7 @@ import { memoryTools, executeMemoryTool } from "./memory-tools";
 import { pipelineTools, executePipelineTool } from "./pipeline-tools";
 import { LEARNING_TOOL_DEFINITIONS, executeLearningTool } from "./learning-tools";
 import { backlogToolDefinitions, executeBacklogTool } from "./backlog-tools";
+import { storage } from "./storage";
 import type { Message } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -352,4 +353,41 @@ export async function processChat(
     content: assistantMessage.content || "Done.",
     taskCard,
   };
+}
+
+export async function generateMorningBriefing(sessionId: string): Promise<string> {
+  const demoted = await storage.demoteStaleActiveMoves();
+  
+  const health = await storage.getBacklogHealth();
+  const todayMetrics = await storage.getTodayMetrics();
+  
+  const prompt = `
+    You are Work OS. It is morning. Generate a brief, punchy morning briefing.
+    
+    Context:
+    - You just auto-demoted these tasks from 'Active' to 'Queued' because they weren't finished yesterday: ${JSON.stringify(demoted)}
+    - Backlog Health: ${JSON.stringify(health.slice(0, 3))} (showing top 3 clients)
+    - Today's Target: ${todayMetrics.targetMinutes} minutes.
+    
+    Task:
+    1. Greeting (Good morning).
+    2. If tasks were demoted, mention "I moved X stale tasks back to queue to clear your board."
+    3. Suggest 1 high-impact move to start the day based on the backlog health or a random client.
+    4. Keep it under 3 sentences. Make it motivating.
+  `;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "system", content: prompt }],
+  });
+
+  const content = response.choices[0].message.content || "Good morning. Ready to move clients forward?";
+
+  await storage.createMessage({
+    sessionId,
+    role: "assistant",
+    content,
+  });
+
+  return content;
 }

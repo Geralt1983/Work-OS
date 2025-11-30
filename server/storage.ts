@@ -143,6 +143,8 @@ export interface IStorage {
   demoteMove(id: number): Promise<Move | undefined>;
   deleteMove(id: number): Promise<void>;
   reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void>;
+  
+  demoteStaleActiveMoves(): Promise<string[]>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -1175,12 +1177,31 @@ class DatabaseStorage implements IStorage {
   }
 
   async reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void> {
-    // Update sort order based on position in array
     for (let i = 0; i < orderedIds.length; i++) {
       await db.update(moves)
         .set({ sortOrder: i })
         .where(eq(moves.id, orderedIds[i]));
     }
+  }
+
+  async demoteStaleActiveMoves(): Promise<string[]> {
+    const activeMoves = await db.select().from(moves).where(
+      eq(moves.status, "active")
+    );
+
+    const demotedTitles: string[] = [];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    for (const move of activeMoves) {
+      const moveDate = new Date(move.createdAt);
+      if (moveDate < startOfToday) {
+        await this.updateMove(move.id, { status: 'queued' });
+        demotedTitles.push(move.title);
+      }
+    }
+
+    return demotedTitles;
   }
 }
 

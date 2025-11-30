@@ -20,6 +20,7 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem("work_os_session_id"));
   const [isConnected, setIsConnected] = useState(true);
   const [triageOpen, setTriageOpen] = useState(false);
+  const [hasCheckedBriefing, setHasCheckedBriefing] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -71,6 +72,42 @@ export default function Chat() {
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!sessionId || hasCheckedBriefing) return;
+
+    const lastBriefing = localStorage.getItem("last_briefing_date");
+    const today = new Date().toISOString().split('T')[0];
+
+    if (lastBriefing !== today) {
+      const runBriefing = async () => {
+        try {
+          localStorage.setItem("last_briefing_date", today);
+          setHasCheckedBriefing(true);
+          
+          await apiRequest("POST", "/api/briefing", { sessionId });
+          
+          const res = await fetch(`/api/sessions/${sessionId}/messages`);
+          if (res.ok) {
+            const history = await res.json();
+            setMessages(history.map((msg: any) => ({
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp),
+              taskCard: msg.taskCard
+            })));
+          }
+          
+          queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+        } catch (e) {
+          console.error("Briefing failed", e);
+        }
+      };
+      runBriefing();
+    } else {
+      setHasCheckedBriefing(true);
+    }
+  }, [sessionId, hasCheckedBriefing]);
 
   const handleSendMessage = async (content: string, imagesBase64?: string[]) => {
     const hasImages = imagesBase64 && imagesBase64.length > 0;
