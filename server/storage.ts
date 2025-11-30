@@ -52,6 +52,7 @@ export interface IStorage {
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
   addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean>;
   removeCompletedMoves(date: string, moveIds: string[]): Promise<number>;
+  addNotificationSent(date: string, milestone: number): Promise<void>;
   
   // Learning memory: patterns
   recordPattern(pattern: InsertUserPattern): Promise<UserPattern>;
@@ -372,6 +373,25 @@ class DatabaseStorage implements IStorage {
     }
 
     return removedCount;
+  }
+
+  async addNotificationSent(date: string, milestone: number): Promise<void> {
+    const existing = await this.getDailyLog(date);
+    if (!existing) {
+      await this.createDailyLog({ date, notificationsSent: [milestone] } as InsertDailyLog);
+      return;
+    }
+
+    const sent = Array.isArray(existing.notificationsSent) 
+      ? (existing.notificationsSent as number[])
+      : [];
+    
+    if (!sent.includes(milestone)) {
+      sent.push(milestone);
+      await db.update(dailyLog)
+        .set({ notificationsSent: sent })
+        .where(eq(dailyLog.date, date));
+    }
   }
 
   // Learning memory: patterns

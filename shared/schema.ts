@@ -77,6 +77,7 @@ export const dailyLog = pgTable("daily_log", {
   summary: text("summary"),
   backlogMovesCount: integer("backlog_moves_count").default(0), // moves pulled from backlog
   nonBacklogMovesCount: integer("non_backlog_moves_count").default(0), // moves from active/queued
+  notificationsSent: jsonb("notifications_sent").default([]), // tracks SMS milestones sent (25, 50, 75, 100)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
