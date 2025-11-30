@@ -26,10 +26,10 @@ type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
 type SortDirection = "asc" | "desc";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
-  active: { label: "Active", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
-  queued: { label: "Queued", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-  backlog: { label: "Backlog", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400" },
-  done: { label: "Done", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
+  active: { label: "Active", color: "bg-purple-500/20 text-purple-300 border border-purple-500/30" },
+  queued: { label: "Queued", color: "bg-blue-500/20 text-blue-300 border border-blue-500/30" },
+  backlog: { label: "Backlog", color: "bg-slate-500/20 text-slate-300 border border-slate-500/30" },
+  done: { label: "Done", color: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" },
 };
 
 const STATUS_ORDER: MoveStatus[] = ["active", "queued", "backlog", "done"];
@@ -202,10 +202,10 @@ function StatusColumn({
   });
 
   return (
-    <div className="flex-1 min-w-[300px] max-w-[380px] flex flex-col h-full" data-testid={`column-${status}`}>
+    <div className="flex flex-col h-full min-w-0 max-w-[500px]" data-testid={`column-${status}`}>
       <div className="flex items-center justify-between mb-4 px-2">
         <h3 className="font-bold text-lg text-white/80 tracking-tight">{labels[status]}</h3>
-        <span className="px-2.5 py-0.5 rounded-full bg-white/5 text-xs font-medium text-muted-foreground border border-white/10">
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_LABELS[status].color}`}>
           {columnMoves.length}
         </span>
       </div>
@@ -335,9 +335,9 @@ function MoveListRow({
       onClick={handleRowClick}
       data-testid={`row-move-${move.id}`}
     >
-      <TableCell className="font-medium max-w-[300px]">
-        <div className="flex items-center gap-2">
-          <span className="truncate" data-testid={`text-row-title-${move.id}`}>{move.title}</span>
+      <TableCell className="font-medium max-w-[400px]">
+        <div className="flex items-start gap-2">
+          <span className="text-slate-200 whitespace-normal break-words leading-snug" data-testid={`text-row-title-${move.id}`}>{move.title}</span>
           {isStale && (
             <Badge variant="destructive" className="text-xs gap-1 shrink-0">
               <AlertCircle className="h-3 w-3" />
@@ -354,35 +354,35 @@ function MoveListRow({
       </TableCell>
       <TableCell>
         {client ? (
-          <Badge variant="outline" className="text-xs">
+          <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-slate-300 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
             {client.name}
-          </Badge>
+          </span>
         ) : (
-          <span className="text-muted-foreground text-sm">—</span>
+          <span className="text-slate-500 text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
-        <Badge className={`text-xs ${statusInfo.color}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${statusInfo.color}`}>
           {statusInfo.label}
-        </Badge>
+        </span>
       </TableCell>
       <TableCell>
         {effortLevel ? (
-          <Badge variant="secondary" className="text-xs">
+          <span className="text-xs text-slate-300 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
             {effortLevel.label}
-          </Badge>
+          </span>
         ) : (
-          <span className="text-muted-foreground text-sm">—</span>
+          <span className="text-slate-500 text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
         {DrainIcon ? (
           <div className="flex items-center gap-1.5">
-            <DrainIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm">{DRAIN_LABELS[normalizedDrainType!]}</span>
+            <DrainIcon className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-sm text-slate-300">{DRAIN_LABELS[normalizedDrainType!]}</span>
           </div>
         ) : (
-          <span className="text-muted-foreground text-sm">—</span>
+          <span className="text-slate-500 text-sm">—</span>
         )}
       </TableCell>
       <TableCell>
@@ -749,7 +749,7 @@ export function DesktopMovesView({
           <div className="flex-1 overflow-auto p-6">
             {viewMode === "board" ? (
               <DragDropContext onDragEnd={onDragEnd}>
-                <div className="flex gap-6 min-w-max h-full">
+                <div className={`grid gap-6 h-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <StatusColumn 
                     status="active" 
                     moves={moves} 
