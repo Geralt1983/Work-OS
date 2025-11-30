@@ -689,13 +689,13 @@ export function DesktopMovesView({
 
           <div className="px-6 py-3 flex items-center gap-4 flex-wrap border-b border-white/5" data-testid="filter-bar">
             <Select value={clientFilter} onValueChange={setClientFilter}>
-              <SelectTrigger className="w-[160px]" data-testid="select-client-filter">
+              <SelectTrigger className="w-[160px] bg-white/5 border-white/10 text-slate-200 hover:bg-white/10" data-testid="select-client-filter">
                 <SelectValue placeholder="All Clients" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clients</SelectItem>
+              <SelectContent className="bg-[#1a1a2e] border-white/10">
+                <SelectItem value="all" className="text-slate-200 focus:bg-white/10 focus:text-white">All Clients</SelectItem>
                 {clients.map(client => (
-                  <SelectItem key={client.id} value={client.id.toString()}>
+                  <SelectItem key={client.id} value={client.id.toString()} className="text-slate-200 focus:bg-white/10 focus:text-white">
                     {client.name}
                   </SelectItem>
                 ))}
@@ -703,25 +703,25 @@ export function DesktopMovesView({
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+              <SelectTrigger className="w-[140px] bg-white/5 border-white/10 text-slate-200 hover:bg-white/10" data-testid="select-status-filter">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="queued">Queued</SelectItem>
-                {showBacklog && <SelectItem value="backlog">Backlog</SelectItem>}
+              <SelectContent className="bg-[#1a1a2e] border-white/10">
+                <SelectItem value="all" className="text-slate-200 focus:bg-white/10 focus:text-white">All Statuses</SelectItem>
+                <SelectItem value="active" className="text-slate-200 focus:bg-white/10 focus:text-white">Active</SelectItem>
+                <SelectItem value="queued" className="text-slate-200 focus:bg-white/10 focus:text-white">Queued</SelectItem>
+                {showBacklog && <SelectItem value="backlog" className="text-slate-200 focus:bg-white/10 focus:text-white">Backlog</SelectItem>}
               </SelectContent>
             </Select>
 
             <Select value={drainFilter} onValueChange={setDrainFilter}>
-              <SelectTrigger className="w-[140px]" data-testid="select-drain-filter">
+              <SelectTrigger className="w-[140px] bg-white/5 border-white/10 text-slate-200 hover:bg-white/10" data-testid="select-drain-filter">
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
+              <SelectContent className="bg-[#1a1a2e] border-white/10">
+                <SelectItem value="all" className="text-slate-200 focus:bg-white/10 focus:text-white">All Types</SelectItem>
                 {DRAIN_TYPES.map(drain => (
-                  <SelectItem key={drain} value={drain}>
+                  <SelectItem key={drain} value={drain} className="text-slate-200 focus:bg-white/10 focus:text-white">
                     {DRAIN_LABELS[drain]}
                   </SelectItem>
                 ))}
