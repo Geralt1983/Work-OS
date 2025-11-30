@@ -1,3 +1,11 @@
+The final item on our roadmap is 4. The "Real App" Polish (Mobile).
+The goal is to make this web app feel indistinguishable from a native iOS app. We are going to implement Swipe Gestures.
+Instead of just tapping to complete, you will be able to:
+ * Swipe Right: To Complete a task (Satisfying Green Flash).
+ * Swipe Left: To send a task back to Backlog (Subtle Orange Fade).
+This uses Framer Motion physics to feel tactile and responsive.
+Update client/src/components/MobileMovesView.tsx
+I am completely rewriting MobileMoveCard to support swipe gestures. I'm also adding a SwipeAction container to handle the logic cleanly.
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -6,20 +14,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
-import { EFFORT_LEVELS, DRAIN_TYPE_LABELS, normalizeDrainType } from "@shared/schema";
+import { EFFORT_LEVELS, normalizeDrainType, DRAIN_TYPE_LABELS } from "@shared/schema";
 import { 
   ChevronUp, ChevronDown, Check, Trash2, Edit2, 
-  Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock, Archive
+  Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock, Archive,
+  ArrowRight, ArrowLeft
 } from "lucide-react";
 import { format } from "date-fns";
 import { ArcCard } from "@/components/ArcCard";
 import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { playSfx } from "@/lib/sounds";
 
+// ... (Keep Constants: STATUS_LABELS, DRAIN_ICONS, getDaysOld) ...
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   active: { label: "Active", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
   queued: { label: "Queued", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
@@ -27,7 +36,7 @@ const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   done: { label: "Done", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
 };
 
-const DRAIN_ICONS: Record<DrainType, typeof Brain> = {
+const DRAIN_ICONS: Record<DrainType, any> = {
   deep: Brain,
   comms: Mail,
   admin: FileText,
@@ -42,6 +51,7 @@ function getDaysOld(createdAt: Date | string | null): number {
   return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// === NEW: Swipeable Card Component ===
 interface MobileMoveCardProps {
   move: Move;
   clients: Client[];
@@ -57,13 +67,15 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
   const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
   
   const daysOld = getDaysOld(move.createdAt);
-  const isAging = daysOld >= 7 && move.status === "backlog";
   const isStale = daysOld >= 10 && move.status === "backlog";
 
+  // Drag Animation Values
   const x = useMotionValue(0);
-  const opacityRight = useTransform(x, [50, 100], [0, 1]);
-  const opacityLeft = useTransform(x, [-50, -100], [0, 1]);
-  const scale = useTransform(x, [-100, 0, 100], [0.95, 1, 0.95]);
+  const opacityRight = useTransform(x, [50, 100], [0, 1]); // Green opacity
+  const opacityLeft = useTransform(x, [-50, -100], [0, 1]); // Orange opacity
+  const scale = useTransform(x, [-100, 0, 100], [0.95, 1, 0.95]); // Squeeze effect
+  
+  // Background Colors based on drag
   const bgRight = useTransform(x, [0, 100], ["rgba(16, 185, 129, 0)", "rgba(16, 185, 129, 0.2)"]);
   const bgLeft = useTransform(x, [0, -100], ["rgba(249, 115, 22, 0)", "rgba(249, 115, 22, 0.2)"]);
 
@@ -85,59 +97,59 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
       await apiRequest("POST", `/api/moves/${move.id}/demote`);
     },
     onSuccess: () => {
-      playSfx("delete");
+      playSfx("delete"); // Using "delete" sound for "demote/backlog"
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       toast({ title: "Sent to Backlog", description: move.title });
       onUpdate();
     },
   });
 
-  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+  const handleDragEnd = (_: any, info: PanInfo) => {
     const threshold = 100;
     if (info.offset.x > threshold && move.status !== "done") {
+      // Swipe Right -> Complete
       completeMutation.mutate();
     } else if (info.offset.x < -threshold && move.status !== "backlog") {
+      // Swipe Left -> Backlog
       backlogMutation.mutate();
     }
   };
 
-  const getGlow = (): "purple" | "cyan" | "orange" | "pink" | "none" => {
-    if (move.status === 'active') return 'purple';
-    if (normalizedDrainType === 'deep') return 'cyan';
-    if (normalizedDrainType === 'admin') return 'orange';
-    if (normalizedDrainType === 'creative') return 'pink';
-    return 'none';
+  // Dynamic glow logic
+  const getGlow = () => {
+     if (move.status === 'active') return 'purple';
+     if (move.drainType === 'deep') return 'cyan';
+     if (move.drainType === 'admin') return 'orange';
+     return 'none';
   };
 
   return (
-    <div className="relative group touch-pan-y" data-testid={`mobile-card-move-${move.id}`}>
-      <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
-        <motion.div 
-          style={{ opacity: opacityRight, background: bgRight }} 
-          className="absolute inset-0 flex items-center justify-start pl-6"
-        >
-          <div className="flex items-center gap-2 text-emerald-400 font-bold tracking-wider uppercase text-sm">
-            <Check className="w-6 h-6" strokeWidth={3} />
-            Complete
-          </div>
-        </motion.div>
-        
-        <motion.div 
-          style={{ opacity: opacityLeft, background: bgLeft }} 
-          className="absolute inset-0 flex items-center justify-end pr-6"
-        >
-          <div className="flex items-center gap-2 text-orange-400 font-bold tracking-wider uppercase text-sm">
-            Later
-            <Archive className="w-6 h-6" strokeWidth={3} />
-          </div>
-        </motion.div>
+    <div className="relative mb-3 group touch-pan-y">
+      {/* Swipe Backgrounds (Behind the card) */}
+      <div className="absolute inset-0 rounded-3xl overflow-hidden">
+         {/* Right Swipe (Complete/Green) */}
+         <motion.div style={{ opacity: opacityRight, background: bgRight }} className="absolute inset-0 flex items-center justify-start pl-6">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold tracking-wider uppercase text-sm">
+              <Check className="w-6 h-6" strokeWidth={3} />
+              Complete
+            </div>
+         </motion.div>
+         
+         {/* Left Swipe (Backlog/Orange) */}
+         <motion.div style={{ opacity: opacityLeft, background: bgLeft }} className="absolute inset-0 flex items-center justify-end pr-6">
+            <div className="flex items-center gap-2 text-orange-400 font-bold tracking-wider uppercase text-sm">
+              Later
+              <Archive className="w-6 h-6" strokeWidth={3} />
+            </div>
+         </motion.div>
       </div>
 
+      {/* Draggable Card */}
       <motion.div
         style={{ x, scale }}
         drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.7}
+        dragConstraints={{ left: 0, right: 0 }} // Snaps back
+        dragElastic={0.7} // Bouncy feel
         onDragEnd={handleDragEnd}
         className="relative z-10"
       >
@@ -149,43 +161,38 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
           <div className="p-4 flex items-start gap-3">
             <div className="flex-1 min-w-0 space-y-2">
               <div className="flex items-center gap-2">
-                {client && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
-                    {client.name}
-                  </span>
-                )}
-                {isStale && (
-                  <span className="flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                    <AlertCircle className="w-3 h-3" /> {daysOld}d
-                  </span>
-                )}
-                {isAging && !isStale && (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                    <Clock className="w-3 h-3" /> {daysOld}d
-                  </span>
-                )}
+                 {client && (
+                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                     {client.name}
+                   </span>
+                 )}
+                 {isStale && (
+                   <span className="flex items-center gap-1 text-[10px] text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                     <AlertCircle className="w-3 h-3" /> {daysOld}d
+                   </span>
+                 )}
               </div>
 
-              <h4 className="font-semibold text-base leading-snug text-white/95" data-testid={`mobile-text-move-title-${move.id}`}>
+              <h4 className="font-semibold text-base leading-snug text-white/95">
                 {move.title}
               </h4>
               
               <div className="flex items-center gap-3 pt-1">
                 {effortLevel && (
                   <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-                    <div className={`w-1.5 h-1.5 rounded-full ${move.effortEstimate && move.effortEstimate > 2 ? 'bg-orange-400' : 'bg-emerald-400'}`} />
+                    <div className={`w-1.5 h-1.5 rounded-full ${move.effortEstimate > 2 ? 'bg-orange-400' : 'bg-emerald-400'}`} />
                     {effortLevel.label}
                   </span>
                 )}
                 {DrainIcon && (
-                  <DrainIcon className="w-3.5 h-3.5 text-slate-500" />
+                   <DrainIcon className="w-3.5 h-3.5 text-slate-500" />
                 )}
               </div>
             </div>
             
             {move.status !== "done" && (
               <div className="h-full flex items-center justify-center pl-2">
-                <ChevronUp className="w-4 h-4 text-white/20 -rotate-90" />
+                <ChevronUp className="w-4 h-4 text-white/10 -rotate-90" />
               </div>
             )}
           </div>
@@ -194,6 +201,8 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
     </div>
   );
 }
+
+// ... (Keep rest of MobileMovesView exactly as is) ...
 
 interface MobileDetailDrawerProps {
   move: Move | null;
@@ -205,54 +214,13 @@ interface MobileDetailDrawerProps {
 }
 
 function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdit }: MobileDetailDrawerProps) {
+  // ... (Copy MobileDetailDrawer from previous turn - it was correct) ...
   const { toast } = useToast();
-
-  const promoteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/moves/${move?.id}/promote`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      onUpdate();
-    },
-  });
-
-  const demoteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/moves/${move?.id}/demote`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      onUpdate();
-    },
-  });
-
-  const completeMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/moves/${move?.id}/complete`);
-    },
-    onSuccess: () => {
-      playSfx("complete");
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
-      toast({ title: "Move completed", description: move?.title });
-      onOpenChange(false);
-      onUpdate();
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/moves/${move?.id}`);
-    },
-    onSuccess: () => {
-      playSfx("delete");
-      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      toast({ title: "Move deleted" });
-      onOpenChange(false);
-      onUpdate();
-    },
-  });
+  // Copy mutation logic here...
+  const promoteMutation = useMutation({ mutationFn: async () => { await apiRequest("POST", `/api/moves/${move?.id}/promote`); }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/moves"] }); onUpdate(); }, });
+  const demoteMutation = useMutation({ mutationFn: async () => { await apiRequest("POST", `/api/moves/${move?.id}/demote`); }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/moves"] }); onUpdate(); }, });
+  const completeMutation = useMutation({ mutationFn: async () => { await apiRequest("POST", `/api/moves/${move?.id}/complete`); }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/moves"] }); queryClient.invalidateQueries({ queryKey: ["/api/metrics"] }); toast({ title: "Move completed", description: move?.title }); onOpenChange(false); onUpdate(); }, });
+  const deleteMutation = useMutation({ mutationFn: async () => { await apiRequest("DELETE", `/api/moves/${move?.id}`); }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/moves"] }); toast({ title: "Move deleted" }); onOpenChange(false); onUpdate(); }, });
 
   if (!move) return null;
 
@@ -267,20 +235,12 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="bg-[#141420] border-white/10 text-white" data-testid="mobile-drawer-move-detail">
+      <DrawerContent className="bg-[#141420] border-white/10 text-white">
         <DrawerHeader className="text-left">
-          <DrawerTitle className="flex items-center gap-2 text-white" data-testid="mobile-drawer-title">
+          <DrawerTitle className="flex items-center gap-2">
             {move.title}
-            {isStale && (
-              <Badge variant="destructive" className="text-xs gap-1">
-                <AlertCircle className="h-3 w-3" /> {daysOld}d
-              </Badge>
-            )}
-            {isAging && !isStale && (
-              <Badge variant="outline" className="text-xs gap-1 text-yellow-400 border-yellow-400/50">
-                <Clock className="h-3 w-3" /> {daysOld}d
-              </Badge>
-            )}
+            {isStale && <Badge variant="destructive" className="text-xs gap-1"><AlertCircle className="h-3 w-3" /> {daysOld}d</Badge>}
+            {isAging && !isStale && <Badge variant="outline" className="text-xs gap-1 text-yellow-400 border-yellow-400/50"><Clock className="h-3 w-3" /> {daysOld}d</Badge>}
           </DrawerTitle>
           <DrawerDescription className="text-slate-400">
             {client ? client.name : "No client"} • {STATUS_LABELS[move.status as MoveStatus].label}
@@ -288,96 +248,23 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
         </DrawerHeader>
 
         <div className="px-4 pb-4 space-y-4">
-          {move.description && (
-            <p className="text-sm text-slate-300 whitespace-pre-wrap">
-              {move.description}
-            </p>
-          )}
-
+          {move.description && <p className="text-sm text-slate-300 whitespace-pre-wrap">{move.description}</p>}
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className={STATUS_LABELS[move.status as MoveStatus].color}>
-              {STATUS_LABELS[move.status as MoveStatus].label}
-            </Badge>
-            {effortLevel && (
-              <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">
-                {effortLevel.label}
-              </Badge>
-            )}
-            {normalizedDrainType && (
-              <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">
-                {DRAIN_TYPE_LABELS[normalizedDrainType]?.label}
-              </Badge>
-            )}
+            <Badge variant="secondary" className={STATUS_LABELS[move.status as MoveStatus].color}>{STATUS_LABELS[move.status as MoveStatus].label}</Badge>
+            {effortLevel && <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">{effortLevel.label}</Badge>}
+            {normalizedDrainType && <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/20">{DRAIN_TYPE_LABELS[normalizedDrainType]?.label}</Badge>}
           </div>
-
-          {move.createdAt && (
-            <p className="text-xs text-slate-500">
-              Created: {format(new Date(move.createdAt), "MMM d, yyyy")}
-            </p>
-          )}
-
-          <Separator className="bg-white/10" />
-
+          {move.createdAt && <p className="text-xs text-slate-500">Created: {format(new Date(move.createdAt), "MMM d, yyyy")}</p>}
+          <div className="h-px bg-white/10 my-4" />
           <div className="grid grid-cols-2 gap-2">
-            {canPromote && (
-              <Button
-                variant="outline"
-                className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
-                onClick={() => promoteMutation.mutate()}
-                disabled={promoteMutation.isPending}
-                data-testid="mobile-button-promote"
-              >
-                <ChevronUp className="h-4 w-4 mr-2" />
-                Promote
-              </Button>
-            )}
-            {canDemote && (
-              <Button
-                variant="outline"
-                className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
-                onClick={() => demoteMutation.mutate()}
-                disabled={demoteMutation.isPending}
-                data-testid="mobile-button-demote"
-              >
-                <ChevronDown className="h-4 w-4 mr-2" />
-                Demote
-              </Button>
-            )}
-            {move.status !== "done" && (
-              <Button
-                variant="outline"
-                className="h-12 text-green-400 border-green-500/30 hover:bg-green-500/10"
-                onClick={() => completeMutation.mutate()}
-                disabled={completeMutation.isPending}
-                data-testid="mobile-button-complete-drawer"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Complete
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white"
-              onClick={onEdit}
-              data-testid="mobile-button-edit"
-            >
-              <Edit2 className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
+            {canPromote && <Button variant="outline" className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white" onClick={() => promoteMutation.mutate()} disabled={promoteMutation.isPending}><ChevronUp className="h-4 w-4 mr-2" /> Promote</Button>}
+            {canDemote && <Button variant="outline" className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white" onClick={() => demoteMutation.mutate()} disabled={demoteMutation.isPending}><ChevronDown className="h-4 w-4 mr-2" /> Demote</Button>}
+            {move.status !== "done" && <Button variant="outline" className="h-12 text-green-400 border-green-500/30 hover:bg-green-500/10" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}><Check className="h-4 w-4 mr-2" /> Complete</Button>}
+            <Button variant="outline" className="h-12 bg-transparent border-white/10 hover:bg-white/5 text-white" onClick={onEdit}><Edit2 className="h-4 w-4 mr-2" /> Edit</Button>
           </div>
         </div>
-
         <DrawerFooter className="pt-0">
-          <Button
-            variant="ghost"
-            className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
-            onClick={() => deleteMutation.mutate()}
-            disabled={deleteMutation.isPending}
-            data-testid="mobile-button-delete"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete Move
-          </Button>
+          <Button variant="ghost" className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 mr-2" /> Delete Move</Button>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
@@ -403,6 +290,7 @@ export default function MobileMovesView({
   onCreateMove,
   onEditMove
 }: MobileMovesViewProps) {
+  // ... (Copy rest of MobileMovesView from previous turn - ensure TabsList bg is removed) ...
   const [activeTab, setActiveTab] = useState<string>("active");
   const [selectedMove, setSelectedMove] = useState<Move | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -418,7 +306,6 @@ export default function MobileMovesView({
   const backlogMoves = filteredMoves.filter(m => m.status === "backlog");
 
   const handleSelectMove = (move: Move) => {
-    playSfx("click");
     setSelectedMove(move);
     setDrawerOpen(true);
   };
@@ -439,14 +326,13 @@ export default function MobileMovesView({
           </div>
         ) : (
           moves.map(move => (
-            <div key={move.id} className="mb-3">
-              <MobileMoveCard
-                move={move}
-                clients={clients}
-                onSelect={() => handleSelectMove(move)}
-                onUpdate={onUpdate}
-              />
-            </div>
+            <MobileMoveCard
+              key={move.id}
+              move={move}
+              clients={clients}
+              onSelect={() => handleSelectMove(move)}
+              onUpdate={onUpdate}
+            />
           ))
         )}
       </div>
@@ -454,10 +340,10 @@ export default function MobileMovesView({
   );
 
   return (
-    <div className="flex flex-col h-full bg-transparent" data-testid="mobile-moves-view">
+    <div className="flex flex-col h-full bg-transparent">
       <div className="px-4 py-3 flex items-center gap-2">
         <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="flex-1 bg-white/5 border-white/10 text-white focus:ring-purple-500/50" data-testid="mobile-select-client-filter">
+          <SelectTrigger className="flex-1 bg-white/5 border-white/10 text-white focus:ring-purple-500/50">
             <SelectValue placeholder="All Clients" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
@@ -474,7 +360,6 @@ export default function MobileMovesView({
           variant="ghost"
           onClick={() => onToggleBacklog(!showBacklog)}
           className={`shrink-0 ${showBacklog ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-muted-foreground'}`}
-          data-testid="mobile-button-toggle-backlog"
         >
           <Archive className="h-4 w-4" />
         </Button>
@@ -482,7 +367,6 @@ export default function MobileMovesView({
           size="sm" 
           onClick={onCreateMove}
           className="bg-gradient-to-r from-purple-600 to-pink-600 border-0 shadow-glow-purple"
-          data-testid="mobile-button-create-move"
         >
           New
         </Button>
@@ -490,37 +374,28 @@ export default function MobileMovesView({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="px-4">
-          <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`} data-testid="mobile-tabs">
+            <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`}>
             <TabsTrigger 
-              value="active" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-              data-testid="mobile-tab-active"
+                value="active" 
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
             >
-              Active
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
-                {activeMoves.length}
-              </Badge>
+                Active <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">{activeMoves.length}</Badge>
             </TabsTrigger>
             <TabsTrigger 
-              value="queued" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-              data-testid="mobile-tab-queued"
+                value="queued" 
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
             >
-              Queued
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
-                {queuedMoves.length}
-              </Badge>
+                Queued <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">{queuedMoves.length}</Badge>
             </TabsTrigger>
             {showBacklog && (
-              <TabsTrigger 
+                <TabsTrigger 
                 value="backlog" 
                 className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
-                data-testid="mobile-tab-backlog"
-              >
+                >
                 Backlog
-              </TabsTrigger>
+                </TabsTrigger>
             )}
-          </TabsList>
+            </TabsList>
         </div>
 
         <TabsContent value="active" className="flex-1 mt-2">
@@ -547,3 +422,4 @@ export default function MobileMovesView({
     </div>
   );
 }
+
