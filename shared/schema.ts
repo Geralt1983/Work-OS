@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, integer, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, integer, serial, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,7 +27,12 @@ export const moves = pgTable("moves", {
   sortOrder: integer("sort_order").default(0), // for manual ordering within status
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
-});
+}, (table) => ({
+  // Performance indexes for faster queries
+  statusIdx: index("status_idx").on(table.status),
+  clientIdIdx: index("client_id_idx").on(table.clientId),
+  clientStatusIdx: index("client_status_idx").on(table.clientId, table.status),
+}));
 
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
