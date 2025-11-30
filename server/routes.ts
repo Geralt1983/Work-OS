@@ -365,12 +365,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/moves/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // Get old state to check for transitions
+      const oldMove = await storage.getMove(id);
+      
       const updates = updateMoveSchema.parse(req.body);
       const move = await storage.updateMove(id, updates);
+      
       if (!move) {
         res.status(404).json({ error: "Move not found" });
         return;
       }
+
+      // If we just "Undid" a completion (Done -> Active/Queued/Backlog)
+      // Remove it from the daily log metrics
+      if (oldMove?.status === 'done' && updates.status && updates.status !== 'done') {
+        const today = getLocalDateString();
+        await storage.removeCompletedMoves(today, [id.toString()]);
+      }
+
       res.json(move);
     } catch (error) {
       console.error("Error updating move:", error);

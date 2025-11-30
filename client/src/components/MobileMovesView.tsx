@@ -8,6 +8,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, Dr
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, MoveStatus, DrainType } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPE_LABELS, normalizeDrainType } from "@shared/schema";
@@ -67,6 +68,20 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
   const bgRight = useTransform(x, [0, 100], ["rgba(16, 185, 129, 0)", "rgba(16, 185, 129, 0.2)"]);
   const bgLeft = useTransform(x, [0, -100], ["rgba(249, 115, 22, 0)", "rgba(249, 115, 22, 0.2)"]);
 
+  // Generic Undo Mutation - restores to previous status
+  const undoMutation = useMutation({
+    mutationFn: async ({ status }: { status: string }) => {
+      await apiRequest("PATCH", `/api/moves/${move.id}`, { status });
+    },
+    onSuccess: () => {
+      playSfx("click");
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      toast({ title: "Undone", description: "Move restored to previous status." });
+      onUpdate();
+    },
+  });
+
   const completeMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", `/api/moves/${move.id}/complete`);
@@ -75,7 +90,22 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
       playSfx("complete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
-      toast({ title: "Move completed", description: move.title });
+      
+      // Toast with UNDO action
+      toast({ 
+        title: "Move completed", 
+        description: move.title,
+        action: (
+          <ToastAction 
+            altText="Undo" 
+            onClick={() => undoMutation.mutate({ status: move.status })}
+            className="border-white/20 hover:bg-white/10"
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+      
       onUpdate();
     },
   });
@@ -87,7 +117,22 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
     onSuccess: () => {
       playSfx("delete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
-      toast({ title: "Sent to Backlog", description: move.title });
+      
+      // Toast with UNDO action
+      toast({ 
+        title: "Sent to Backlog", 
+        description: move.title,
+        action: (
+          <ToastAction 
+            altText="Undo" 
+            onClick={() => undoMutation.mutate({ status: move.status })}
+            className="border-white/20 hover:bg-white/10"
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+      
       onUpdate();
     },
   });

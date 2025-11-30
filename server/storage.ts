@@ -1003,8 +1003,17 @@ class DatabaseStorage implements IStorage {
   async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
     const oldMove = await this.getMove(id);
     
+    // Prepare update object
+    const valuesToSet: any = { ...updates };
+    
+    // If moving OUT of 'done' status, clear the completedAt timestamp and effortActual
+    if (oldMove?.status === 'done' && updates.status && updates.status !== 'done') {
+      valuesToSet.completedAt = null;
+      valuesToSet.effortActual = null;
+    }
+    
     const [updated] = await db.update(moves)
-      .set(updates)
+      .set(valuesToSet)
       .where(eq(moves.id, id))
       .returning();
     
