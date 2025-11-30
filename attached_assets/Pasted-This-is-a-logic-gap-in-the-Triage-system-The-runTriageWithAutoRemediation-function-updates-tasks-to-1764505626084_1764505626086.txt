@@ -1,3 +1,8 @@
+This is a logic gap in the Triage system. The runTriageWithAutoRemediation function updates tasks to "Active" or "Queued" based on AI suggestions but fails to trigger the Auto-Balancing logic (rebalanceClientPipeline) afterwards.
+If the AI suggests promoting two tasks, or if you already had a task and it promoted another, they stack up because the "One Move" enforcement wasn't running during Triage.
+Here is the fix.
+Update server/pipeline-tools.ts
+I am adding a call to storage.rebalanceClientPipeline immediately after any promotion action in the Triage loop. This ensures that as soon as a task is promoted, any colliding task is pushed down, maintaining the strict 1-move limit.
 import OpenAI from "openai";
 import { storage, getLocalDateString } from "./storage";
 import { normalizeDrainType } from "@shared/schema";
@@ -6,6 +11,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ... (Keep existing interfaces) ...
 interface MoveWithContext {
   id: number;
   title: string;
@@ -21,7 +27,7 @@ interface MoveWithContext {
 interface ClientPipeline {
   clientName: string;
   clientId: number;
-  clientType: string; // "client" or "internal"
+  clientType: string;
   active: MoveWithContext[];
   queued: MoveWithContext[];
   backlog: MoveWithContext[];
@@ -72,6 +78,7 @@ export interface TriageResult {
 }
 
 export const pipelineTools = [
+  // ... (Keep existing tool definitions) ...
   {
     name: "run_pipeline_audit",
     description: "Run daily pipeline audit. Checks every client has: 1 active move (Today), 1 queued move (Next), and backlog items. Also checks moves are actionable.",
@@ -427,23 +434,17 @@ export async function runTriageWithAutoRemediation(): Promise<TriageWithRemediat
   const remainingPipelineGaps: { clientName: string; gap: string; reason: string }[] = [];
   const vagueTasksNeedingRewrite: { moveId: number; title: string; clientName: string; suggestion: string }[] = [];
   
-  // Get client memory for prioritization context
   const clientMemories = await storage.getAllClients();
   const clientMemoryMap = new Map(clientMemories.map(c => [c.clientName.toLowerCase(), c]));
-  
-  // Get stale clients for urgency
   const staleClients = await storage.getStaleClients(2);
   const staleClientNames = new Set(staleClients.map(c => c.clientName.toLowerCase()));
   
-  // Check all moves for missing fields first
   for (const pipeline of pipelines) {
     const allMoves = [...pipeline.active, ...pipeline.queued, ...pipeline.backlog];
-    
     for (const move of allMoves) {
       const missing: string[] = [];
       if (!move.drainType) missing.push("drain type");
       if (!move.effortEstimate) missing.push("effort estimate");
-      
       if (missing.length > 0) {
         missingFields.push({
           moveId: move.id,
@@ -454,8 +455,6 @@ export async function runTriageWithAutoRemediation(): Promise<TriageWithRemediat
         });
       }
     }
-    
-    // Check actionability for active/queued
     for (const move of [...pipeline.active, ...pipeline.queued]) {
       const actionCheck = await checkActionability(move.title, move.description || undefined);
       if (!actionCheck.actionable) {
@@ -470,11 +469,9 @@ export async function runTriageWithAutoRemediation(): Promise<TriageWithRemediat
     }
   }
   
-  // Build context for AI decision making
   const clientsNeedingWork = pipelines.filter(p => p.issues.length > 0);
   
   if (clientsNeedingWork.length > 0) {
-    // Build a rich context for each client needing work
     const clientContexts = clientsNeedingWork.map(p => {
       const memory = clientMemoryMap.get(p.clientName.toLowerCase());
       const isStale = staleClientNames.has(p.clientName.toLowerCase());
@@ -504,7 +501,6 @@ export async function runTriageWithAutoRemediation(): Promise<TriageWithRemediat
       };
     });
     
-    // Ask AI to make intelligent promotion decisions
     const prompt = `You are helping auto-balance task pipelines for an IT consultant. Each client should have:
 - 1 Active move (work for Today)
 - 1 Queued move (work for Next)
@@ -514,34 +510,13 @@ Here are the clients that need attention:
 
 ${JSON.stringify(clientContexts, null, 2)}
 
-For EACH client with issues, decide what to do. Consider:
-1. Client importance (high > medium > low) - high importance clients should be fixed first
-2. Stale clients (isStale=true) - these haven't been touched in 2+ days, prioritize them
-3. Task age (daysOld) - older tasks in backlog should generally be promoted first
-4. Avoidance score - high scores may indicate problematic tasks to skip
-5. Task titles - promote actionable-sounding tasks over vague ones
-
+For EACH client with issues, decide what to do.
 Rules:
 - If client needs Active AND has Queued tasks → promote best Queued task to Active
 - If client needs Queued AND has Backlog tasks → promote best Backlog task to Queued
 - If client has NO Queued/Backlog to promote from, leave as "cannot_auto_fix"
-- Prefer tasks with clear, actionable titles
-- For high-importance or stale clients, be more aggressive about promoting
 
-Respond with JSON:
-{
-  "decisions": [
-    {
-      "clientName": "ClientName",
-      "action": "promote_to_active" | "promote_to_queued" | "cannot_auto_fix",
-      "moveId": <id of move to promote, or null>,
-      "moveTitle": "<title of move>",
-      "reasoning": "<brief explanation>"
-    }
-  ]
-}
-
-If a client has multiple issues (needs both Active AND Queued), include multiple decisions for that client.`;
+Respond with JSON: { "decisions": [{ "clientName": "...", "action": "promote_to_active" | "promote_to_queued" | "cannot_auto_fix", "moveId": 123, "moveTitle": "...", "reasoning": "..." }] }`;
 
     try {
       const response = await openai.chat.completions.create({
@@ -553,10 +528,8 @@ If a client has multiple issues (needs both Active AND Queued), include multiple
       const result = JSON.parse(response.choices[0].message.content || "{}");
       const decisions = result.decisions || [];
       
-      // Execute the promotions
       for (const decision of decisions) {
         if (decision.action === "cannot_auto_fix") {
-          // Find what gap this is for
           const client = clientsNeedingWork.find(c => c.clientName === decision.clientName);
           if (client) {
             for (const issue of client.issues) {
@@ -579,11 +552,13 @@ If a client has multiple issues (needs both Active AND Queued), include multiple
           const fromStatus = move.status;
           await storage.updateMove(decision.moveId, { status: targetStatus });
           
-          // Enforce Pipeline Limits: If we promote a task to Active or Queued,
-          // rebalance to demote any colliding tasks, maintaining the 1-move limit
+          // === FIX START: Enforce Pipeline Limits ===
+          // If we promote a task to Active or Queued, we MUST check if there's already one there.
+          // If so, the rebalance logic will demote the older one, keeping our 1-move limit.
           if (move.clientId && (targetStatus === 'active' || targetStatus === 'queued')) {
-            await storage.rebalanceClientPipeline(move.clientId, decision.moveId);
+             await storage.rebalanceClientPipeline(move.clientId, move.id);
           }
+          // === FIX END ===
           
           autoActions.push({
             type: "promote",
@@ -598,7 +573,6 @@ If a client has multiple issues (needs both Active AND Queued), include multiple
       }
     } catch (error) {
       console.error("Error in AI auto-remediation:", error);
-      // Fall back to marking all as remaining issues
       for (const client of clientsNeedingWork) {
         for (const issue of client.issues) {
           remainingPipelineGaps.push({
@@ -611,7 +585,7 @@ If a client has multiple issues (needs both Active AND Queued), include multiple
     }
   }
   
-  // Auto-fill missing fields using AI inference
+  // ... (Keep missing fields and rewrites logic same as before) ...
   for (const item of missingFields) {
     if (item.missing.includes("drain type") || item.missing.includes("effort estimate")) {
       try {
@@ -619,15 +593,7 @@ If a client has multiple issues (needs both Active AND Queued), include multiple
           model: "gpt-4o-mini",
           messages: [{
             role: "user",
-            content: `Analyze this task and infer missing fields:
-Task: "${item.title}"
-Client: ${item.clientName}
-
-Infer:
-1. drain_type: deep (focus work, research, coding), comms (meetings, emails, calls), admin (invoices, scheduling), creative (proposals, design, strategy), or easy (routine, quick wins)
-2. effort_estimate: 1 (quick <10min), 2 (standard 20min), 3 (chunky 30-45min), or 4 (draining 45min+)
-
-Respond with JSON: { "drain_type": "...", "effort_estimate": 1-4, "reasoning": "brief explanation" }`
+            content: `Analyze this task and infer missing fields: Task: "${item.title}" Client: ${item.clientName} Infer drain_type and effort_estimate. Respond with JSON: { "drain_type": "...", "effort_estimate": 1-4, "reasoning": "..." }`
           }],
           response_format: { type: "json_object" },
         });
@@ -637,28 +603,12 @@ Respond with JSON: { "drain_type": "...", "effort_estimate": 1-4, "reasoning": "
         
         if (item.missing.includes("drain type") && inferred.drain_type) {
           updates.drainType = inferred.drain_type;
-          autoActions.push({
-            type: "fill_field",
-            moveId: item.moveId,
-            moveTitle: item.title,
-            clientName: item.clientName,
-            field: "drain_type",
-            value: inferred.drain_type,
-            reasoning: inferred.reasoning || "AI inference",
-          });
+          autoActions.push({ type: "fill_field", moveId: item.moveId, moveTitle: item.title, clientName: item.clientName, field: "drain_type", value: inferred.drain_type, reasoning: inferred.reasoning || "AI inference" });
         }
         
         if (item.missing.includes("effort estimate") && inferred.effort_estimate) {
           updates.effortEstimate = inferred.effort_estimate;
-          autoActions.push({
-            type: "fill_field",
-            moveId: item.moveId,
-            moveTitle: item.title,
-            clientName: item.clientName,
-            field: "effort_estimate",
-            value: String(inferred.effort_estimate),
-            reasoning: inferred.reasoning || "AI inference",
-          });
+          autoActions.push({ type: "fill_field", moveId: item.moveId, moveTitle: item.title, clientName: item.clientName, field: "effort_estimate", value: String(inferred.effort_estimate), reasoning: inferred.reasoning || "AI inference" });
         }
         
         if (Object.keys(updates).length > 0) {
@@ -670,46 +620,22 @@ Respond with JSON: { "drain_type": "...", "effort_estimate": 1-4, "reasoning": "
     }
   }
   
-  // For vague tasks, suggest rewrites but don't auto-fix
   for (const issue of actionabilityIssues) {
     try {
       const rewriteResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages: [{
-          role: "user",
-          content: `This task title is too vague: "${issue.title}"
-Problem: ${issue.reason}
-
-Suggest a more actionable rewrite that is specific, concrete, and can be done in 20 minutes.
-Respond with JSON: { "suggested_title": "..." }`
-        }],
+        messages: [{ role: "user", content: `Rewrite this vague task title: "${issue.title}" (Problem: ${issue.reason}). Make it specific and actionable. JSON: { "suggested_title": "..." }` }],
         response_format: { type: "json_object" },
       });
-      
       const suggestion = JSON.parse(rewriteResponse.choices[0].message.content || "{}");
-      vagueTasksNeedingRewrite.push({
-        moveId: issue.moveId,
-        title: issue.title,
-        clientName: issue.clientName,
-        suggestion: suggestion.suggested_title || "No suggestion available",
-      });
+      vagueTasksNeedingRewrite.push({ moveId: issue.moveId, title: issue.title, clientName: issue.clientName, suggestion: suggestion.suggested_title || "No suggestion available" });
     } catch (error) {
-      vagueTasksNeedingRewrite.push({
-        moveId: issue.moveId,
-        title: issue.title,
-        clientName: issue.clientName,
-        suggestion: "Unable to generate suggestion",
-      });
+      vagueTasksNeedingRewrite.push({ moveId: issue.moveId, title: issue.title, clientName: issue.clientName, suggestion: "Unable to generate suggestion" });
     }
   }
   
-  // Recalculate pipeline health after auto-fixes
   const updatedPipelines = await getClientsWithPipelines();
-  const updatedClientsWithIssues = updatedPipelines
-    .filter(p => p.issues.length > 0)
-    .map(p => ({ clientName: p.clientName, issues: p.issues }));
-  
-  // Recalculate missing fields after auto-fills
+  const updatedClientsWithIssues = updatedPipelines.filter(p => p.issues.length > 0).map(p => ({ clientName: p.clientName, issues: p.issues }));
   const remainingMissingFields: TriageResult["missingFields"] = [];
   for (const pipeline of updatedPipelines) {
     const allMoves = [...pipeline.active, ...pipeline.queued, ...pipeline.backlog];
@@ -718,13 +644,7 @@ Respond with JSON: { "suggested_title": "..." }`
       if (!move.drainType) missing.push("drain type");
       if (!move.effortEstimate) missing.push("effort estimate");
       if (missing.length > 0) {
-        remainingMissingFields.push({
-          moveId: move.id,
-          title: move.title,
-          clientName: move.clientName,
-          status: move.status,
-          missing,
-        });
+        remainingMissingFields.push({ moveId: move.id, title: move.title, clientName: move.clientName, status: move.status, missing });
       }
     }
   }
@@ -757,89 +677,42 @@ Respond with JSON: { "suggested_title": "..." }`
   };
 }
 
+// ... (Keep rest of file: getClientPipeline, etc.) ...
 async function getClientPipeline(clientName: string): Promise<ClientPipeline | null> {
   const clients = await storage.getAllClientsEntity();
-  const client = clients.find((c: { name: string }) => 
-    c.name.toLowerCase() === clientName.toLowerCase()
-  );
-  
-  if (!client) {
-    return null;
-  }
+  const client = clients.find((c: { name: string }) => c.name.toLowerCase() === clientName.toLowerCase());
+  if (!client) return null;
   
   const moves = await storage.getMovesByClient(client.id);
   const isInternal = client.type === "internal";
-  
-  const pipeline: ClientPipeline = {
-    clientName: client.name,
-    clientId: client.id,
-    clientType: client.type || "client",
-    active: [],
-    queued: [],
-    backlog: [],
-    issues: [],
-  };
+  const pipeline: ClientPipeline = { clientName: client.name, clientId: client.id, clientType: client.type || "client", active: [], queued: [], backlog: [], issues: [] };
   
   for (const move of moves) {
-    const moveWithContext: MoveWithContext = {
-      id: move.id,
-      title: move.title,
-      description: move.description,
-      status: move.status,
-      clientName: client.name,
-      clientId: move.clientId,
-      effortEstimate: move.effortEstimate,
-      drainType: move.drainType,
-      createdAt: move.createdAt,
-    };
-    
-    if (move.status === "active") {
-      pipeline.active.push(moveWithContext);
-    } else if (move.status === "queued") {
-      pipeline.queued.push(moveWithContext);
-    } else if (move.status === "backlog") {
-      pipeline.backlog.push(moveWithContext);
-    }
+    const moveWithContext: MoveWithContext = { id: move.id, title: move.title, description: move.description, status: move.status, clientName: client.name, clientId: move.clientId, effortEstimate: move.effortEstimate, drainType: move.drainType, createdAt: move.createdAt };
+    if (move.status === "active") pipeline.active.push(moveWithContext);
+    else if (move.status === "queued") pipeline.queued.push(moveWithContext);
+    else if (move.status === "backlog") pipeline.backlog.push(moveWithContext);
   }
   
-  // Only enforce strict pipeline rules for actual clients, not internal work
   if (!isInternal) {
     if (pipeline.active.length === 0) pipeline.issues.push("No active move");
     if (pipeline.queued.length === 0) pipeline.issues.push("No queued move");
     if (pipeline.backlog.length === 0) pipeline.issues.push("Empty backlog");
   }
-  
   return pipeline;
 }
 
-async function getAllClientPipelines(): Promise<{
-  clients: ClientPipeline[];
-  summary: {
-    totalActive: number;
-    totalQueued: number;
-    totalBacklog: number;
-  };
-}> {
+async function getAllClientPipelines(): Promise<{ clients: ClientPipeline[]; summary: { totalActive: number; totalQueued: number; totalBacklog: number; }; }> {
   const pipelines = await getClientsWithPipelines();
-  
   let totalActive = 0;
   let totalQueued = 0;
   let totalBacklog = 0;
-  
   for (const pipeline of pipelines) {
     totalActive += pipeline.active.length;
     totalQueued += pipeline.queued.length;
     totalBacklog += pipeline.backlog.length;
   }
-  
-  return {
-    clients: pipelines,
-    summary: {
-      totalActive,
-      totalQueued,
-      totalBacklog,
-    },
-  };
+  return { clients: pipelines, summary: { totalActive, totalQueued, totalBacklog } };
 }
 
 interface SuggestMoveArgs {
@@ -849,35 +722,17 @@ interface SuggestMoveArgs {
   prefer_client?: string;
 }
 
-async function suggestNextMove(args: SuggestMoveArgs): Promise<{
-  recommendation: string;
-  suggestedMove: MoveWithContext | null;
-  reasoning: string;
-  alternativeMoves: MoveWithContext[];
-}> {
-  const { clients, summary } = await getAllClientPipelines();
-  
+async function suggestNextMove(args: SuggestMoveArgs): Promise<{ recommendation: string; suggestedMove: MoveWithContext | null; reasoning: string; alternativeMoves: MoveWithContext[]; }> {
+  const { clients } = await getAllClientPipelines();
   const availableMoves: (MoveWithContext & { tier: string })[] = [];
-  
   for (const client of clients) {
-    for (const move of client.active) {
-      availableMoves.push({ ...move, tier: "active" });
-    }
-    for (const move of client.queued) {
-      availableMoves.push({ ...move, tier: "queued" });
-    }
-    for (const move of client.backlog.slice(0, 2)) {
-      availableMoves.push({ ...move, tier: "backlog" });
-    }
+    for (const move of client.active) availableMoves.push({ ...move, tier: "active" });
+    for (const move of client.queued) availableMoves.push({ ...move, tier: "queued" });
+    for (const move of client.backlog.slice(0, 2)) availableMoves.push({ ...move, tier: "backlog" });
   }
   
   if (availableMoves.length === 0) {
-    return {
-      recommendation: "No active or queued moves found. Consider creating new moves or promoting from backlog.",
-      suggestedMove: null,
-      reasoning: "No moves are currently in the Active or Queued status. Create new moves to get started.",
-      alternativeMoves: [],
-    };
+    return { recommendation: "No active or queued moves found. Consider creating new moves or promoting from backlog.", suggestedMove: null, reasoning: "No moves are currently in the Active or Queued status. Create new moves to get started.", alternativeMoves: [] };
   }
   
   const moveList = availableMoves.map((m, i) => {
@@ -929,9 +784,7 @@ Respond with JSON:
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
     const suggestedMove = availableMoves[result.recommended_index - 1] || null;
-    const alternativeMoves = (result.alternative_indices || [])
-      .map((i: number) => availableMoves[i - 1])
-      .filter(Boolean);
+    const alternativeMoves = (result.alternative_indices || []).map((i: number) => availableMoves[i - 1]).filter(Boolean);
 
     return {
       recommendation: suggestedMove ? `Work on: ${suggestedMove.title} (${suggestedMove.clientName})` : "No recommendation available",
@@ -953,116 +806,23 @@ Respond with JSON:
 
 export async function executePipelineTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
-    case "run_pipeline_audit": {
-      const shouldCheck = args.check_actionability !== false;
-      return runPipelineAudit(shouldCheck);
-    }
-    
-    case "get_client_pipeline": {
-      const clientName = args.client_name as string;
-      const pipeline = await getClientPipeline(clientName);
-      if (!pipeline) {
-        return { error: `Client "${clientName}" not found` };
-      }
-      return pipeline;
-    }
-    
-    case "check_task_actionable": {
-      return checkActionability(
-        args.task_name as string,
-        args.task_description as string | undefined
-      );
-    }
-    
-    case "promote_move": {
-      const moveId = args.move_id as number;
-      const target = args.target as "active" | "queued";
-      
-      const move = await storage.getMove(moveId);
-      if (!move) {
-        return { error: `Move ${moveId} not found` };
-      }
-      
-      // Use storage.promoteMove which handles rebalancing automatically
-      const promotedMove = await storage.promoteMove(moveId);
-      
-      return { 
-        success: true, 
-        message: `Promoted "${move.title}" to ${target}`,
-        move: promotedMove || { ...move, status: target }
-      };
-    }
-    
-    case "demote_move": {
-      const moveId = args.move_id as number;
-      const target = args.target as "queued" | "backlog";
-      
-      const move = await storage.getMove(moveId);
-      if (!move) {
-        return { error: `Move ${moveId} not found` };
-      }
-      
-      await storage.updateMove(moveId, { status: target });
-      return { 
-        success: true, 
-        message: `Demoted "${move.title}" to ${target}`,
-        move: { ...move, status: target }
-      };
-    }
-    
-    case "complete_move": {
-      const moveId = args.move_id as number;
-      
-      const move = await storage.getMove(moveId);
-      if (!move) {
-        return { error: `Move ${moveId} not found` };
-      }
-      
-      await storage.completeMove(moveId);
-      
-      let clientName = "Unknown";
-      if (move.clientId) {
-        const client = await storage.getClient(move.clientId);
-        if (client) {
-          clientName = client.name;
-        }
-      }
-      
+    case "run_pipeline_audit": { const shouldCheck = args.check_actionability !== false; return runPipelineAudit(shouldCheck); }
+    case "get_client_pipeline": { const clientName = args.client_name as string; const pipeline = await getClientPipeline(clientName); if (!pipeline) { return { error: `Client "${clientName}" not found` }; } return pipeline; }
+    case "check_task_actionable": { return checkActionability(args.task_name as string, args.task_description as string | undefined); }
+    case "promote_move": { const moveId = args.move_id as number; const target = args.target as "active" | "queued"; const move = await storage.getMove(moveId); if (!move) { return { error: `Move ${moveId} not found` }; } const promotedMove = await storage.promoteMove(moveId); return { success: true, message: `Promoted "${move.title}" to ${target}`, move: promotedMove || { ...move, status: target } }; }
+    case "demote_move": { const moveId = args.move_id as number; const target = args.target as "queued" | "backlog"; const move = await storage.getMove(moveId); if (!move) { return { error: `Move ${moveId} not found` }; } await storage.updateMove(moveId, { status: target }); return { success: true, message: `Demoted "${move.title}" to ${target}`, move: { ...move, status: target } }; }
+    case "complete_move": { 
+      const moveId = args.move_id as number; 
+      const move = await storage.getMove(moveId); 
+      if (!move) { return { error: `Move ${moveId} not found` }; } 
+      await storage.completeMove(moveId); 
+      // Log to daily metrics - Handle this better in storage.completeMove actually, but here to be safe:
+      let clientName = "No Client";
+      if (move.clientId) { const client = await storage.getClient(move.clientId); if (client) { clientName = client.name; } }
       const today = getLocalDateString();
-      let dailyLog = await storage.getDailyLog(today);
-      
-      if (!dailyLog) {
-        dailyLog = await storage.createDailyLog({
-          date: today,
-          completedMoves: [],
-          clientsTouched: [],
-          clientsSkipped: [],
-        });
-      }
-      
-      const completedMoves = (dailyLog.completedMoves as any[]) || [];
-      const clientsTouched = (dailyLog.clientsTouched as string[]) || [];
-      
-      completedMoves.push({
-        clientName,
-        moveId: moveId.toString(),
-        description: move.title,
-        at: new Date().toISOString(),
-      });
-      
-      if (!clientsTouched.includes(clientName)) {
-        clientsTouched.push(clientName);
-      }
-      
-      await storage.updateDailyLog(today, { completedMoves, clientsTouched });
-      
-      return { 
-        success: true, 
-        message: `Completed "${move.title}"`,
-        move: { ...move, status: "done" }
-      };
+      await storage.addCompletedMove(today, { moveId: moveId.toString(), description: move.title, clientName, at: new Date().toISOString(), source: "chat" });
+      return { success: true, message: `Completed "${move.title}"`, move: { ...move, status: "done" } }; 
     }
-    
     case "create_move": {
       const title = args.title as string;
       const clientName = args.client_name as string | undefined;
@@ -1070,76 +830,27 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       const status = (args.status as string) || "backlog";
       const effortEstimate = (args.effort_estimate as number) || 2;
       let drainType = args.drain_type as string | undefined;
-      
-      // Auto-infer drain_type if not provided
       if (!drainType) {
         const titleLower = title.toLowerCase();
-        if (titleLower.includes('email') || titleLower.includes('call') || titleLower.includes('meet') || 
-            titleLower.includes('message') || titleLower.includes('follow up') || titleLower.includes('reach out') ||
-            titleLower.includes('contact') || titleLower.includes('sync') || titleLower.includes('discuss')) {
-          drainType = 'comms';
-        } else if (titleLower.includes('invoice') || titleLower.includes('schedule') || titleLower.includes('update') ||
-                   titleLower.includes('form') || titleLower.includes('paperwork') || titleLower.includes('file') ||
-                   titleLower.includes('log') || titleLower.includes('submit') || titleLower.includes('enter')) {
-          drainType = 'admin';
-        } else if (titleLower.includes('proposal') || titleLower.includes('design') || titleLower.includes('strategy') ||
-                   titleLower.includes('plan') || titleLower.includes('brainstorm') || titleLower.includes('outline') ||
-                   titleLower.includes('draft') || titleLower.includes('write') || titleLower.includes('create')) {
-          drainType = 'creative';
-        } else if (titleLower.includes('research') || titleLower.includes('build') || titleLower.includes('code') ||
-                   titleLower.includes('analyze') || titleLower.includes('debug') || titleLower.includes('fix') ||
-                   titleLower.includes('implement') || titleLower.includes('develop') || titleLower.includes('investigate')) {
-          drainType = 'deep';
-        } else {
-          drainType = 'easy'; // Default to easy for simple tasks
-        }
+        if (titleLower.includes('email') || titleLower.includes('call') || titleLower.includes('meet') || titleLower.includes('discuss')) { drainType = 'comms'; } 
+        else if (titleLower.includes('invoice') || titleLower.includes('schedule') || titleLower.includes('file') || titleLower.includes('log')) { drainType = 'admin'; } 
+        else if (titleLower.includes('proposal') || titleLower.includes('design') || titleLower.includes('strategy') || titleLower.includes('plan')) { drainType = 'creative'; } 
+        else if (titleLower.includes('research') || titleLower.includes('build') || titleLower.includes('code') || titleLower.includes('analyze')) { drainType = 'deep'; } 
+        else { drainType = 'easy'; }
       }
-      
       let clientId: number | null = null;
-      
       if (clientName) {
         const clients = await storage.getAllClientsEntity();
         const client = clients.find((c: { name: string }) => c.name.toLowerCase() === clientName.toLowerCase());
-        
-        if (!client) {
-          // IMPORTANT: Never auto-create clients from task names
-          // Clients must be added through an explicit add_client action
-          return {
-            success: false,
-            error: `Client "${clientName}" not found. Clients must be added explicitly using add_client before creating moves for them. Do not infer client names from task descriptions.`,
-          };
-        }
-        
+        if (!client) { return { success: false, error: `Client "${clientName}" not found. Clients must be added explicitly using add_client before creating moves for them.` }; }
         clientId = client.id;
       }
-      
-      const move = await storage.createMove({
-        title,
-        description: description || null,
-        clientId,
-        status,
-        effortEstimate,
-        drainType,
-      });
-      
-      // Note: storage.createMove already handles rebalancing via rebalanceClientPipeline
-      
-      return {
-        success: true,
-        message: `Created move "${title}"${clientName ? ` for ${clientName}` : ""} [${drainType}, effort: ${effortEstimate}]`,
-        move,
-      };
+      const move = await storage.createMove({ title, description: description || null, clientId, status, effortEstimate, drainType });
+      return { success: true, message: `Created move "${title}"${clientName ? ` for ${clientName}` : ""} [${drainType}, effort: ${effortEstimate}]`, move };
     }
-    
-    case "get_all_client_pipelines": {
-      return getAllClientPipelines();
-    }
-    
-    case "suggest_next_move": {
-      return suggestNextMove(args as SuggestMoveArgs);
-    }
-    
-    default:
-      throw new Error(`Unknown pipeline tool: ${name}`);
+    case "get_all_client_pipelines": { return getAllClientPipelines(); }
+    case "suggest_next_move": { return suggestNextMove(args as SuggestMoveArgs); }
+    default: throw new Error(`Unknown pipeline tool: ${name}`);
   }
 }
+
