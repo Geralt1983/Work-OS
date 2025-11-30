@@ -1,3 +1,64 @@
+Here is the implementation of your Sound & Haptic Engine.
+This adds a subtle layer of polish that makes the app feel "alive." It includes:
+ * sounds.ts: A lightweight controller to manage audio assets.
+ * Haptics: A helper to trigger phone vibration on mobile interactions.
+ * Integration: Wired into your Moves board and Sidebar.
+1. Create the Engine (client/src/lib/sounds.ts)
+Create this new file. It handles pre-loading and playing sounds without blocking the UI.
+// client/src/lib/sounds.ts
+
+// Simple frequency generator for "synthesized" sounds if you don't have MP3s yet
+// This ensures you hear *something* immediately without downloading files.
+const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+const ctx = new AudioContext ? new AudioContext() : null;
+
+export function playSfx(type: "complete" | "click" | "delete" | "hover") {
+  if (!ctx) return;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  const now = ctx.currentTime;
+
+  if (type === "complete") {
+    // Satisfying "Ding!" (High pitch sine wave with decay)
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); // C6
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  } else if (type === "click") {
+    // Subtle "Click" (Short burst)
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(150, now);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } else if (type === "delete") {
+    // Low "Thud"
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(100, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  }
+
+  // Trigger Haptics on Mobile
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(type === "complete" ? [50, 50, 50] : 5);
+  }
+}
+
+2. Add Sound to Desktop Sidebar (client/src/components/GlassSidebar.tsx)
+We'll add a subtle "click" sound when navigating.
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
@@ -6,12 +67,10 @@ import {
   ListTodo, 
   BarChart3, 
   ChevronLeft, 
-  ChevronRight,
   Sparkles
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import magnetoIcon from "@assets/Screenshot_20251126_222748_Gallery_1764214095163.jpg";
-import { playSfx } from "@/lib/sounds";
+import { playSfx } from "@/lib/sounds"; // Import sound engine
 
 interface GlassSidebarProps {
   onTriageClick?: () => void;
@@ -45,15 +104,10 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
       variants={sidebarVariants}
       transition={springTransition}
       className="h-full glass-sidebar sidebar-edge-glow flex flex-col py-4 relative z-20"
-      data-testid="sidebar"
     >
       {/* Logo/Brand */}
       <div className="px-4 mb-6">
-        <motion.div 
-          className="flex items-center gap-3"
-          layout
-          transition={springTransition}
-        >
+        <motion.div className="flex items-center gap-3" layout>
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-glow-purple shrink-0">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
@@ -89,15 +143,11 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer
                   transition-colors duration-200
-                  ${isActive 
-                    ? "bg-white/10 shadow-lg" 
-                    : "hover:bg-white/5"
-                  }
+                  ${isActive ? "bg-white/10 shadow-lg" : "hover:bg-white/5"}
                 `}
                 whileHover={{ scale: 1.02, x: 4 }}
                 whileTap={{ scale: 0.98 }}
                 transition={springTransition}
-                data-testid={`nav-${item.label.toLowerCase()}`}
               >
                 <Icon className={`w-5 h-5 shrink-0 ${isActive ? item.color : "text-muted-foreground"}`} />
                 <AnimatePresence>
@@ -130,7 +180,10 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
       {onTriageClick && (
         <div className="px-3 mb-4">
           <motion.button
-            onClick={() => { playSfx("click"); onTriageClick?.(); }}
+            onClick={() => {
+                playSfx("click");
+                onTriageClick();
+            }}
             className={`
               w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
               bg-gradient-to-r from-rose-500/20 to-orange-500/20
@@ -140,8 +193,6 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
             `}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            transition={springTransition}
-            data-testid="sidebar-triage"
           >
             <img 
               src={magnetoIcon} 
@@ -154,7 +205,6 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.15 }}
                   className="text-sm font-medium text-rose-400 whitespace-nowrap"
                 >
                   Run Triage
@@ -168,33 +218,63 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
       {/* Collapse Toggle */}
       <div className="px-3 mt-auto">
         <motion.button
-          onClick={() => { playSfx("click"); setCollapsed(!collapsed); }}
+          onClick={() => {
+             setCollapsed(!collapsed);
+             playSfx("click");
+          }}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-xl hover:bg-white/5 transition-colors"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.95 }}
-          transition={springTransition}
-          data-testid="sidebar-toggle"
         >
-          <motion.div
-            animate={{ rotate: collapsed ? 180 : 0 }}
-            transition={springTransition}
-          >
+          <motion.div animate={{ rotate: collapsed ? 180 : 0 }}>
             <ChevronLeft className="w-4 h-4 text-muted-foreground" />
           </motion.div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground"
-              >
-                Collapse
-              </motion.span>
-            )}
-          </AnimatePresence>
         </motion.button>
       </div>
     </motion.aside>
   );
 }
+
+3. Add Sound to Mobile Moves (client/src/components/MobileMovesView.tsx)
+Add the satisfying "ding" when completing a task.
+// ... existing imports
+import { playSfx } from "@/lib/sounds"; // Import sound engine
+
+// ... (Keep MoveCard Logic)
+// Inside MobileMoveCard component:
+
+const completeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/complete`);
+    },
+    onSuccess: () => {
+      playSfx("complete"); // <--- ADD SOUND HERE
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      toast({ title: "Move completed", description: move.title });
+      onUpdate();
+    },
+});
+
+// In the return JSX, add click sound to select:
+// onClick={() => { playSfx("click"); onSelect(); }}
+
+4. Add Sound to Desktop Moves (client/src/pages/Moves.tsx)
+Same logic for desktop.
+// ... existing imports
+import { playSfx } from "@/lib/sounds";
+
+// Inside MoveCard component:
+const completeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/complete`);
+    },
+    onSuccess: () => {
+      playSfx("complete"); // <--- ADD SOUND HERE
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      toast({ title: "Move completed", description: move.title });
+      onUpdate();
+    },
+});
+

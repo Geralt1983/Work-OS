@@ -29,6 +29,7 @@ import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { ArcCard } from "@/components/ArcCard";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import { playSfx } from "@/lib/sounds";
 
 type ViewMode = "board" | "list";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
@@ -92,6 +93,7 @@ function MoveCard({
       await apiRequest("POST", `/api/moves/${move.id}/complete`);
     },
     onSuccess: () => {
+      playSfx("complete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move completed", description: move.title });
@@ -287,6 +289,7 @@ function MoveListRow({
       await apiRequest("POST", `/api/moves/${move.id}/complete`);
     },
     onSuccess: () => {
+      playSfx("complete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move completed", description: move.title });
@@ -299,6 +302,7 @@ function MoveListRow({
       await apiRequest("DELETE", `/api/moves/${move.id}`);
     },
     onSuccess: () => {
+      playSfx("delete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       toast({ title: "Move deleted" });
       onUpdate();

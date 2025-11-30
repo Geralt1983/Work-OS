@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ArcCard } from "@/components/ArcCard";
+import { playSfx } from "@/lib/sounds";
 
 const STATUS_LABELS: Record<MoveStatus, { label: string; color: string }> = {
   active: { label: "Active", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
@@ -63,6 +64,7 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
       await apiRequest("POST", `/api/moves/${move.id}/complete`);
     },
     onSuccess: () => {
+      playSfx("complete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move completed", description: move.title });
@@ -179,6 +181,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
       await apiRequest("POST", `/api/moves/${move?.id}/complete`);
     },
     onSuccess: () => {
+      playSfx("complete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move completed", description: move?.title });
@@ -192,6 +195,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
       await apiRequest("DELETE", `/api/moves/${move?.id}`);
     },
     onSuccess: () => {
+      playSfx("delete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
       toast({ title: "Move deleted" });
       onOpenChange(false);
@@ -365,6 +369,7 @@ export default function MobileMovesView({
   const backlogMoves = filteredMoves.filter(m => m.status === "backlog");
 
   const handleSelectMove = (move: Move) => {
+    playSfx("click");
     setSelectedMove(move);
     setDrawerOpen(true);
   };
