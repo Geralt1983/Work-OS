@@ -92,11 +92,14 @@ function MoveCard({
   });
 
   const getGlow = () => {
-    if (move.status === 'active') return 'purple' as const;
+    // Only Active tasks get glow - it indicates "focus" status
+    if (move.status !== 'active') return 'none' as const;
+    
+    // For Active tasks, glow color matches drain type
     if (normalizedDrainType === 'deep') return 'cyan' as const;
     if (normalizedDrainType === 'admin') return 'orange' as const;
     if (normalizedDrainType === 'creative') return 'pink' as const;
-    return 'none' as const;
+    return 'purple' as const; // Default purple for Active tasks without drain type
   };
 
   return (

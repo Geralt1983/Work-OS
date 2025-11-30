@@ -147,11 +147,14 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
   };
 
   const getGlow = (): "purple" | "cyan" | "orange" | "pink" | "none" => {
-    if (move.status === 'active') return 'purple';
+    // Only Active tasks get glow - it indicates "focus" status
+    if (move.status !== 'active') return 'none';
+    
+    // For Active tasks, glow color matches drain type
     if (normalizedDrainType === 'deep') return 'cyan';
     if (normalizedDrainType === 'admin') return 'orange';
     if (normalizedDrainType === 'creative') return 'pink';
-    return 'none';
+    return 'purple'; // Default purple for Active tasks without drain type
   };
 
   return (
