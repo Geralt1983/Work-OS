@@ -8,6 +8,7 @@ import Chat from "@/pages/Chat";
 import Metrics from "@/pages/Metrics";
 import Moves from "@/pages/Moves";
 import NotFound from "@/pages/not-found";
+import { CommandPalette } from "@/components/CommandPalette";
 
 function Router() {
   return (
@@ -26,6 +27,7 @@ function App() {
       <TooltipProvider>
         <div className="h-screen gradient-bg">
           <Router />
+          <CommandPalette />
         </div>
         <Toaster />
         <SonnerToaster 
