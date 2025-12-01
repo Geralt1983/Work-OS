@@ -1074,15 +1074,17 @@ export async function executePipelineTool(name: string, args: Record<string, unk
           const highest = Math.max(...newCrossed);
           console.log(`[Notification AI] Triggering alert for ${highest}% (crossed: [${newCrossed.join(',')}])`);
           
-          // Fire the alert (don't await - let it complete in background)
-          sendWifeAlert(highest, metrics.movesCompleted).catch(err => 
-            console.error("[Notification AI] Failed to send:", err)
-          );
-          
-          // Mark ALL crossed thresholds as sent so we don't retry lower ones
-          const newSentList = Array.from(new Set([...alreadySent, ...newCrossed]));
-          await storage.updateDailyLog(today, { notificationsSent: newSentList });
-          console.log(`[Notification AI] Marked as sent: [${newSentList.join(',')}]`);
+          // AWAIT the notification before marking as sent
+          try {
+            await sendWifeAlert(highest, metrics.movesCompleted);
+            // Only mark as sent AFTER successful delivery
+            const newSentList = Array.from(new Set([...alreadySent, ...newCrossed]));
+            await storage.updateDailyLog(today, { notificationsSent: newSentList });
+            console.log(`[Notification AI] Marked as sent: [${newSentList.join(',')}]`);
+          } catch (err) {
+            console.error("[Notification AI] Failed to send:", err);
+            // Don't mark as sent if it failed - will retry next completion
+          }
         }
       } catch (notifError) {
         console.error("[Notification AI] Logic error:", notifError);
