@@ -1,0 +1,269 @@
+That logic is solid: we check the database to see if 25, 50, etc. are already in the notificationsSent array for today. If they are, we skip sending. This prevents spam if you refresh the page or if the system re-calculates.
+However, to be extra safe and avoid "bursts" (e.g., if you jump from 20% to 60% instantly, we don't want to send both the 25% and 50% texts at the same time), I will update the logic to only send the highest new threshold and mark the lower ones as "skipped/sent".
+Here is the corrected code.
+1. Update server/storage.ts (The Scoring Engine)
+This enables the "90 minutes for Draining tasks" logic so your percentage moves faster.
+import { db } from "./db";
+import { sessions, messages, clientMemory, dailyLog, userPatterns, taskSignals, backlogEntries, clients, moves } from "@shared/schema";
+import { eq, desc, and, gte, isNull, sql, asc } from "drizzle-orm";
+import { randomUUID } from "crypto";
+
+// ... (Keep getLocalDateString helper) ...
+export function getLocalDateString(date: Date = new Date()): string {
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+  const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  return `${year}-${month}-${day}`;
+}
+
+// === SCORING ENGINE ===
+export function calculateEarnedMinutes(effort: number | null, drainType: string | null): number {
+  const effortMap: Record<number, number> = {
+    1: 10,  // Quick
+    2: 20,  // Standard
+    3: 45,  // Chunky
+    4: 90   // Draining (Big Credit)
+  };
+  return effortMap[effort || 2] || 20;
+}
+
+// ... (Keep IStorage Interface) ...
+
+class DatabaseStorage {
+  // ... (Keep all standard methods like createSession, getClient, etc.) ...
+  // ... (Only showing the CHANGED methods below for brevity) ...
+
+  // === UPDATED: Log Move with Weighted Score ===
+  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string; earnedMinutes?: number }): Promise<boolean> {
+    let existing = await this.getDailyLog(date);
+    
+    if (!existing) {
+      existing = await this.createDailyLog({
+        date,
+        completedMoves: [],
+        clientsTouched: [],
+        clientsSkipped: [],
+      });
+    }
+    
+    const completedMoves = Array.isArray(existing.completedMoves) 
+      ? (existing.completedMoves as any[])
+      : [];
+    
+    const clientsTouched = Array.isArray(existing.clientsTouched)
+      ? (existing.clientsTouched as string[])
+      : [];
+    
+    if (completedMoves.some(m => m.moveId === move.moveId)) return false;
+    
+    completedMoves.push(move);
+    
+    if (!clientsTouched.includes(move.clientName)) {
+      clientsTouched.push(move.clientName);
+    }
+    
+    await this.updateDailyLog(date, {
+      completedMoves: completedMoves as unknown as string[],
+      clientsTouched,
+    });
+    
+    return true;
+  }
+
+  // === UPDATED: Calculate Percentage based on Score ===
+  async getTodayMetrics() {
+    const today = getLocalDateString();
+    const log = await this.getDailyLog(today);
+    
+    const completedMoves = (log?.completedMoves as any[]) || [];
+    const clientsTouched = (log?.clientsTouched as string[]) || [];
+    const movesCompleted = completedMoves.length;
+    
+    // SUM MINUTES based on the saved 'earnedMinutes' field
+    const estimatedMinutes = completedMoves.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+    const targetMinutes = 180; // 3 Hours
+    
+    let pacingPercent = 0;
+    if (targetMinutes > 0) {
+      pacingPercent = Math.min(Math.round((estimatedMinutes / targetMinutes) * 100), 100);
+    }
+    
+    return {
+      date: today,
+      movesCompleted,
+      estimatedMinutes,
+      targetMinutes,
+      pacingPercent,
+      clientsTouched,
+      backlogMoves: log?.backlogMovesCount || 0,
+      nonBacklogMoves: log?.nonBacklogMovesCount || 0,
+    };
+  }
+
+  // === UPDATED: Weekly Metrics (Monday Start) ===
+  async getWeeklyMetrics() {
+    const targetMinutes = 180;
+    
+    // Calculate start of week (Monday)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun
+    const daysToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysToMonday);
+    
+    const days: any[] = [];
+    let currentWeekMinutes = 0;
+    let currentWeekMoves = 0;
+    
+    // Fetch logs
+    const logs = await this.getWeeklyLogs(14); // Fetch extra history
+    const logsByDate = new Map(logs.map(l => [l.date, l]));
+
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const dateStr = getLocalDateString(d);
+        
+        const log = logsByDate.get(dateStr);
+        const moves = (log?.completedMoves as any[]) || [];
+        const minutes = moves.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+        
+        days.push({
+            date: dateStr,
+            movesCompleted: moves.length,
+            estimatedMinutes: minutes,
+            pacingPercent: Math.min(Math.round((minutes / targetMinutes) * 100), 100)
+        });
+        
+        currentWeekMinutes += minutes;
+        currentWeekMoves += moves.length;
+    }
+
+    // Fake momentum for now (simplified)
+    const trend = currentWeekMinutes > 600 ? "up" : "stable";
+    
+    return {
+        days,
+        averageMovesPerDay: Math.round(currentWeekMoves / (days.filter(d=>d.movesCompleted>0).length || 1)),
+        totalMoves: currentWeekMoves,
+        totalMinutes: currentWeekMinutes,
+        momentum: { trend, percentChange: 0, message: "Tracking" }
+    };
+  }
+
+  // ... (Copy all other methods from your previous storage.ts) ...
+  // Ensure createSession, getSession, etc. are preserved
+}
+
+export const storage = new DatabaseStorage();
+
+2. Update server/routes.ts (Smart Notification Trigger)
+This route handles the "Complete" button click from the UI.
+import { storage, getLocalDateString, calculateEarnedMinutes } from "./storage";
+import { sendWifeAlert } from "./notification-service";
+
+// ... imports
+
+// ... inside app.post("/api/moves/:id/complete")
+
+  app.post("/api/moves/:id/complete", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const effortActual = req.body.effortActual ? parseInt(req.body.effortActual) : undefined;
+      
+      const move = await storage.completeMove(id, effortActual);
+      if (!move) return res.status(404).json({ error: "Move not found" });
+
+      // 1. Calculate Score
+      const minutes = calculateEarnedMinutes(move.effortEstimate, move.drainType);
+
+      // 2. Log
+      let clientName = "No Client";
+      if (move.clientId) {
+        const client = await storage.getClient(move.clientId);
+        if (client) clientName = client.name;
+      }
+      
+      const today = getLocalDateString();
+      await storage.addCompletedMove(today, {
+        moveId: move.id.toString(),
+        description: move.title,
+        clientName,
+        at: new Date().toISOString(),
+        source: "moves-ui",
+        earnedMinutes: minutes, // <--- Save the score
+      });
+
+      // 3. SMART ALERT SYSTEM
+      const metrics = await storage.getTodayMetrics();
+      const log = await storage.getDailyLog(today);
+      const sentNotifications = (log?.notificationsSent as number[]) || [];
+      const thresholds = [25, 50, 75, 100];
+      
+      // Find all thresholds we have crossed but NOT sent yet
+      const newCrossed = thresholds.filter(t => metrics.pacingPercent >= t && !sentNotifications.includes(t));
+      
+      if (newCrossed.length > 0) {
+          // Only send the HIGHEST one to avoid spamming (e.g. hitting 25 and 50 at once)
+          const highest = Math.max(...newCrossed);
+          
+          // Send the alert
+          sendWifeAlert(highest, metrics.movesCompleted).catch(console.error);
+          
+          // Mark ALL crossed thresholds as sent
+          const newSentList = [...new Set([...sentNotifications, ...newCrossed])];
+          await storage.updateDailyLog(today, { notificationsSent: newSentList });
+      }
+      
+      res.json(move);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed" });
+    }
+  });
+
+3. Update server/pipeline-tools.ts (AI Trigger)
+Ensure the AI can also trigger alerts when it auto-completes tasks.
+import { sendWifeAlert } from "./notification-service";
+import { storage, getLocalDateString, calculateEarnedMinutes } from "./storage";
+
+// ... inside executePipelineTool -> case "complete_move":
+
+    case "complete_move": {
+      // ... (get move, complete move) ...
+      
+      // 1. Calculate Score
+      const minutes = calculateEarnedMinutes(move.effortEstimate, move.drainType);
+      
+      // ... (logging logic) ...
+      
+      await storage.addCompletedMove(today, {
+        // ... params ...
+        earnedMinutes: minutes
+      });
+
+      // 2. SMART ALERT SYSTEM (Same logic as routes.ts)
+      const metrics = await storage.getTodayMetrics();
+      const log = await storage.getDailyLog(today);
+      const sentNotifications = (log?.notificationsSent as number[]) || [];
+      const thresholds = [25, 50, 75, 100];
+      
+      const newCrossed = thresholds.filter(t => metrics.pacingPercent >= t && !sentNotifications.includes(t));
+      
+      if (newCrossed.length > 0) {
+          const highest = Math.max(...newCrossed);
+          sendWifeAlert(highest, metrics.movesCompleted).catch(console.error);
+          const newSentList = [...new Set([...sentNotifications, ...newCrossed])];
+          await storage.updateDailyLog(today, { notificationsSent: newSentList });
+      }
+
+      return { success: true, message: "Completed" };
+    }
+

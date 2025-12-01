@@ -453,21 +453,29 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
         });
       }
       
-      // === WIFE NOTIFICATION TRIGGER ===
+      // === SMART ALERT SYSTEM ===
+      // Only sends the HIGHEST new threshold to avoid burst notifications
       try {
         const today = getLocalDateString();
         const metrics = await storage.getTodayMetrics();
         const log = await storage.getDailyLog(today);
         
         const sentNotifications = (log?.notificationsSent as number[]) || [];
-        const currentPercent = metrics.pacingPercent;
+        const thresholds = [25, 50, 75, 100];
         
-        const milestones = [25, 50, 75, 100];
-        for (const milestone of milestones) {
-          if (currentPercent >= milestone && !sentNotifications.includes(milestone)) {
-            await sendWifeAlert(milestone, metrics.movesCompleted);
-            await storage.addNotificationSent(today, milestone);
-          }
+        // Find all thresholds we crossed but haven't sent yet
+        const newCrossed = thresholds.filter(t => 
+          metrics.pacingPercent >= t && !sentNotifications.includes(t)
+        );
+        
+        if (newCrossed.length > 0) {
+          // Only send the HIGHEST one to avoid spam
+          const highest = Math.max(...newCrossed);
+          await sendWifeAlert(highest, metrics.movesCompleted);
+          
+          // Mark ALL crossed thresholds as sent (avoid duplicates)
+          const newSentList = Array.from(new Set([...sentNotifications, ...newCrossed]));
+          await storage.updateDailyLog(today, { notificationsSent: newSentList });
         }
       } catch (notifError) {
         console.error("Notification error (non-fatal):", notifError);
