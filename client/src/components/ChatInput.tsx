@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, ImagePlus, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { Client } from "@shared/schema";
 
 interface SelectedImage {
   file: File;
@@ -30,8 +32,25 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState(0);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: clients } = useQuery<Client[]>({ 
+    queryKey: ["/api/clients"],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const activeClients = clients?.filter(c => c.isActive === 1) || [];
+  
+  const filteredClients = activeClients.filter(c => 
+    c.name.toLowerCase().includes(mentionQuery.toLowerCase())
+  );
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -82,6 +101,7 @@ export default function ChatInput({
     const base64Array = selectedImages.length > 0 ? selectedImages.map(img => img.base64) : undefined;
     onSendMessage(trimmed || "What's in this image?", base64Array);
     setMessage("");
+    setShowMentions(false);
     
     selectedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
     setSelectedImages([]);
@@ -101,7 +121,63 @@ export default function ChatInput({
     });
   };
 
+  const checkForMention = (text: string, cursor: number) => {
+    const textBeforeCursor = text.slice(0, cursor);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith("@")) {
+      const query = lastWord.slice(1);
+      setMentionQuery(query);
+      setShowMentions(true);
+      setMentionIndex(0);
+    } else {
+      setShowMentions(false);
+    }
+  };
+
+  const insertMention = (clientName: string) => {
+    const textBeforeCursor = message.slice(0, cursorPosition);
+    const textAfterCursor = message.slice(cursorPosition);
+    
+    const lastAtPos = textBeforeCursor.lastIndexOf("@");
+    const newTextBefore = textBeforeCursor.slice(0, lastAtPos) + `@${clientName} `;
+    
+    const newValue = newTextBefore + textAfterCursor;
+    setMessage(newValue);
+    setShowMentions(false);
+    
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newTextBefore.length, newTextBefore.length);
+      }
+    }, 0);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentions && filteredClients.length > 0) {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex(prev => (prev > 0 ? prev - 1 : filteredClients.length - 1));
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex(prev => (prev < filteredClients.length - 1 ? prev + 1 : 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(filteredClients[mentionIndex].name);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowMentions(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -125,10 +201,55 @@ export default function ChatInput({
     }
   };
 
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const newCursorPos = e.target.selectionStart;
+    
+    setMessage(newValue);
+    setCursorPosition(newCursorPos);
+    checkForMention(newValue, newCursorPos);
+  };
+
   return (
-    <div className="p-4 sm:p-6">
-      <div className="max-w-3xl mx-auto space-y-3">
-        {/* Image Previews */}
+    <div className="p-4 sm:p-6 relative">
+      <div className="max-w-3xl mx-auto space-y-3 relative">
+        
+        <AnimatePresence>
+          {showMentions && filteredClients.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute bottom-full left-0 mb-2 w-64 bg-[#1a1b26]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+            >
+              <div className="px-3 py-2 text-xs font-medium text-white/40 border-b border-white/5 uppercase tracking-wider">
+                Select Client
+              </div>
+              <div className="max-h-48 overflow-y-auto py-1 custom-scrollbar">
+                {filteredClients.map((client, index) => (
+                  <button
+                    key={client.id}
+                    onClick={() => insertMention(client.name)}
+                    data-testid={`mention-client-${client.id}`}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
+                      index === mentionIndex 
+                        ? "bg-purple-500/20 text-white" 
+                        : "text-slate-300 hover:bg-white/5"
+                    }`}
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full shrink-0" 
+                      style={{ backgroundColor: client.color || '#a855f7' }} 
+                    />
+                    <span className="truncate text-sm font-medium">{client.name}</span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {selectedImages.length > 0 && (
             <motion.div 
@@ -168,7 +289,6 @@ export default function ChatInput({
           )}
         </AnimatePresence>
 
-        {/* Input Container - The "Command Bar" */}
         <motion.div 
           className="relative flex items-end gap-2 p-2 rounded-[24px] bg-[#1a1b26]/80 backdrop-blur-xl border border-white/10 shadow-2xl"
           initial={false}
@@ -188,7 +308,6 @@ export default function ChatInput({
             data-testid="input-image-file"
           />
           
-          {/* Image Upload Button */}
           <motion.button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -201,11 +320,10 @@ export default function ChatInput({
             <ImagePlus className="h-5 w-5" />
           </motion.button>
 
-          {/* Text Input */}
           <Textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder={selectedImages.length > 0 ? "Ask about these images..." : placeholder}
             disabled={disabled}
@@ -214,7 +332,6 @@ export default function ChatInput({
             data-testid="input-message"
           />
 
-          {/* Send Button */}
           <motion.button
             onClick={handleSubmit}
             disabled={disabled || (!message.trim() && selectedImages.length === 0)}
@@ -232,7 +349,7 @@ export default function ChatInput({
         </motion.div>
 
         <p className="text-[10px] text-muted-foreground/40 text-center font-medium tracking-wide uppercase">
-          One move per client • Daily momentum
+          Type @ to mention a client
         </p>
       </div>
     </div>
