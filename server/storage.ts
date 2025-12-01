@@ -63,7 +63,7 @@ export interface IStorage {
   createDailyLog(log: InsertDailyLog): Promise<DailyLog>;
   getDailyLog(date: string): Promise<DailyLog | undefined>;
   updateDailyLog(date: string, updates: Partial<DailyLog>): Promise<void>;
-  addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean>;
+  addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string; earnedMinutes: number }): Promise<boolean>;
   removeCompletedMoves(date: string, moveIds: string[]): Promise<number>;
   addNotificationSent(date: string, milestone: number): Promise<void>;
   
@@ -322,7 +322,7 @@ class DatabaseStorage implements IStorage {
     await db.update(dailyLog).set(updates).where(eq(dailyLog.date, date));
   }
 
-  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string }): Promise<boolean> {
+  async addCompletedMove(date: string, move: { moveId: string; description: string; clientName: string; at: string; source?: string; earnedMinutes: number }): Promise<boolean> {
     let existing = await this.getDailyLog(date);
     
     if (!existing) {
@@ -335,7 +335,7 @@ class DatabaseStorage implements IStorage {
     }
     
     const completedMoves = Array.isArray(existing.completedMoves) 
-      ? (existing.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string; source?: string }>)
+      ? (existing.completedMoves as Array<{ moveId: string; description: string; clientName: string; at: string; source?: string; earnedMinutes?: number }>)
       : [];
     
     const clientsTouched = Array.isArray(existing.clientsTouched)
