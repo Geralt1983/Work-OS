@@ -460,25 +460,33 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
         const metrics = await storage.getTodayMetrics();
         const log = await storage.getDailyLog(today);
         
-        const sentNotifications = (log?.notificationsSent as number[]) || [];
+        const alreadySent = (log?.notificationsSent as number[]) || [];
         const thresholds = [25, 50, 75, 100];
+        
+        console.log(`[Notification] Check: ${metrics.pacingPercent}% progress, already sent: [${alreadySent.join(',')}]`);
         
         // Find all thresholds we crossed but haven't sent yet
         const newCrossed = thresholds.filter(t => 
-          metrics.pacingPercent >= t && !sentNotifications.includes(t)
+          metrics.pacingPercent >= t && !alreadySent.includes(t)
         );
         
         if (newCrossed.length > 0) {
           // Only send the HIGHEST one to avoid spam
           const highest = Math.max(...newCrossed);
-          await sendWifeAlert(highest, metrics.movesCompleted);
+          console.log(`[Notification] Triggering alert for ${highest}% (crossed: [${newCrossed.join(',')}])`);
           
-          // Mark ALL crossed thresholds as sent (avoid duplicates)
-          const newSentList = Array.from(new Set([...sentNotifications, ...newCrossed]));
+          // Fire the alert (don't await - let it complete in background)
+          sendWifeAlert(highest, metrics.movesCompleted).catch(err => 
+            console.error("[Notification] Failed to send:", err)
+          );
+          
+          // Mark ALL crossed thresholds as sent so we don't retry lower ones
+          const newSentList = Array.from(new Set([...alreadySent, ...newCrossed]));
           await storage.updateDailyLog(today, { notificationsSent: newSentList });
+          console.log(`[Notification] Marked as sent: [${newSentList.join(',')}]`);
         }
       } catch (notifError) {
-        console.error("Notification error (non-fatal):", notifError);
+        console.error("[Notification] Logic error:", notifError);
       }
       
       res.json(move);
