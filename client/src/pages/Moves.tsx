@@ -15,7 +15,7 @@ import MobileMovesView from "@/components/MobileMovesView";
 import { DesktopMovesView } from "@/components/DesktopMovesView";
 import { TriageDialog } from "@/components/TriageDialog";
 
-type ViewMode = "board" | "list";
+type ViewMode = "board" | "list" | "history";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
 type SortDirection = "asc" | "desc";
 
@@ -31,7 +31,7 @@ export default function Moves() {
   });
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("moves-view-mode");
-    return (saved === "list" || saved === "board") ? saved : "board";
+    return (saved === "list" || saved === "board" || saved === "history") ? saved : "board";
   });
   const [sortField, setSortField] = useState<SortField>("status");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");

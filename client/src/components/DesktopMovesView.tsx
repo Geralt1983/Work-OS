@@ -14,14 +14,14 @@ import { EFFORT_LEVELS, DRAIN_TYPES, normalizeDrainType } from "@shared/schema";
 import { 
   Plus, ChevronUp, ChevronDown, Check, Trash2, 
   Zap, Brain, Mail, FileText, Lightbulb, AlertCircle, Clock,
-  LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown
+  LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, History
 } from "lucide-react";
 import GlassSidebar from "@/components/GlassSidebar";
 import IslandLayout from "@/components/IslandLayout";
 import { ArcCard } from "@/components/ArcCard";
 import { playSfx } from "@/lib/sounds";
 
-type ViewMode = "board" | "list";
+type ViewMode = "board" | "list" | "history";
 type SortField = "title" | "client" | "status" | "effort" | "drain" | "created";
 type SortDirection = "asc" | "desc";
 
@@ -597,6 +597,85 @@ function ListView({
   );
 }
 
+function HistoryView({ moves, clients }: { moves: Move[]; clients: Client[] }) {
+  const history = moves
+    .filter(m => m.status === 'done')
+    .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
+  
+  const grouped: Record<string, Move[]> = {};
+  history.forEach(m => {
+    const date = new Date(m.completedAt!).toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(m);
+  });
+
+  if (history.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <div className="text-center space-y-2">
+          <History className="w-12 h-12 mx-auto opacity-50" />
+          <p>No completed moves yet</p>
+          <p className="text-sm text-muted-foreground/60">Complete some moves to see them here</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-6" data-testid="history-view">
+      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+        <Check className="w-5 h-5 text-emerald-400" /> Completed Moves
+      </h3>
+       
+      {Object.entries(grouped).map(([date, groupMoves]) => (
+        <div key={date} className="mb-8">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 border-b border-white/5 pb-2">
+            {date} ({groupMoves.length} moves)
+          </h4>
+          <div className="space-y-2">
+            {groupMoves.map(move => {
+              const client = clients.find(c => c.id === move.clientId);
+              const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
+              return (
+                <div 
+                  key={move.id} 
+                  className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 opacity-75 hover:opacity-100 transition-opacity"
+                  data-testid={`history-move-${move.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs">
+                      <Check className="w-3 h-3" />
+                    </div>
+                    <span className="text-sm font-medium text-slate-300 line-through decoration-slate-600">
+                      {move.title}
+                    </span>
+                    {client && (
+                      <Badge variant="outline" className="text-[10px]">{client.name}</Badge>
+                    )}
+                    {effortLevel && (
+                      <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-white/5">
+                        {effortLevel.label}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {new Date(move.completedAt!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface DesktopMovesViewProps {
   moves: Move[];
   clients: Client[];
@@ -671,6 +750,15 @@ export function DesktopMovesView({
                   data-testid="button-view-list"
                 >
                   <List className="h-4 w-4" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`h-8 w-8 rounded-xl flex items-center justify-center transition-colors ${viewMode === "history" ? "bg-emerald-500/20 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setViewMode("history")}
+                  data-testid="button-view-history"
+                >
+                  <Check className="h-4 w-4" />
                 </motion.button>
               </div>
             </div>
@@ -787,7 +875,7 @@ export function DesktopMovesView({
                   )}
                 </div>
               </DragDropContext>
-            ) : (
+            ) : viewMode === "list" ? (
               <ListView 
                 moves={moves} 
                 clients={clients} 
@@ -801,6 +889,8 @@ export function DesktopMovesView({
                 statusFilter={statusFilter}
                 drainFilter={drainFilter}
               />
+            ) : (
+              <HistoryView moves={moves} clients={clients} />
             )}
           </div>
         </div>
