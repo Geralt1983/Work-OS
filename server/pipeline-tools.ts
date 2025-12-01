@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { storage, getLocalDateString } from "./storage";
+import { storage, getLocalDateString, calculateEarnedMinutes } from "./storage";
+import { sendWifeAlert } from "./notification-service";
 import { normalizeDrainType } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -1028,45 +1029,52 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       
       await storage.completeMove(moveId);
       
-      let clientName = "Unknown";
+      // Calculate weighted score based on effort level
+      const earnedMinutes = calculateEarnedMinutes(move.effortEstimate, move.drainType);
+      
+      let clientName = "No Client";
       if (move.clientId) {
         const client = await storage.getClient(move.clientId);
         if (client) {
           clientName = client.name;
+          await storage.updateClientMove(client.name, moveId.toString(), move.title);
         }
       }
       
       const today = getLocalDateString();
-      let dailyLog = await storage.getDailyLog(today);
       
-      if (!dailyLog) {
-        dailyLog = await storage.createDailyLog({
-          date: today,
-          completedMoves: [],
-          clientsTouched: [],
-          clientsSkipped: [],
-        });
-      }
-      
-      const completedMoves = (dailyLog.completedMoves as any[]) || [];
-      const clientsTouched = (dailyLog.clientsTouched as string[]) || [];
-      
-      completedMoves.push({
-        clientName,
+      // Log completion with weighted earnedMinutes
+      await storage.addCompletedMove(today, {
         moveId: moveId.toString(),
         description: move.title,
+        clientName,
         at: new Date().toISOString(),
+        source: "chat",
+        earnedMinutes,
       });
       
-      if (!clientsTouched.includes(clientName)) {
-        clientsTouched.push(clientName);
+      // === NOTIFICATION TRIGGER (same logic as routes.ts) ===
+      try {
+        const metrics = await storage.getTodayMetrics();
+        const log = await storage.getDailyLog(today);
+        
+        const sentNotifications = (log?.notificationsSent as number[]) || [];
+        const currentPercent = metrics.pacingPercent;
+        
+        const milestones = [25, 50, 75, 100];
+        for (const milestone of milestones) {
+          if (currentPercent >= milestone && !sentNotifications.includes(milestone)) {
+            await sendWifeAlert(milestone, metrics.movesCompleted);
+            await storage.addNotificationSent(today, milestone);
+          }
+        }
+      } catch (notifError) {
+        console.error("Notification error (non-fatal):", notifError);
       }
-      
-      await storage.updateDailyLog(today, { completedMoves, clientsTouched });
       
       return { 
         success: true, 
-        message: `Completed "${move.title}"`,
+        message: `Completed "${move.title}" (+${earnedMinutes} mins)`,
         move: { ...move, status: "done" }
       };
     }
