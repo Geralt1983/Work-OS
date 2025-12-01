@@ -464,6 +464,9 @@ export default function MobileMovesView({
   const activeMoves = filteredMoves.filter(m => m.status === "active");
   const queuedMoves = filteredMoves.filter(m => m.status === "queued");
   const backlogMoves = filteredMoves.filter(m => m.status === "backlog");
+  const historyMoves = filteredMoves
+    .filter(m => m.status === "done")
+    .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
 
   const handleSelectMove = (move: Move) => {
     playSfx("click");
@@ -500,6 +503,77 @@ export default function MobileMovesView({
       </div>
     </ScrollArea>
   );
+
+  const renderHistoryList = (moves: Move[], clients: Client[]) => {
+    const grouped: Record<string, Move[]> = {};
+    moves.forEach(m => {
+      const date = new Date(m.completedAt!).toLocaleDateString('en-US', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(m);
+    });
+
+    return (
+      <ScrollArea className="h-[calc(100vh-220px)]">
+        <div className="p-4 pb-20">
+          {moves.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground/50">
+              <Check className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              <p>No completed moves yet</p>
+            </div>
+          ) : (
+            Object.entries(grouped).map(([date, dayMoves]) => (
+              <div key={date} className="mb-6">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 px-1">
+                  {date} ({dayMoves.length})
+                </h4>
+                <div className="space-y-2">
+                  {dayMoves.map(move => {
+                    const client = clients.find(c => c.id === move.clientId);
+                    const effortLevel = EFFORT_LEVELS.find(e => e.value === move.effortEstimate);
+                    return (
+                      <div 
+                        key={move.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5"
+                        data-testid={`mobile-history-move-${move.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Check className="h-3 w-3" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-medium text-slate-400 line-through decoration-slate-600 block truncate">
+                              {move.title}
+                            </span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {client && (
+                                <span className="text-[10px] text-muted-foreground">{client.name}</span>
+                              )}
+                              {effortLevel && (
+                                <span className="text-[10px] text-muted-foreground/60">
+                                  {effortLevel.label}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs text-slate-600 shrink-0 ml-2">
+                          {new Date(move.completedAt!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full bg-transparent" data-testid="mobile-moves-view">
@@ -538,36 +612,44 @@ export default function MobileMovesView({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="px-4">
-          <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-3' : 'grid-cols-2'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`} data-testid="mobile-tabs">
+          <TabsList className={`grid w-full ${showBacklog ? 'grid-cols-4' : 'grid-cols-3'} bg-black/40 border border-white/5 rounded-xl h-11 p-1`} data-testid="mobile-tabs">
             <TabsTrigger 
               value="active" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground text-xs"
               data-testid="mobile-tab-active"
             >
               Active
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
+              <Badge variant="secondary" className="ml-1 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1 h-4">
                 {activeMoves.length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger 
               value="queued" 
-              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+              className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground text-xs"
               data-testid="mobile-tab-queued"
             >
               Queued
-              <Badge variant="secondary" className="ml-1.5 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1.5 h-4">
+              <Badge variant="secondary" className="ml-1 bg-white/10 text-white/90 hover:bg-white/10 text-[10px] px-1 h-4">
                 {queuedMoves.length}
               </Badge>
             </TabsTrigger>
             {showBacklog && (
               <TabsTrigger 
                 value="backlog" 
-                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground"
+                className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white text-muted-foreground text-xs"
                 data-testid="mobile-tab-backlog"
               >
                 Backlog
               </TabsTrigger>
             )}
+            <TabsTrigger 
+              value="history" 
+              className="rounded-lg data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400 text-muted-foreground text-xs"
+              data-testid="mobile-tab-history"
+            >
+              <Check className="h-3 w-3 mr-1" />
+              Done
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -582,6 +664,9 @@ export default function MobileMovesView({
             {renderMoveList(backlogMoves)}
           </TabsContent>
         )}
+        <TabsContent value="history" className="flex-1 mt-2">
+          {renderHistoryList(historyMoves, clients)}
+        </TabsContent>
       </Tabs>
 
       <MobileDetailDrawer
