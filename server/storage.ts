@@ -17,6 +17,19 @@ export function getLocalDateString(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+// === Weighted Scoring Engine ===
+// Quick (1): 10 mins, Standard (2): 20 mins, Chunky (3): 45 mins, Draining (4): 90 mins
+export function calculateEarnedMinutes(effort: number | null, drainType: string | null): number {
+  const effortMap: Record<number, number> = {
+    1: 10,  // Quick
+    2: 20,  // Standard
+    3: 45,  // Chunky
+    4: 90   // Draining (High Reward)
+  };
+  
+  return effortMap[effort || 2] || 20;
+}
+
 import type { 
   Session, InsertSession, 
   Message, InsertMessage,
