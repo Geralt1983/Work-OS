@@ -111,6 +111,18 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     });
   });
 
+  // Test SMS notification endpoint
+  app.post("/api/test-notification", async (req, res) => {
+    try {
+      console.log("[Test] Sending test SMS notification...");
+      await sendWifeAlert(25, 1); // Send 25% milestone test
+      res.json({ success: true, message: "Test SMS sent (25% milestone)" });
+    } catch (error) {
+      console.error("[Test] Failed to send test SMS:", error);
+      res.status(500).json({ error: "Failed to send test SMS" });
+    }
+  });
+
   // Metrics endpoints
   app.get("/api/metrics/today", async (req, res) => {
     try {
