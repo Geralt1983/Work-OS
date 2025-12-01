@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage as defaultStorage, getLocalDateString, type IStorage } from "./storage";
+import { storage as defaultStorage, getLocalDateString, calculateEarnedMinutes, type IStorage } from "./storage";
 import { processChat, generateMorningBriefing } from "./openai-service";
 import { runTriage, runTriageWithAutoRemediation } from "./pipeline-tools";
 import { sendWifeAlert } from "./notification-service";
@@ -419,6 +419,9 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
         return;
       }
       
+      // Calculate weighted minutes for this move
+      const earnedMinutes = calculateEarnedMinutes(move.effortEstimate, move.drainType);
+      
       let clientName = "No Client";
       if (move.clientId) {
         const client = await storage.getClient(move.clientId);
@@ -433,6 +436,7 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
             clientName: client.name,
             at: new Date().toISOString(),
             source: "moves-ui",
+            earnedMinutes,
           });
           
           await storage.updateClientMove(client.name, move.id.toString(), move.title);
@@ -445,6 +449,7 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
           clientName: clientName,
           at: new Date().toISOString(),
           source: "moves-ui",
+          earnedMinutes,
         });
       }
       

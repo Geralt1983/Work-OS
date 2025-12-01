@@ -727,10 +727,12 @@ class DatabaseStorage implements IStorage {
     const today = getLocalDateString();
     const log = await this.getDailyLog(today);
     
-    const completedMoves = (log?.completedMoves as string[] || []);
+    const completedMoves = (log?.completedMoves as Array<{ earnedMinutes?: number }> || []);
     const clientsTouched = (log?.clientsTouched as string[] || []);
     const movesCompleted = completedMoves.length;
-    const estimatedMinutes = movesCompleted * 20; // 20 min per move
+    
+    // Sum weighted minutes (using earnedMinutes from each move, fallback to 20)
+    const estimatedMinutes = completedMoves.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
     const targetMinutes = 180; // 3 hours = 180 minutes
     
     // Calculate pacing with proper clamping
@@ -767,102 +769,108 @@ class DatabaseStorage implements IStorage {
       message: string;
     };
   }> {
-    // Fetch 14 days to compare this week vs last week
-    const logs = await this.getWeeklyLogs(14);
     const targetMinutes = 180;
     
-    // Create a map of existing logs by date
+    // 1. Determine "Current Week" (Monday-Sunday) in Eastern Time
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, 2=Tue, etc.
+    // Calculate days to subtract to get to previous Monday
+    // If Sun(0) -> -6 days. If Mon(1) -> 0 days. If Tue(2) -> -1 day, etc.
+    const daysToMonday = (dayOfWeek + 6) % 7;
+    
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysToMonday);
+    
+    // 2. Determine "Previous Week" for momentum
+    const prevMonday = new Date(monday);
+    prevMonday.setDate(monday.getDate() - 7);
+    
+    // Fetch logs for last 14 days to cover both weeks
+    const logs = await db.select().from(dailyLog)
+      .where(gte(dailyLog.date, getLocalDateString(prevMonday)))
+      .orderBy(desc(dailyLog.date));
+
     const logsByDate = new Map<string, DailyLog>();
     for (const log of logs) {
       logsByDate.set(log.date, log);
     }
     
-    // Generate array of last 7 days in chronological order (current week)
+    // 3. Build Current Week Data (Mon -> Sun)
     const days: Array<{
       date: string;
       movesCompleted: number;
       estimatedMinutes: number;
       pacingPercent: number;
     }> = [];
-    
+    let currentWeekMinutes = 0;
     let currentWeekMoves = 0;
-    let previousWeekMoves = 0;
-    const today = new Date();
-    
-    // Calculate Current Week (Last 7 days including today)
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = getLocalDateString(date);
+
+    // Iterate 0 to 6 (Mon to Sun)
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = getLocalDateString(d);
       
       const log = logsByDate.get(dateStr);
-      const completedMoves = log ? (log.completedMoves as string[] || []) : [];
-      const movesCompleted = completedMoves.length;
-      currentWeekMoves += movesCompleted;
+      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
       
-      const estimatedMinutes = movesCompleted * 20;
-      const pacingPercent = targetMinutes > 0 
-        ? Math.min(Math.round((estimatedMinutes / targetMinutes) * 100), 100)
-        : 0;
+      // SUM MINUTES (using saved earnedMinutes OR fallback to 20)
+      const dailyMinutes = movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
       
       days.push({
         date: dateStr,
-        movesCompleted,
-        estimatedMinutes,
-        pacingPercent,
+        movesCompleted: movesArr.length,
+        estimatedMinutes: dailyMinutes,
+        pacingPercent: Math.min(Math.round((dailyMinutes / targetMinutes) * 100), 100)
       });
+      
+      currentWeekMinutes += dailyMinutes;
+      currentWeekMoves += movesArr.length;
     }
-    
-    // Calculate Previous Week (Days 8-14)
-    for (let i = 13; i >= 7; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = getLocalDateString(date);
+
+    // 4. Calculate Previous Week Stats
+    let prevWeekMinutes = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(prevMonday);
+      d.setDate(prevMonday.getDate() + i);
+      const dateStr = getLocalDateString(d);
       const log = logsByDate.get(dateStr);
-      const movesCompleted = log ? (log.completedMoves as string[] || []).length : 0;
-      previousWeekMoves += movesCompleted;
+      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
+      prevWeekMinutes += movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
     }
-    
-    // Calculate Momentum
+
+    // 5. Momentum Logic (Based on TIME, not just move count)
     let trend: "up" | "down" | "stable" = "stable";
     let percentChange = 0;
     let message = "Steady flow";
-    
-    if (previousWeekMoves === 0) {
-      if (currentWeekMoves > 0) {
-        trend = "up";
-        percentChange = 100;
+
+    if (prevWeekMinutes === 0) {
+      if (currentWeekMinutes > 0) {
+        trend = "up"; 
+        percentChange = 100; 
         message = "Building momentum";
       }
     } else {
-      const rawChange = ((currentWeekMoves - previousWeekMoves) / previousWeekMoves) * 100;
+      const rawChange = ((currentWeekMinutes - prevWeekMinutes) / prevWeekMinutes) * 100;
       percentChange = Math.round(Math.abs(rawChange));
-      
-      if (rawChange >= 10) {
-        trend = "up";
-        message = "Accelerating";
-      } else if (rawChange <= -10) {
-        trend = "down";
-        message = "Cooling down";
+      if (rawChange >= 10) { 
+        trend = "up"; 
+        message = "Accelerating"; 
+      } else if (rawChange <= -10) { 
+        trend = "down"; 
+        message = "Cooling down"; 
       }
     }
-    
-    const totalMoves = currentWeekMoves;
-    const totalMinutes = totalMoves * 20;
-    // Average over days with actual data
+
+    // Filter out future days for average calc
     const daysWithData = days.filter(d => d.movesCompleted > 0).length;
-    const averageMovesPerDay = daysWithData > 0 ? Math.round(totalMoves / daysWithData) : 0;
     
     return {
       days,
-      averageMovesPerDay,
-      totalMoves,
-      totalMinutes,
-      momentum: {
-        trend,
-        percentChange,
-        message,
-      },
+      averageMovesPerDay: daysWithData > 0 ? Math.round(currentWeekMoves / daysWithData) : 0,
+      totalMoves: currentWeekMoves,
+      totalMinutes: currentWeekMinutes,
+      momentum: { trend, percentChange, message }
     };
   }
 
