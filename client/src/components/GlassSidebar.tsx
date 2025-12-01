@@ -68,7 +68,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                 <h1 className="text-lg font-bold text-gradient-purple whitespace-nowrap">
                   Work OS
                 </h1>
-                <p className="text-xs text-muted-foreground whitespace-nowrap">
+                <p className="text-xs text-zinc-500 whitespace-nowrap">
                   Move clients forward
                 </p>
               </motion.div>
@@ -99,7 +99,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                 transition={springTransition}
                 data-testid={`nav-${item.label.toLowerCase()}`}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? item.color : "text-muted-foreground"}`} />
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? item.color : "text-zinc-400"}`} />
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.span
@@ -107,7 +107,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -10 }}
                       transition={{ duration: 0.15 }}
-                      className={`text-sm font-medium whitespace-nowrap ${isActive ? "text-foreground" : "text-muted-foreground"}`}
+                      className={`text-sm font-medium whitespace-nowrap ${isActive ? "text-white" : "text-zinc-400"}`}
                     >
                       {item.label}
                     </motion.span>
@@ -179,7 +179,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
             animate={{ rotate: collapsed ? 180 : 0 }}
             transition={springTransition}
           >
-            <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+            <ChevronLeft className="w-4 h-4 text-zinc-500" />
           </motion.div>
           <AnimatePresence>
             {!collapsed && (
@@ -187,7 +187,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground"
+                className="text-xs text-zinc-500"
               >
                 Collapse
               </motion.span>
