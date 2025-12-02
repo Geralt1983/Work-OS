@@ -18,7 +18,7 @@ export async function sendWifeAlert(percent: number, movesCount: number) {
 
   try {
     // ntfy.sh is dead simple: just POST to the URL
-    await fetch(`https://ntfy.sh/${TOPIC}`, {
+    const response = await fetch(`https://ntfy.sh/${TOPIC}`, {
       method: 'POST',
       body: message,
       headers: {
@@ -27,8 +27,19 @@ export async function sendWifeAlert(percent: number, movesCount: number) {
         'Priority': percent === 100 ? 'high' : 'default'
       }
     });
+    
+    // Log the actual HTTP response
+    console.log(`[Notification] HTTP Status: ${response.status} ${response.statusText}`);
+    const responseText = await response.text();
+    console.log(`[Notification] Response: ${responseText || '(empty)'}`);
+    
+    if (!response.ok) {
+      console.error(`❌ Ntfy Error: HTTP ${response.status} - ${responseText}`);
+      return;
+    }
+    
     console.log(`✅ Ntfy sent to topic: ${TOPIC}`);
   } catch (error) {
-    console.error("❌ Ntfy Error:", error);
+    console.error("❌ Ntfy Network Error:", error instanceof Error ? error.message : error);
   }
 }
