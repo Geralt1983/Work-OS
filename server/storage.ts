@@ -544,9 +544,10 @@ class DatabaseStorage implements IStorage {
     const signals = await db.select().from(taskSignals);
 
     // 2. Get ALL historical completed moves (Source of Truth for completions)
-    // Use isNotNull for cleaner queries instead of raw SQL
+    // CRITICAL FIX: Do NOT filter by completedAt IS NOT NULL. 
+    // We fetch ALL 'done' moves and use fallback timestamps (updatedAt) for legacy data.
     const completedMoves = await db.select().from(moves)
-      .where(isNotNull(moves.completedAt));
+      .where(eq(moves.status, "done"));
 
     // Initialize 24-hour buckets
     const hourStats = new Map<number, { completions: number; deferrals: number }>();
@@ -564,28 +565,31 @@ class DatabaseStorage implements IStorage {
       }
     }
 
-    // Fill Completions from Actual Moves (with Timezone Adjustment)
+    // Fill Completions from Actual Moves (with Fallback Logic)
     for (const move of completedMoves) {
-      if (move.completedAt) {
-        const date = new Date(move.completedAt);
-        // Force Eastern Time extraction to match your context
-        const hourStr = date.toLocaleString('en-US', {
-          timeZone: 'America/New_York',
-          hour: 'numeric',
-          hour12: false
+      // Use completedAt if available, otherwise fallback to updatedAt (when it was marked done)
+      // or createdAt as a final resort.
+      const timestamp = move.completedAt || move.updatedAt || move.createdAt;
+      
+      if (timestamp) {
+        const date = new Date(timestamp);
+        // Force Eastern Time extraction to match your "Jeremys-Life" context
+        const hourStr = date.toLocaleString('en-US', { 
+          timeZone: 'America/New_York', 
+          hour: 'numeric', 
+          hour12: false 
         });
-
+        
         // Handle "24" edge case if API returns it, strictly 0-23
-        let hour = parseInt(hourStr);
-        if (hour === 24) hour = 0;
-
+        const hour = parseInt(hourStr) % 24;
+        
         const stats = hourStats.get(hour);
         if (stats) {
           stats.completions++;
         }
       }
     }
-
+    
     return Array.from(hourStats.entries())
       .map(([hour, stats]) => ({ hour, ...stats }))
       .sort((a, b) => a.hour - b.hour);
