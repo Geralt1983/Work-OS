@@ -1108,8 +1108,11 @@ class DatabaseStorage implements IStorage {
   async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
     const oldMove = await this.getMove(id);
     
-    // Prepare update object
-    const valuesToSet: any = { ...updates };
+    // Prepare update object - FORCE update timestamp
+    const valuesToSet: any = { 
+      ...updates,
+      updatedAt: new Date() 
+    };
     
     // If moving OUT of 'done' status, clear the completedAt timestamp and effortActual
     if (oldMove?.status === 'done' && updates.status && updates.status !== 'done') {
@@ -1308,8 +1311,13 @@ class DatabaseStorage implements IStorage {
     startOfToday.setHours(0, 0, 0, 0);
 
     for (const move of activeMoves) {
-      const moveDate = new Date(move.createdAt);
-      if (moveDate < startOfToday) {
+      // CRITICAL FIX: Check updatedAt (last touched) instead of createdAt
+      // If updatedAt doesn't exist yet (legacy tasks), fall back to createdAt
+      const lastActive = move.updatedAt || move.createdAt;
+      const lastActiveDate = new Date(lastActive);
+
+      // Only demote if it hasn't been touched since BEFORE today
+      if (lastActiveDate < startOfToday) {
         await this.updateMove(move.id, { status: 'queued' });
         demotedTitles.push(move.title);
       }

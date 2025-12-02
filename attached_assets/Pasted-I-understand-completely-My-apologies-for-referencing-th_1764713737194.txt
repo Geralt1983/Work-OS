@@ -1,0 +1,104 @@
+I understand completely. My apologies for referencing the "fast edit" feature; I will provide the direct code changes you need to copy and paste into your files manually.
+The issue is that your database currently doesn't track when you last worked on a task, only when it was created. So, if you pick up an older task, the system sees the old creation date and "cleans it up" by demoting it.
+Here is the 3-step fix to stop your active tasks from disappearing.
+Step 1: Update the Database Schema
+We need to add an updatedAt field to your Moves table so we know the last time you touched a task.
+File: shared/schema.ts
+Action: Find the moves table definition and add the updatedAt line shown below.
+// shared/schema.ts
+
+export const moves = pgTable("moves", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clients.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("backlog"),
+  effortEstimate: integer("effort_estimate").default(2),
+  effortActual: integer("effort_actual"),
+  drainType: text("drain_type"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // <--- ADD THIS LINE
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  statusIdx: index("status_idx").on(table.status),
+  clientIdIdx: index("client_id_idx").on(table.clientId),
+  clientStatusIdx: index("client_status_idx").on(table.clientId, table.status),
+}));
+
+Note: After saving this, you may need to restart your server or run a database push command (like npm run db:push) depending on your setup to apply the new column.
+Step 2: Track Activity in Storage
+Now we need to tell the system to update that timestamp whenever you move a card.
+File: server/storage.ts
+Action: Replace your existing updateMove function with this updated version:
+// server/storage.ts
+
+  async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
+    const oldMove = await this.getMove(id);
+    
+    // Prepare update object - FORCE update timestamp
+    const valuesToSet: any = { 
+      ...updates,
+      updatedAt: new Date() 
+    };
+    
+    // If moving OUT of 'done' status, clear the completedAt timestamp
+    if (oldMove?.status === 'done' && updates.status && updates.status !== 'done') {
+      valuesToSet.completedAt = null;
+      valuesToSet.effortActual = null;
+    }
+    
+    const [updated] = await db.update(moves)
+      .set(valuesToSet)
+      .where(eq(moves.id, id))
+      .returning();
+    
+    // Track backlog entry when move enters backlog
+    if (updated && updates.status === 'backlog' && oldMove?.status !== 'backlog') {
+      const client = updated.clientId ? await this.getClient(updated.clientId) : null;
+      await this.recordBacklogEntry({
+        taskId: String(updated.id),
+        taskName: updated.title,
+        clientName: client?.name || 'Unknown',
+      });
+    }
+    
+    // Track promotion when move leaves backlog
+    if (updated && oldMove?.status === 'backlog' && updates.status && updates.status !== 'backlog') {
+      await this.markBacklogPromoted(String(id));
+    }
+    
+    return updated;
+  }
+
+Step 3: Fix the Demotion Logic
+Finally, update the cleanup logic to check the last update time, not the creation time. This ensures tasks you are actively working on are safe.
+File: server/storage.ts
+Action: Replace your existing demoteStaleActiveMoves function with this:
+// server/storage.ts
+
+  async demoteStaleActiveMoves(): Promise<string[]> {
+    const activeMoves = await db.select().from(moves).where(
+      eq(moves.status, "active")
+    );
+
+    const demotedTitles: string[] = [];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    for (const move of activeMoves) {
+      // CRITICAL FIX: Check updatedAt (last touched) instead of createdAt
+      // If updatedAt doesn't exist yet (legacy tasks), fall back to createdAt
+      const lastActive = move.updatedAt || move.createdAt;
+      const lastActiveDate = new Date(lastActive);
+
+      // Only demote if it hasn't been touched since BEFORE today
+      if (lastActiveDate < startOfToday) {
+        await this.updateMove(move.id, { status: 'queued' });
+        demotedTitles.push(move.title);
+      }
+    }
+
+    return demotedTitles;
+  }
+

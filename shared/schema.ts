@@ -26,6 +26,7 @@ export const moves = pgTable("moves", {
   drainType: text("drain_type"), // 'deep' | 'comms' | 'admin' | 'creative' | 'easy' | null
   sortOrder: integer("sort_order").default(0), // for manual ordering within status
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 }, (table) => ({
   // Performance indexes for faster queries
