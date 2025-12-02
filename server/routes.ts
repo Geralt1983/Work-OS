@@ -413,6 +413,14 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     try {
       const id = parseInt(req.params.id);
       const effortActual = req.body.effortActual ? parseInt(req.body.effortActual) : undefined;
+      const today = getLocalDateString();
+      
+      // *** CRITICAL FIX: Calculate OLD progress BEFORE updating task ***
+      const oldMetrics = await storage.getTodayMetrics();
+      const oldProgress = oldMetrics.pacingPercent;
+      console.log(`[Notification] OLD progress: ${oldProgress}%`);
+      
+      // Now complete the move
       const move = await storage.completeMove(id, effortActual);
       if (!move) {
         res.status(404).json({ error: "Move not found" });
@@ -428,8 +436,6 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
         if (client) {
           clientName = client.name;
           
-          const today = getLocalDateString();
-          
           await storage.addCompletedMove(today, {
             moveId: move.id.toString(),
             description: move.title,
@@ -442,7 +448,6 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
           await storage.updateClientMove(client.name, move.id.toString(), move.title);
         }
       } else {
-        const today = getLocalDateString();
         await storage.addCompletedMove(today, {
           moveId: move.id.toString(),
           description: move.title,
@@ -454,21 +459,22 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
       }
       
       // === SMART ALERT SYSTEM ===
-      // Only sends the HIGHEST new threshold to avoid burst notifications
+      // *** NOW calculate NEW progress AFTER adding to daily log ***
       try {
-        const today = getLocalDateString();
-        const metrics = await storage.getTodayMetrics();
-        const log = await storage.getDailyLog(today);
+        const newMetrics = await storage.getTodayMetrics();
+        const newProgress = newMetrics.pacingPercent;
+        console.log(`[Notification] NEW progress: ${newProgress}% (was ${oldProgress}%)`);
         
+        const log = await storage.getDailyLog(today);
         const alreadySent = (log?.notificationsSent as number[]) || [];
         const thresholds = [25, 50, 75, 100];
         
-        console.log(`[Notification] Check: ${metrics.pacingPercent}% progress, already sent: [${alreadySent.join(',')}]`);
-        
-        // Find all thresholds we crossed but haven't sent yet
+        // Find thresholds we CROSSED (old < threshold <= new) but haven't sent yet
         const newCrossed = thresholds.filter(t => 
-          metrics.pacingPercent >= t && !alreadySent.includes(t)
+          oldProgress < t && newProgress >= t && !alreadySent.includes(t)
         );
+        
+        console.log(`[Notification] Crossed thresholds: [${newCrossed.join(',')}], already sent: [${alreadySent.join(',')}]`);
         
         if (newCrossed.length > 0) {
           // Only send the HIGHEST one to avoid spam
@@ -477,7 +483,7 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
           
           // AWAIT the notification before marking as sent
           try {
-            await sendWifeAlert(highest, metrics.movesCompleted);
+            await sendWifeAlert(highest, newMetrics.movesCompleted);
             // Only mark as sent AFTER successful delivery
             const newSentList = Array.from(new Set([...alreadySent, ...newCrossed]));
             await storage.updateDailyLog(today, { notificationsSent: newSentList });
