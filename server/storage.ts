@@ -543,8 +543,8 @@ class DatabaseStorage implements IStorage {
     // 1. Get "Deferral" signals from the new learning system
     const signals = await db.select().from(taskSignals);
 
-    // 2. Get ALL historical completed moves (Source of Truth for completions)
-    // CRITICAL CHANGE: We fetch by STATUS, not timestamp, to catch legacy data
+    // 2. Get ALL historical completed moves (Source of Truth)
+    // FIX: Filter by STATUS, not timestamp, to catch legacy data with null completedAt
     const completedMoves = await db.select().from(moves)
       .where(eq(moves.status, "done"));
 
@@ -564,9 +564,9 @@ class DatabaseStorage implements IStorage {
       }
     }
 
-    // Fill Completions from Actual Moves (with Timezone & Fallback)
+    // Fill Completions from Actual Moves (with Fallback Logic)
     for (const move of completedMoves) {
-      // Fallback: Use completedAt -> updatedAt -> createdAt
+      // FIX: Use completedAt -> updatedAt -> createdAt
       const timestamp = move.completedAt || move.updatedAt || move.createdAt;
       
       if (timestamp) {
@@ -913,24 +913,25 @@ class DatabaseStorage implements IStorage {
   }
 
   async backfillSignals(): Promise<string> {
+    // FIX: Also update this to capture legacy tasks for backfilling
     const completedMoves = await db.select().from(moves)
-      .where(and(
-        eq(moves.status, "done"),
-        sql`${moves.completedAt} IS NOT NULL`
-      ));
+      .where(eq(moves.status, "done"));
 
     let createdCount = 0;
 
     for (const move of completedMoves) {
-      if (!move.completedAt) continue;
+      // Use fallback timestamp here too
+      const timestamp = move.completedAt || move.updatedAt || move.createdAt;
+      if (!timestamp) continue;
 
       // Check if signal exists
       const existing = await db.select().from(taskSignals)
         .where(eq(taskSignals.taskId, String(move.id)));
         
       if (existing.length === 0) {
-        const date = new Date(move.completedAt);
-        const hour = parseInt(date.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+        const date = new Date(timestamp);
+        const hourStr = date.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false });
+        const hour = parseInt(hourStr) % 24;
         const day = date.getDay();
 
         const id = randomUUID();
