@@ -329,30 +329,39 @@ export default function Metrics() {
             <Skeleton className="h-32 w-full bg-white/5" />
           ) : productivityData && productivityData.length > 0 ? (
             <div className="space-y-3">
-              <div className="flex gap-1 h-24 items-end px-2">
-                {productivityData.filter(h => h.hour >= 6 && h.hour <= 22).map((hourData) => {
-                  const total = hourData.completions + hourData.deferrals;
-                  const height = total > 0 ? Math.max(10, total * 10) : 4;
-                  const isPositive = hourData.completions >= hourData.deferrals;
-                  return (
-                    <div
-                      key={hourData.hour}
-                      className="flex-1 flex flex-col items-center group relative"
-                    >
-                      <div
-                        className={`w-full rounded-t-sm transition-all duration-300 ${isPositive ? "bg-emerald-500/60 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500/60 group-hover:bg-rose-400" : "bg-white/5"}`}
-                        style={{ height: `${height}%` }}
-                      />
+              {(() => {
+                const filteredData = productivityData.filter(h => h.hour >= 6 && h.hour <= 22);
+                const maxTotal = Math.max(...filteredData.map(h => h.completions + h.deferrals));
+                return (
+                  <>
+                    <div className="flex gap-0.5 h-32 items-end px-2">
+                      {filteredData.map((hourData) => {
+                        const total = hourData.completions + hourData.deferrals;
+                        const heightPercent = maxTotal > 0 ? (total / maxTotal) * 100 : 5;
+                        const isPositive = hourData.completions >= hourData.deferrals;
+                        return (
+                          <div
+                            key={hourData.hour}
+                            className="flex-1 flex flex-col items-center group relative justify-end"
+                            title={`${hourData.hour}:00 - ${total} tasks`}
+                          >
+                            <div
+                              className={`w-full min-w-px rounded-t-sm transition-all duration-200 ${isPositive ? "bg-emerald-500 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500 group-hover:bg-rose-400" : "bg-white/10"}`}
+                              style={{ height: `${Math.max(5, heightPercent)}%` }}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground uppercase tracking-wider px-2">
-                <span>6am</span>
-                <span>12pm</span>
-                <span>6pm</span>
-                <span>10pm</span>
-              </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground uppercase tracking-wider px-2">
+                      <span>6am</span>
+                      <span>12pm</span>
+                      <span>6pm</span>
+                      <span>10pm</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
         </div>
