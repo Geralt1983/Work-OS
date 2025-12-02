@@ -544,8 +544,7 @@ class DatabaseStorage implements IStorage {
     const signals = await db.select().from(taskSignals);
 
     // 2. Get ALL historical completed moves (Source of Truth for completions)
-    // CRITICAL FIX: Do NOT filter by completedAt IS NOT NULL. 
-    // We fetch ALL 'done' moves and use fallback timestamps (updatedAt) for legacy data.
+    // CRITICAL CHANGE: We fetch by STATUS, not timestamp, to catch legacy data
     const completedMoves = await db.select().from(moves)
       .where(eq(moves.status, "done"));
 
@@ -565,10 +564,9 @@ class DatabaseStorage implements IStorage {
       }
     }
 
-    // Fill Completions from Actual Moves (with Fallback Logic)
+    // Fill Completions from Actual Moves (with Timezone & Fallback)
     for (const move of completedMoves) {
-      // Use completedAt if available, otherwise fallback to updatedAt (when it was marked done)
-      // or createdAt as a final resort.
+      // Fallback: Use completedAt -> updatedAt -> createdAt
       const timestamp = move.completedAt || move.updatedAt || move.createdAt;
       
       if (timestamp) {
