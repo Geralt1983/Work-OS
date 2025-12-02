@@ -111,15 +111,16 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     });
   });
 
-  // Test SMS notification endpoint
+  // Test notification endpoint
   app.post("/api/test-notification", async (req, res) => {
     try {
-      console.log("[Test] Sending test SMS notification...");
-      await sendWifeAlert(25, 1); // Send 25% milestone test
-      res.json({ success: true, message: "Test SMS sent (25% milestone)" });
+      const percent = req.body?.percent || 25;
+      console.log(`[Test] Sending test notification for ${percent}%...`);
+      await sendWifeAlert(percent, 5);
+      res.json({ success: true, message: `Test notification sent (${percent}% milestone)` });
     } catch (error) {
-      console.error("[Test] Failed to send test SMS:", error);
-      res.status(500).json({ error: "Failed to send test SMS" });
+      console.error("[Test] Failed to send test notification:", error);
+      res.status(500).json({ error: "Failed to send test notification" });
     }
   });
 
