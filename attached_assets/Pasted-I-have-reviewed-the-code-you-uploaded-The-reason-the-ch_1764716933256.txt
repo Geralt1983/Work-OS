@@ -1,0 +1,192 @@
+I have reviewed the code you uploaded. The reason the chart is still blank and tasks are still disappearing is that **the code currently in your files is still the old version**. The fixes have not been applied yet.
+
+I will group the changes by **File** so you can fix everything in one pass.
+
+### **File 1: `shared/schema.ts`**
+
+**Issue:** The database doesn't know when you last touched a task, so it deletes "old" ones even if they are active.
+**Fix:** Add `updatedAt` to the `moves` table.
+
+**Find this block:**
+
+```typescript
+export const moves = pgTable("moves", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clients.id),
+  title: text("title").notNull(),
+  // ... other fields ...
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+```
+
+**Replace it with this (adding `updatedAt`):**
+
+```typescript
+export const moves = pgTable("moves", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clients.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("backlog"),
+  effortEstimate: integer("effort_estimate").default(2),
+  effortActual: integer("effort_actual"),
+  drainType: text("drain_type"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // <--- ADD THIS LINE
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+```
+
+-----
+
+### **File 2: `server/storage.ts`**
+
+There are **3 specific functions** you need to replace in this file.
+
+#### **1. Fix "Blank Chart" (Metrics Page)**
+
+**Problem:** The chart is only looking for new AI data (`taskSignals`). It ignores your actual work history.
+**Fix:** Replace `getProductivityByHour` to look at your `moves` history.
+
+**Find:** `async getProductivityByHour(): Promise<{ ... }[]> { ... }`
+**Replace entire function with:**
+
+```typescript
+  async getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]> {
+    // 1. Get "Deferral" signals from the new learning system
+    const signals = await db.select().from(taskSignals);
+    
+    // 2. Get ALL historical completed moves (Source of Truth for completions)
+    // We use raw SQL to ensure we check for non-null completion dates
+    const completedMoves = await db.select().from(moves)
+      .where(sql`${moves.completedAt} IS NOT NULL`);
+    
+    // Initialize 24-hour buckets
+    const hourStats = new Map<number, { completions: number; deferrals: number }>();
+    for (let h = 0; h < 24; h++) {
+      hourStats.set(h, { completions: 0, deferrals: 0 });
+    }
+    
+    // Fill Deferrals from Signals
+    for (const signal of signals) {
+      if (signal.hourOfDay !== null && signal.hourOfDay !== undefined) {
+        const stats = hourStats.get(signal.hourOfDay);
+        if (stats && (signal.signalType === 'deferred' || signal.signalType === 'avoided')) {
+          stats.deferrals++;
+        }
+      }
+    }
+    
+    // Fill Completions from Actual Moves (with Timezone Adjustment)
+    for (const move of completedMoves) {
+      if (move.completedAt) {
+        const date = new Date(move.completedAt);
+        // Force Eastern Time extraction to match your context
+        const hourStr = date.toLocaleString('en-US', { 
+          timeZone: 'America/New_York', 
+          hour: 'numeric', 
+          hour12: false 
+        });
+        
+        // Handle "24" edge case if API returns it, strictly 0-23
+        let hour = parseInt(hourStr);
+        if (hour === 24) hour = 0;
+        
+        const stats = hourStats.get(hour);
+        if (stats) {
+          stats.completions++;
+        }
+      }
+    }
+    
+    return Array.from(hourStats.entries())
+      .map(([hour, stats]) => ({ hour, ...stats }))
+      .sort((a, b) => a.hour - b.hour);
+  }
+```
+
+#### **2. Fix "Disappearing Tasks" (Moves Page)**
+
+**Problem:** The system is checking `createdAt` (Creation Date) instead of `updatedAt` (Last Active Date).
+**Fix:** Replace `demoteStaleActiveMoves`.
+
+**Find:** `async demoteStaleActiveMoves(): Promise<string[]> { ... }`
+**Replace entire function with:**
+
+```typescript
+  async demoteStaleActiveMoves(): Promise<string[]> {
+    const activeMoves = await db.select().from(moves).where(
+      eq(moves.status, "active")
+    );
+
+    const demotedTitles: string[] = [];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    for (const move of activeMoves) {
+      // CRITICAL FIX: Check updatedAt (last touched) instead of createdAt
+      // Cast to any to access updatedAt if Typescript complains before restart
+      const m = move as any;
+      const lastActive = m.updatedAt || move.createdAt;
+      const lastActiveDate = new Date(lastActive);
+
+      // Only demote if it hasn't been touched since BEFORE today
+      if (lastActiveDate < startOfToday) {
+        await this.updateMove(move.id, { status: 'queued' });
+        demotedTitles.push(move.title);
+      }
+    }
+
+    return demotedTitles;
+  }
+```
+
+#### **3. Ensure "Last Active" is Recorded**
+
+**Problem:** Moving a card currently doesn't update the timestamp, so the fix above won't work without this.
+**Fix:** Update `updateMove`.
+
+**Find:** `async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> { ... }`
+**Replace entire function with:**
+
+```typescript
+  async updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined> {
+    const oldMove = await this.getMove(id);
+    
+    // Prepare update object - FORCE update timestamp
+    const valuesToSet: any = { 
+      ...updates,
+      updatedAt: new Date() 
+    };
+    
+    // If moving OUT of 'done' status, clear the completedAt timestamp
+    if (oldMove?.status === 'done' && updates.status && updates.status !== 'done') {
+      valuesToSet.completedAt = null;
+      valuesToSet.effortActual = null;
+    }
+    
+    const [updated] = await db.update(moves)
+      .set(valuesToSet)
+      .where(eq(moves.id, id))
+      .returning();
+    
+    // Track backlog entry when move enters backlog
+    if (updated && updates.status === 'backlog' && oldMove?.status !== 'backlog') {
+      const client = updated.clientId ? await this.getClient(updated.clientId) : null;
+      await this.recordBacklogEntry({
+        taskId: String(updated.id),
+        taskName: updated.title,
+        clientName: client?.name || 'Unknown',
+      });
+    }
+    
+    // Track promotion when move leaves backlog
+    if (updated && oldMove?.status === 'backlog' && updates.status && updates.status !== 'backlog') {
+      await this.markBacklogPromoted(String(id));
+    }
+    
+    return updated;
+  }
+```
