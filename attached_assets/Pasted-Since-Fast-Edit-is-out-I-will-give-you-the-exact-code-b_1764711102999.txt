@@ -1,0 +1,254 @@
+Since Fast Edit is out, I will give you the **exact code blocks** to copy and paste. We will implement this in two files: `server/storage.ts` (Logic) and `client/src/pages/Metrics.tsx` (UI).
+
+### **Part 1: The Logic & Backfill (`server/storage.ts`)**
+
+You need to update the `DatabaseStorage` class with two major changes:
+
+1.  **New Momentum Logic:** Replace the entire `getWeeklyMetrics` method.
+2.  **Backfill Script:** Add a new `backfillSignals` method to fix the empty Rhythm chart.
+
+**Action:** Open `server/storage.ts`, scroll to the `DatabaseStorage` class, and **replace/add these methods**:
+
+```typescript
+  // REPLACE the existing getWeeklyMetrics method with this Multifactorial version
+  async getWeeklyMetrics(): Promise<{
+    days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }>;
+    averageMovesPerDay: number;
+    totalMoves: number;
+    totalMinutes: number;
+    momentum: {
+      trend: "up" | "down" | "stable";
+      percentChange: number;
+      message: string;
+    };
+  }> {
+    const targetMinutes = 180;
+    
+    // 1. Determine "Current Week" (Monday-Sunday)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); 
+    const daysToMonday = (dayOfWeek + 6) % 7;
+    
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    // Fetch logs for last 7 days
+    const logs = await db.select().from(dailyLog)
+      .where(gte(dailyLog.date, getLocalDateString(monday)))
+      .orderBy(desc(dailyLog.date));
+
+    const logsByDate = new Map<string, DailyLog>();
+    for (const log of logs) {
+      logsByDate.set(log.date, log);
+    }
+    
+    // 2. Build Week Data & Calculate Factors
+    const days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }> = [];
+    
+    let currentWeekMinutes = 0;
+    let currentWeekMoves = 0;
+    let activeDaysCount = 0;
+    let highImpactMinutes = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = getLocalDateString(d);
+      
+      const log = logsByDate.get(dateStr);
+      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
+      const dailyMinutes = movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+      
+      // Impact Calculation: Count minutes from "Chunky" (45m) or "Draining" (90m) tasks
+      const dailyHighImpact = movesArr
+        .filter(m => (m.earnedMinutes || 0) >= 45)
+        .reduce((sum, m) => sum + (m.earnedMinutes || 0), 0);
+        
+      highImpactMinutes += dailyHighImpact;
+
+      if (movesArr.length > 0) activeDaysCount++;
+      
+      days.push({
+        date: dateStr,
+        movesCompleted: movesArr.length,
+        estimatedMinutes: dailyMinutes,
+        pacingPercent: Math.min(Math.round((dailyMinutes / targetMinutes) * 100), 100)
+      });
+      
+      currentWeekMinutes += dailyMinutes;
+      currentWeekMoves += movesArr.length;
+    }
+
+    // 3. MULTIFACTORIAL MOMENTUM SCORE (0-100)
+    
+    // A. Velocity (40%): Target 15 hours (900 mins) / week
+    const velocityScore = Math.min((currentWeekMinutes / 900) * 100, 100);
+    
+    // B. Consistency (30%): Target 5 active days / week
+    const consistencyScore = Math.min((activeDaysCount / 5) * 100, 100);
+    
+    // C. Impact (30%): Target 50% of time spent on Deep/High-Value work
+    // If 50% of your time is high impact, you get 100/100 score.
+    const impactRatio = currentWeekMinutes > 0 ? (highImpactMinutes / currentWeekMinutes) : 0;
+    const impactScore = Math.min((impactRatio / 0.5) * 100, 100);
+
+    // Weighted Final Score
+    const rawScore = (velocityScore * 0.4) + (consistencyScore * 0.3) + (impactScore * 0.3);
+    const momentumScore = Math.round(rawScore);
+
+    let trend: "up" | "down" | "stable" = "stable";
+    let message = "Building steam";
+    let messageColor = "text-yellow-400"; // default
+
+    if (momentumScore >= 80) {
+      trend = "up";
+      message = "Unstoppable Flow";
+    } else if (momentumScore >= 60) {
+      trend = "stable";
+      message = "Solid Performance";
+    } else if (momentumScore >= 40) {
+      trend = "stable";
+      message = "Gaining Traction";
+    } else {
+      trend = "down";
+      message = "Recovery Mode";
+    }
+
+    const daysWithData = days.filter(d => d.movesCompleted > 0).length;
+    
+    return {
+      days,
+      averageMovesPerDay: daysWithData > 0 ? Math.round(currentWeekMoves / daysWithData) : 0,
+      totalMoves: currentWeekMoves,
+      totalMinutes: currentWeekMinutes,
+      momentum: { 
+        trend, 
+        percentChange: momentumScore, // Used as the Score (0-100)
+        message 
+      }
+    };
+  }
+
+  // ADD this new method to DatabaseStorage class
+  // Call this ONCE manually or via a route to fix your Rhythm chart
+  async backfillSignals(): Promise<string> {
+    const completedMoves = await db.select().from(moves)
+      .where(and(
+        eq(moves.status, "done"),
+        // Only look at moves that have a completion time
+        sql`${moves.completedAt} IS NOT NULL`
+      ));
+
+    let createdCount = 0;
+
+    for (const move of completedMoves) {
+      if (!move.completedAt) continue;
+
+      // Check if signal exists
+      const existing = await db.select().from(taskSignals)
+        .where(eq(taskSignals.taskId, String(move.id)));
+        
+      if (existing.length === 0) {
+        const date = new Date(move.completedAt);
+        const hour = parseInt(date.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+        const day = date.getDay();
+
+        // Create the signal manually
+        const id = randomUUID();
+        await db.insert(taskSignals).values({
+          id,
+          taskId: String(move.id),
+          taskName: move.title,
+          clientName: "Backfill", // Placeholder since we might not have client details easily joined here without more query overhead
+          signalType: "completed_fast",
+          hourOfDay: hour,
+          dayOfWeek: day,
+          createdAt: date // Important: Backdate the signal
+        });
+        createdCount++;
+      }
+    }
+    return `Backfilled ${createdCount} signals from ${completedMoves.length} historical moves.`;
+  }
+```
+
+**Note:** Don't forget to add `backfillSignals(): Promise<string>;` to the `IStorage` interface at the top of the file as well\!
+
+**How to Run the Backfill:**
+The easiest way is to add a temporary route in `server/routes.ts`:
+
+```typescript
+  app.get("/api/admin/backfill", async (req, res) => {
+    const result = await storage.backfillSignals();
+    res.json({ result });
+  });
+```
+
+Then visit `/api/admin/backfill` in your browser once.
+
+-----
+
+### **Part 2: The UI (`client/src/pages/Metrics.tsx`)**
+
+Now let's visualize that Momentum Score. Open `Metrics.tsx` and find the "Weekly Trends" `ArcCard`. Replace the header section (where the title and badge are) with this:
+
+```tsx
+      {/* Weekly Trends - Meter List View */}
+      <ArcCard glowColor="cyan" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="flex items-center justify-between pb-6">
+            <div className="flex flex-col gap-1">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                <TrendingUp className="h-5 w-5 text-cyan-400" />
+                Weekly Trends
+              </div>
+              
+              {/* MOMENTUM SCORE DISPLAY */}
+              {weeklyMetrics && (
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`text-2xl font-bold ${
+                    weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400" :
+                    weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400" : "text-rose-400"
+                  }`}>
+                    {weeklyMetrics.momentum.percentChange}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Momentum Score</span>
+                    <span className={`text-xs font-medium ${
+                      weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400/80" :
+                      weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400/80" : "text-rose-400/80"
+                    }`}>
+                      {weeklyMetrics.momentum.message}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Hours Badge */}
+            <div className="text-right">
+               <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 mb-1">
+                {weeklyHours}h / 15h
+              </Badge>
+            </div>
+          </div>
+
+          {/* ... Rest of the card (loadingWeekly check, etc) stays the same ... */}
+```
+
+**Implementation Steps:**
+
+1.  **Paste Logic:** Update `server/storage.ts` with the new `getWeeklyMetrics` and `backfillSignals`.
+2.  **Paste UI:** Update `client/src/pages/Metrics.tsx` with the new Momentum Score header.
+3.  **Run Backfill:** Add the temporary route, hit it once, and then check your "Productivity Rhythm" chart—it should now be populated with your history.

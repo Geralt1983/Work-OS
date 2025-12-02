@@ -159,6 +159,7 @@ export interface IStorage {
   reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void>;
   
   demoteStaleActiveMoves(): Promise<string[]>;
+  backfillSignals(): Promise<string>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -771,23 +772,18 @@ class DatabaseStorage implements IStorage {
   }> {
     const targetMinutes = 180;
     
-    // 1. Determine "Current Week" (Monday-Sunday) in Eastern Time
+    // 1. Determine "Current Week" (Monday-Sunday)
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, 2=Tue, etc.
-    // Calculate days to subtract to get to previous Monday
-    // If Sun(0) -> -6 days. If Mon(1) -> 0 days. If Tue(2) -> -1 day, etc.
+    const dayOfWeek = now.getDay(); 
     const daysToMonday = (dayOfWeek + 6) % 7;
     
     const monday = new Date(now);
     monday.setDate(now.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
     
-    // 2. Determine "Previous Week" for momentum
-    const prevMonday = new Date(monday);
-    prevMonday.setDate(monday.getDate() - 7);
-    
-    // Fetch logs for last 14 days to cover both weeks
+    // Fetch logs for last 7 days
     const logs = await db.select().from(dailyLog)
-      .where(gte(dailyLog.date, getLocalDateString(prevMonday)))
+      .where(gte(dailyLog.date, getLocalDateString(monday)))
       .orderBy(desc(dailyLog.date));
 
     const logsByDate = new Map<string, DailyLog>();
@@ -795,17 +791,19 @@ class DatabaseStorage implements IStorage {
       logsByDate.set(log.date, log);
     }
     
-    // 3. Build Current Week Data (Mon -> Sun)
+    // 2. Build Week Data & Calculate Factors
     const days: Array<{
       date: string;
       movesCompleted: number;
       estimatedMinutes: number;
       pacingPercent: number;
     }> = [];
+    
     let currentWeekMinutes = 0;
     let currentWeekMoves = 0;
+    let activeDaysCount = 0;
+    let highImpactMinutes = 0;
 
-    // Iterate 0 to 6 (Mon to Sun)
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
@@ -813,9 +811,16 @@ class DatabaseStorage implements IStorage {
       
       const log = logsByDate.get(dateStr);
       const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
-      
-      // SUM MINUTES (using saved earnedMinutes OR fallback to 20)
       const dailyMinutes = movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+      
+      // Impact Calculation: Count minutes from "Chunky" (45m) or "Draining" (90m) tasks
+      const dailyHighImpact = movesArr
+        .filter(m => (m.earnedMinutes || 0) >= 45)
+        .reduce((sum, m) => sum + (m.earnedMinutes || 0), 0);
+        
+      highImpactMinutes += dailyHighImpact;
+
+      if (movesArr.length > 0) activeDaysCount++;
       
       days.push({
         date: dateStr,
@@ -828,41 +833,39 @@ class DatabaseStorage implements IStorage {
       currentWeekMoves += movesArr.length;
     }
 
-    // 4. Calculate Previous Week Stats
-    let prevWeekMinutes = 0;
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(prevMonday);
-      d.setDate(prevMonday.getDate() + i);
-      const dateStr = getLocalDateString(d);
-      const log = logsByDate.get(dateStr);
-      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
-      prevWeekMinutes += movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
-    }
+    // 3. MULTIFACTORIAL MOMENTUM SCORE (0-100)
+    
+    // A. Velocity (40%): Target 15 hours (900 mins) / week
+    const velocityScore = Math.min((currentWeekMinutes / 900) * 100, 100);
+    
+    // B. Consistency (30%): Target 5 active days / week
+    const consistencyScore = Math.min((activeDaysCount / 5) * 100, 100);
+    
+    // C. Impact (30%): Target 50% of time spent on Deep/High-Value work
+    const impactRatio = currentWeekMinutes > 0 ? (highImpactMinutes / currentWeekMinutes) : 0;
+    const impactScore = Math.min((impactRatio / 0.5) * 100, 100);
 
-    // 5. Momentum Logic (Based on TIME, not just move count)
+    // Weighted Final Score
+    const rawScore = (velocityScore * 0.4) + (consistencyScore * 0.3) + (impactScore * 0.3);
+    const momentumScore = Math.round(rawScore);
+
     let trend: "up" | "down" | "stable" = "stable";
-    let percentChange = 0;
-    let message = "Steady flow";
+    let message = "Building steam";
 
-    if (prevWeekMinutes === 0) {
-      if (currentWeekMinutes > 0) {
-        trend = "up"; 
-        percentChange = 100; 
-        message = "Building momentum";
-      }
+    if (momentumScore >= 80) {
+      trend = "up";
+      message = "Unstoppable Flow";
+    } else if (momentumScore >= 60) {
+      trend = "stable";
+      message = "Solid Performance";
+    } else if (momentumScore >= 40) {
+      trend = "stable";
+      message = "Gaining Traction";
     } else {
-      const rawChange = ((currentWeekMinutes - prevWeekMinutes) / prevWeekMinutes) * 100;
-      percentChange = Math.round(Math.abs(rawChange));
-      if (rawChange >= 10) { 
-        trend = "up"; 
-        message = "Accelerating"; 
-      } else if (rawChange <= -10) { 
-        trend = "down"; 
-        message = "Cooling down"; 
-      }
+      trend = "down";
+      message = "Recovery Mode";
     }
 
-    // Filter out future days for average calc
     const daysWithData = days.filter(d => d.movesCompleted > 0).length;
     
     return {
@@ -870,8 +873,50 @@ class DatabaseStorage implements IStorage {
       averageMovesPerDay: daysWithData > 0 ? Math.round(currentWeekMoves / daysWithData) : 0,
       totalMoves: currentWeekMoves,
       totalMinutes: currentWeekMinutes,
-      momentum: { trend, percentChange, message }
+      momentum: { 
+        trend, 
+        percentChange: momentumScore,
+        message 
+      }
     };
+  }
+
+  async backfillSignals(): Promise<string> {
+    const completedMoves = await db.select().from(moves)
+      .where(and(
+        eq(moves.status, "done"),
+        sql`${moves.completedAt} IS NOT NULL`
+      ));
+
+    let createdCount = 0;
+
+    for (const move of completedMoves) {
+      if (!move.completedAt) continue;
+
+      // Check if signal exists
+      const existing = await db.select().from(taskSignals)
+        .where(eq(taskSignals.taskId, String(move.id)));
+        
+      if (existing.length === 0) {
+        const date = new Date(move.completedAt);
+        const hour = parseInt(date.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+        const day = date.getDay();
+
+        const id = randomUUID();
+        await db.insert(taskSignals).values({
+          id,
+          taskId: String(move.id),
+          taskName: move.title,
+          clientName: "Backfill",
+          signalType: "completed_fast",
+          hourOfDay: hour,
+          dayOfWeek: day,
+          createdAt: date
+        });
+        createdCount++;
+      }
+    }
+    return `Backfilled ${createdCount} signals from ${completedMoves.length} historical moves.`;
   }
 
   async getClientMetrics(): Promise<Array<{

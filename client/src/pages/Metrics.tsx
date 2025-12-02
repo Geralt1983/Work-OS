@@ -186,33 +186,35 @@ export default function Metrics() {
                 <TrendingUp className="h-5 w-5 text-cyan-400" />
                 Weekly Trends
               </div>
-              {/* Momentum Velocity Indicator */}
+              
+              {/* MOMENTUM SCORE DISPLAY */}
               {weeklyMetrics && (
-                <div className="flex items-center gap-1.5">
-                  {weeklyMetrics.momentum.trend === "up" && (
-                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
-                      <ArrowUpRight className="w-3 h-3" />
-                      {weeklyMetrics.momentum.percentChange}% {weeklyMetrics.momentum.message}
-                    </span>
-                  )}
-                  {weeklyMetrics.momentum.trend === "down" && (
-                    <span className="flex items-center gap-1 text-xs font-bold text-rose-400">
-                      <ArrowDownRight className="w-3 h-3" />
-                      {weeklyMetrics.momentum.percentChange}% {weeklyMetrics.momentum.message}
-                    </span>
-                  )}
-                  {weeklyMetrics.momentum.trend === "stable" && (
-                    <span className="flex items-center gap-1 text-xs font-bold text-cyan-400">
-                      <Activity className="w-3 h-3" />
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`text-2xl font-bold ${
+                    weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400" :
+                    weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400" : "text-rose-400"
+                  }`}>
+                    {weeklyMetrics.momentum.percentChange}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Momentum Score</span>
+                    <span className={`text-xs font-medium ${
+                      weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400/80" :
+                      weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400/80" : "text-rose-400/80"
+                    }`}>
                       {weeklyMetrics.momentum.message}
                     </span>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
-            <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
-              {weeklyHours}h / 15h
-            </Badge>
+            
+            {/* Hours Badge */}
+            <div className="text-right">
+              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 mb-1">
+                {weeklyHours}h / 15h
+              </Badge>
+            </div>
           </div>
 
           {loadingWeekly ? (

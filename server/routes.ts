@@ -124,6 +124,17 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     }
   });
 
+  // Admin backfill route (run once to populate rhythm chart)
+  app.get("/api/admin/backfill", async (req, res) => {
+    try {
+      const result = await storage.backfillSignals();
+      res.json({ result });
+    } catch (error) {
+      console.error("Error running backfill:", error);
+      res.status(500).json({ error: "Failed to run backfill" });
+    }
+  });
+
   // Metrics endpoints
   app.get("/api/metrics/today", async (req, res) => {
     try {
