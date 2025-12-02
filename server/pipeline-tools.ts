@@ -1027,6 +1027,13 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         return { error: `Move ${moveId} not found` };
       }
       
+      const today = getLocalDateString();
+      
+      // *** CAPTURE OLD PROGRESS BEFORE ANY CHANGES ***
+      const oldMetrics = await storage.getTodayMetrics();
+      const oldProgress = oldMetrics.pacingPercent;
+      console.log(`[Notification AI] OLD progress before completion: ${oldProgress}%`);
+      
       await storage.completeMove(moveId);
       
       // Calculate weighted score based on effort level
@@ -1041,8 +1048,6 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         }
       }
       
-      const today = getLocalDateString();
-      
       // Log completion with weighted earnedMinutes
       await storage.addCompletedMove(today, {
         moveId: moveId.toString(),
@@ -1054,20 +1059,22 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       });
       
       // === SMART ALERT SYSTEM ===
-      // Only sends the HIGHEST new threshold to avoid burst notifications
+      // *** NOW calculate NEW progress AFTER adding to daily log ***
       try {
-        const metrics = await storage.getTodayMetrics();
-        const log = await storage.getDailyLog(today);
+        const newMetrics = await storage.getTodayMetrics();
+        const newProgress = newMetrics.pacingPercent;
+        console.log(`[Notification AI] NEW progress: ${newProgress}% (was ${oldProgress}%)`);
         
+        const log = await storage.getDailyLog(today);
         const alreadySent = (log?.notificationsSent as number[]) || [];
         const thresholds = [25, 50, 75, 100];
         
-        console.log(`[Notification AI] Check: ${metrics.pacingPercent}% progress, already sent: [${alreadySent.join(',')}]`);
-        
-        // Find all thresholds we crossed but haven't sent yet
+        // Find thresholds we CROSSED (old < threshold <= new) but haven't sent yet
         const newCrossed = thresholds.filter(t => 
-          metrics.pacingPercent >= t && !alreadySent.includes(t)
+          oldProgress < t && newProgress >= t && !alreadySent.includes(t)
         );
+        
+        console.log(`[Notification AI] Crossed thresholds: [${newCrossed.join(',')}], already sent: [${alreadySent.join(',')}]`);
         
         if (newCrossed.length > 0) {
           // Only send the HIGHEST one to avoid spam
@@ -1076,7 +1083,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
           
           // AWAIT the notification before marking as sent
           try {
-            await sendWifeAlert(highest, metrics.movesCompleted);
+            await sendWifeAlert(highest, newMetrics.movesCompleted);
             // Only mark as sent AFTER successful delivery
             const newSentList = Array.from(new Set([...alreadySent, ...newCrossed]));
             await storage.updateDailyLog(today, { notificationsSent: newSentList });
