@@ -540,26 +540,53 @@ class DatabaseStorage implements IStorage {
   }
 
   async getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]> {
+    // 1. Get "Deferral" signals from the new learning system
     const signals = await db.select().from(taskSignals);
     
+    // 2. Get ALL historical completed moves (Source of Truth for completions)
+    const completedMoves = await db.select().from(moves)
+      .where(sql`${moves.completedAt} IS NOT NULL`);
+    
+    // Initialize 24-hour buckets
     const hourStats = new Map<number, { completions: number; deferrals: number }>();
     for (let h = 0; h < 24; h++) {
       hourStats.set(h, { completions: 0, deferrals: 0 });
     }
     
+    // Fill Deferrals from Signals
     for (const signal of signals) {
       if (signal.hourOfDay !== null && signal.hourOfDay !== undefined) {
-        const stats = hourStats.get(signal.hourOfDay)!;
-        if (signal.signalType === 'completed_fast' || signal.signalType === 'excited') {
-          stats.completions++;
-        } else if (signal.signalType === 'deferred' || signal.signalType === 'avoided') {
+        const stats = hourStats.get(signal.hourOfDay);
+        if (stats && (signal.signalType === 'deferred' || signal.signalType === 'avoided')) {
           stats.deferrals++;
         }
       }
     }
     
+    // Fill Completions from Actual Moves (with Timezone Adjustment)
+    for (const move of completedMoves) {
+      if (move.completedAt) {
+        const date = new Date(move.completedAt);
+        // Force Eastern Time extraction to match your context
+        const hourStr = date.toLocaleString('en-US', { 
+          timeZone: 'America/New_York', 
+          hour: 'numeric', 
+          hour12: false 
+        });
+        
+        // Handle "24" edge case if API returns it, strictly 0-23
+        const hour = parseInt(hourStr) % 24;
+        
+        const stats = hourStats.get(hour);
+        if (stats) {
+          stats.completions++;
+        }
+      }
+    }
+    
     return Array.from(hourStats.entries())
-      .map(([hour, stats]) => ({ hour, ...stats }));
+      .map(([hour, stats]) => ({ hour, ...stats }))
+      .sort((a, b) => a.hour - b.hour);
   }
 
   // Backlog resurfacing

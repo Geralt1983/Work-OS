@@ -1,0 +1,61 @@
+The issue with the "Productivity Rhythm" chart is likely that it relies solely on taskSignals (a new feature) rather than your actual history of completed moves. If you haven't generated new "signals" (by completing tasks after the update), the chart has no data to show.
+We need to update the backend to look at your actual historical data in the moves table to populate the chart immediately.
+The Fix: Backfill Productivity Data from Moves
+File: server/storage.ts
+Action: Replace the getProductivityByHour function with this robust version. It combines "Deferral" signals (from the new system) with "Completion" timestamps (from your entire work history).
+// server/storage.ts
+
+  async getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]> {
+    // 1. Get "Deferral" signals from the new learning system
+    const signals = await db.select().from(taskSignals);
+    
+    // 2. Get ALL historical completed moves (Source of Truth for completions)
+    const completedMoves = await db.select().from(moves)
+      .where(isNotNull(moves.completedAt));
+    
+    // Initialize 24-hour buckets
+    const hourStats = new Map<number, { completions: number; deferrals: number }>();
+    for (let h = 0; h < 24; h++) {
+      hourStats.set(h, { completions: 0, deferrals: 0 });
+    }
+    
+    // Fill Deferrals from Signals
+    for (const signal of signals) {
+      if (signal.hourOfDay !== null && signal.hourOfDay !== undefined) {
+        const stats = hourStats.get(signal.hourOfDay);
+        if (stats && (signal.signalType === 'deferred' || signal.signalType === 'avoided')) {
+          stats.deferrals++;
+        }
+      }
+    }
+    
+    // Fill Completions from Actual Moves (with Timezone Adjustment)
+    for (const move of completedMoves) {
+      if (move.completedAt) {
+        const date = new Date(move.completedAt);
+        // Force Eastern Time extraction to match your "Jeremys-Life" context
+        const hourStr = date.toLocaleString('en-US', { 
+          timeZone: 'America/New_York', 
+          hour: 'numeric', 
+          hour12: false 
+        });
+        
+        // Handle "24" edge case if API returns it, strictly 0-23
+        const hour = parseInt(hourStr) % 24;
+        
+        const stats = hourStats.get(hour);
+        if (stats) {
+          stats.completions++;
+        }
+      }
+    }
+    
+    return Array.from(hourStats.entries())
+      .map(([hour, stats]) => ({ hour, ...stats }))
+      .sort((a, b) => a.hour - b.hour);
+  }
+
+Why this works:
+ * Immediate Data: It reads every task you've ever finished, not just the ones since you installed the AI update.
+ * Timezone Smart: It explicitly converts the server time (UTC) to 'America/New_York' so your 9 AM work actually shows up at 9 AM, not 2 PM.
+ * Hybrid Logic: It keeps the "Deferral" tracking from the AI (which is smart) but uses the "Hard Data" for completions (which is accurate).
