@@ -542,11 +542,11 @@ class DatabaseStorage implements IStorage {
   async getProductivityByHour(): Promise<{ hour: number; completions: number; deferrals: number }[]> {
     // 1. Get "Deferral" signals from the new learning system
     const signals = await db.select().from(taskSignals);
-    
+
     // 2. Get ALL historical completed moves (Source of Truth for completions)
     const completedMoves = await db.select().from(moves)
       .where(sql`${moves.completedAt} IS NOT NULL`);
-    
+
     // Initialize 24-hour buckets
     const hourStats = new Map<number, { completions: number; deferrals: number }>();
     for (let h = 0; h < 24; h++) {
@@ -562,28 +562,46 @@ class DatabaseStorage implements IStorage {
         }
       }
     }
-    
+
     // Fill Completions from Actual Moves (with Timezone Adjustment)
+    let completionCount = 0;
     for (const move of completedMoves) {
       if (move.completedAt) {
         const date = new Date(move.completedAt);
         // Force Eastern Time extraction to match your context
-        const hourStr = date.toLocaleString('en-US', { 
-          timeZone: 'America/New_York', 
-          hour: 'numeric', 
-          hour12: false 
+        const hourStr = date.toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          hour: 'numeric',
+          hour12: false
         });
-        
+
         // Handle "24" edge case if API returns it, strictly 0-23
         const hour = parseInt(hourStr) % 24;
-        
+
         const stats = hourStats.get(hour);
         if (stats) {
           stats.completions++;
+          completionCount++;
         }
       }
     }
-    
+
+    // If move completions are missing (common after recent schema changes),
+    // fall back to completion signals so the chart still has data.
+    if (completionCount === 0) {
+      for (const signal of signals) {
+        if (signal.hourOfDay !== null && signal.hourOfDay !== undefined) {
+          const isCompletionSignal = signal.signalType?.startsWith('completed');
+          if (isCompletionSignal) {
+            const stats = hourStats.get(signal.hourOfDay % 24);
+            if (stats) {
+              stats.completions++;
+            }
+          }
+        }
+      }
+    }
+
     return Array.from(hourStats.entries())
       .map(([hour, stats]) => ({ hour, ...stats }))
       .sort((a, b) => a.hour - b.hour);
