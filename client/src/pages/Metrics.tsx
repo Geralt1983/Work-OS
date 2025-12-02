@@ -339,15 +339,16 @@ export default function Metrics() {
                         const total = hourData.completions + hourData.deferrals;
                         const heightPercent = maxTotal > 0 ? (total / maxTotal) * 100 : 5;
                         const isPositive = hourData.completions >= hourData.deferrals;
+                        const barHeight = Math.max(4, Math.round((heightPercent / 100) * 128));
                         return (
                           <div
                             key={hourData.hour}
-                            className="flex-1 flex flex-col items-center group relative justify-end"
+                            className="flex-1 flex flex-col items-center group relative justify-end h-full"
                             title={`${hourData.hour}:00 - ${total} tasks`}
                           >
                             <div
-                              className={`w-full min-w-px rounded-t-sm transition-all duration-200 ${isPositive ? "bg-emerald-500 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500 group-hover:bg-rose-400" : "bg-white/10"}`}
-                              style={{ height: `${Math.max(5, heightPercent)}%` }}
+                              className={`w-full min-w-[2px] rounded-t-sm transition-all duration-200 ${isPositive ? "bg-emerald-500 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500 group-hover:bg-rose-400" : "bg-white/10"}`}
+                              style={{ height: `${barHeight}px` }}
                             />
                           </div>
                         );
