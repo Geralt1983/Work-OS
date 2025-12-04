@@ -243,6 +243,66 @@ function MobileMoveCard({ move, clients, onSelect, onUpdate }: MobileMoveCardPro
   );
 }
 
+function CompactMobileBacklogCard({ move, clients, onSelect, onUpdate }: MobileMoveCardProps) {
+  const { toast } = useToast();
+  const client = clients.find(c => c.id === move.clientId);
+  const normalizedDrainType = normalizeDrainType(move.drainType);
+  const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
+  const daysOld = getDaysOld(move.createdAt);
+  const isStale = daysOld >= 10;
+
+  const promoteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/promote`, { target: "queued" });
+    },
+    onSuccess: () => {
+      playSfx("click");
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      toast({ title: "Moved to Queue", description: move.title });
+      onUpdate();
+    },
+  });
+
+  return (
+    <div 
+      onClick={onSelect}
+      className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/[0.08] transition-all"
+      data-testid={`compact-mobile-card-move-${move.id}`}
+    >
+      {client && (
+        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold bg-white/5 text-muted-foreground/60">
+          {client.name.slice(0, 6)}
+        </span>
+      )}
+      
+      <span className="flex-1 text-sm text-white/70 truncate">
+        {move.title}
+      </span>
+      
+      {isStale && (
+        <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold text-rose-400">
+          <AlertCircle className="w-2.5 h-2.5" /> {daysOld}d
+        </span>
+      )}
+      
+      {DrainIcon && (
+        <DrainIcon className="shrink-0 w-3 h-3 text-muted-foreground/40" />
+      )}
+      
+      <Button
+        size="icon"
+        variant="ghost"
+        className="shrink-0 h-7 w-7 rounded-lg text-muted-foreground hover:bg-blue-500/20 hover:text-blue-400"
+        onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
+        disabled={promoteMutation.isPending}
+        data-testid={`button-promote-compact-${move.id}`}
+      >
+        <ChevronUp className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
+
 interface MobileDetailDrawerProps {
   move: Move | null;
   clients: Client[];
@@ -504,6 +564,30 @@ export default function MobileMovesView({
     </ScrollArea>
   );
 
+  const renderBacklogList = (moves: Move[]) => (
+    <ScrollArea className="h-[calc(100vh-220px)]">
+      <div className="p-4 pb-20">
+        {moves.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground/50">
+            No moves in backlog
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {moves.map(move => (
+              <CompactMobileBacklogCard
+                key={move.id}
+                move={move}
+                clients={clients}
+                onSelect={() => handleSelectMove(move)}
+                onUpdate={onUpdate}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </ScrollArea>
+  );
+
   const renderHistoryList = (moves: Move[], clients: Client[]) => {
     const grouped: Record<string, Move[]> = {};
     moves.forEach(m => {
@@ -661,7 +745,7 @@ export default function MobileMovesView({
         </TabsContent>
         {showBacklog && (
           <TabsContent value="backlog" className="flex-1 mt-2">
-            {renderMoveList(backlogMoves)}
+            {renderBacklogList(backlogMoves)}
           </TabsContent>
         )}
         <TabsContent value="history" className="flex-1 mt-2">

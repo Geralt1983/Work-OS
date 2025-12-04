@@ -167,6 +167,83 @@ function MoveCard({
   );
 }
 
+function CompactMoveCard({ 
+  move, 
+  clients, 
+  onUpdate,
+  onSelect,
+  isDragging
+}: { 
+  move: Move; 
+  clients: Client[]; 
+  onUpdate: () => void;
+  onSelect: () => void;
+  isDragging?: boolean;
+}) {
+  const { toast } = useToast();
+  const client = clients.find(c => c.id === move.clientId);
+  const normalizedDrainType = normalizeDrainType(move.drainType);
+  const DrainIcon = normalizedDrainType ? DRAIN_ICONS[normalizedDrainType] : null;
+  const daysOld = getDaysOld(move.createdAt);
+  const isStale = daysOld >= 10;
+
+  const promoteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/moves/${move.id}/promote`, { target: "queued" });
+    },
+    onSuccess: () => {
+      playSfx("click");
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      toast({ title: "Moved to Queue", description: move.title });
+      onUpdate();
+    },
+  });
+
+  return (
+    <div 
+      className={`py-1 px-1 ${isDragging ? "opacity-50" : ""}`} 
+      data-testid={`compact-card-move-${move.id}`}
+    >
+      <div 
+        onClick={onSelect}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 cursor-pointer transition-all group ${isDragging ? "ring-1 ring-purple-500" : ""}`}
+      >
+        {client && (
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold bg-white/5 text-muted-foreground/60">
+            {client.name.slice(0, 8)}
+          </span>
+        )}
+        
+        <span className="flex-1 text-sm text-white/70 truncate" data-testid={`text-compact-title-${move.id}`}>
+          {move.title}
+        </span>
+        
+        {isStale && (
+          <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold text-rose-400">
+            <AlertCircle className="w-2.5 h-2.5" /> {daysOld}d
+          </span>
+        )}
+        
+        {DrainIcon && (
+          <DrainIcon className="shrink-0 w-3 h-3 text-muted-foreground/40" />
+        )}
+        
+        <Button
+          size="icon"
+          variant="ghost"
+          className="shrink-0 h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-blue-500/20 hover:text-blue-400 transition-all"
+          onClick={(e) => { e.stopPropagation(); promoteMutation.mutate(); }}
+          disabled={promoteMutation.isPending}
+          title="Move to Queue"
+          data-testid={`button-promote-${move.id}`}
+        >
+          <ChevronUp className="w-3 h-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function StatusColumn({ 
   status, 
   moves, 
@@ -228,13 +305,23 @@ function StatusColumn({
                       {...provided.draggableProps}
                       {...provided.dragHandleProps}
                     >
-                      <MoveCard 
-                        move={move} 
-                        clients={clients}
-                        onUpdate={onUpdate}
-                        onSelect={() => onSelectMove(move)}
-                        isDragging={snapshot.isDragging}
-                      />
+                      {status === "backlog" ? (
+                        <CompactMoveCard 
+                          move={move} 
+                          clients={clients}
+                          onUpdate={onUpdate}
+                          onSelect={() => onSelectMove(move)}
+                          isDragging={snapshot.isDragging}
+                        />
+                      ) : (
+                        <MoveCard 
+                          move={move} 
+                          clients={clients}
+                          onUpdate={onUpdate}
+                          onSelect={() => onSelectMove(move)}
+                          isDragging={snapshot.isDragging}
+                        />
+                      )}
                     </div>
                   )}
                 </Draggable>
