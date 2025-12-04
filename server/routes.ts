@@ -6,6 +6,9 @@ import { runTriage, runTriageWithAutoRemediation } from "./pipeline-tools";
 import { sendWifeAlert } from "./notification-service";
 import { z } from "zod";
 import { insertClientSchema, insertMoveSchema, MOVE_STATUSES, type MoveStatus } from "@shared/schema";
+import OpenAI from "openai";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const sendMessageSchema = z.object({
   sessionId: z.string().optional().nullable(),
@@ -544,6 +547,150 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     } catch (error) {
       console.error("Error demoting move:", error);
       res.status(500).json({ error: "Failed to demote move" });
+    }
+  });
+
+  app.post("/api/moves/:id/suggest-rename", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const move = await storage.getMove(id);
+      if (!move) {
+        res.status(404).json({ error: "Move not found" });
+        return;
+      }
+
+      const client = move.clientId ? await storage.getClient(move.clientId) : null;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You rewrite vague task titles into clear, actionable next-move titles. 
+Rules:
+- Start with a strong action verb (Call, Email, Draft, Review, Build, Send, Schedule, etc.)
+- Be specific about what exactly needs to be done
+- Include the deliverable or outcome when possible
+- Keep it concise (under 60 characters ideally)
+- Make it something that can be done in one sitting (20 minutes or less)
+
+Return ONLY the rewritten title, nothing else.`
+          },
+          {
+            role: "user",
+            content: `Rewrite this task title to be more actionable:\n\nOriginal: "${move.title}"${move.description ? `\nDescription: ${move.description}` : ""}${client ? `\nClient: ${client.name}` : ""}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      });
+
+      const suggestedTitle = response.choices[0]?.message?.content?.trim() || move.title;
+      res.json({ originalTitle: move.title, suggestedTitle });
+    } catch (error) {
+      console.error("Error suggesting rename:", error);
+      res.status(500).json({ error: "Failed to suggest rename" });
+    }
+  });
+
+  app.post("/api/moves/:id/breakdown", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const move = await storage.getMove(id);
+      if (!move) {
+        res.status(404).json({ error: "Move not found" });
+        return;
+      }
+
+      const client = move.clientId ? await storage.getClient(move.clientId) : null;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You break down complex tasks into smaller, actionable subtasks.
+Rules:
+- Each subtask should be completable in 20 minutes or less
+- Start each with a strong action verb
+- Be specific and concrete
+- Typical breakdown is 2-4 subtasks
+- Order them logically (what needs to happen first)
+- Each should be a clear "next move"
+
+Return a JSON array of subtask objects with "title" and "drainType" fields.
+drainType must be one of: "deep", "comms", "admin", "creative", "easy"
+
+Example response:
+[
+  {"title": "Draft outline for proposal document", "drainType": "deep"},
+  {"title": "Email client to schedule review call", "drainType": "comms"},
+  {"title": "Update project tracker with timeline", "drainType": "admin"}
+]`
+          },
+          {
+            role: "user",
+            content: `Break down this task into smaller subtasks:\n\nTask: "${move.title}"${move.description ? `\nDescription: ${move.description}` : ""}${client ? `\nClient: ${client.name}` : ""}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500,
+        response_format: { type: "json_object" },
+      });
+
+      let subtasks: { title: string; drainType: string }[] = [];
+      try {
+        const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+        subtasks = parsed.subtasks || parsed.tasks || (Array.isArray(parsed) ? parsed : []);
+      } catch {
+        subtasks = [];
+      }
+
+      res.json({ 
+        originalMove: move, 
+        subtasks,
+        clientId: move.clientId,
+        clientName: client?.name
+      });
+    } catch (error) {
+      console.error("Error breaking down task:", error);
+      res.status(500).json({ error: "Failed to break down task" });
+    }
+  });
+
+  app.post("/api/moves/:id/apply-breakdown", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { subtasks } = req.body as { subtasks: { title: string; drainType: string }[] };
+      
+      const move = await storage.getMove(id);
+      if (!move) {
+        res.status(404).json({ error: "Move not found" });
+        return;
+      }
+
+      const createdMoves = [];
+      for (const subtask of subtasks) {
+        const newMove = await storage.createMove({
+          title: subtask.title,
+          clientId: move.clientId,
+          status: "backlog",
+          effortEstimate: 1,
+          drainType: subtask.drainType || null,
+        });
+        createdMoves.push(newMove);
+      }
+
+      await storage.deleteMove(id);
+
+      res.json({ 
+        deleted: move,
+        created: createdMoves,
+        message: `Replaced "${move.title}" with ${createdMoves.length} subtasks`
+      });
+    } catch (error) {
+      console.error("Error applying breakdown:", error);
+      res.status(500).json({ error: "Failed to apply breakdown" });
     }
   });
 

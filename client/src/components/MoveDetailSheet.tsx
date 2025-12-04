@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Move, Client, DrainType, MoveStatus } from "@shared/schema";
 import { EFFORT_LEVELS, DRAIN_TYPES, DRAIN_TYPE_LABELS, MOVE_STATUSES } from "@shared/schema";
-import { ChevronUp, ChevronDown, Check, Trash2, Save, Clock, AlertCircle } from "lucide-react";
+import { ChevronUp, ChevronDown, Check, Trash2, Save, Clock, AlertCircle, Wand2, Scissors, Loader2, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 
 const moveEditSchema = z.object({
@@ -44,8 +45,17 @@ function getDaysOld(createdAt: Date | string | null): number {
   return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+interface Subtask {
+  title: string;
+  drainType: string;
+}
+
 export default function MoveDetailSheet({ move, clients, open, onOpenChange, onUpdate }: MoveDetailSheetProps) {
   const { toast } = useToast();
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
+  const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   
   const form = useForm<MoveEditValues>({
     resolver: zodResolver(moveEditSchema),
@@ -71,6 +81,13 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
       });
     }
   }, [move, form]);
+
+  useEffect(() => {
+    if (!open) {
+      setSuggestedTitle(null);
+      setSubtasks([]);
+    }
+  }, [open]);
 
   const updateMutation = useMutation({
     mutationFn: async (values: MoveEditValues) => {
@@ -139,6 +156,67 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
     },
   });
 
+  const suggestRenameMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/moves/${move?.id}/suggest-rename`);
+      return res.json();
+    },
+    onSuccess: (data: { suggestedTitle: string }) => {
+      setSuggestedTitle(data.suggestedTitle);
+      setRenameDialogOpen(true);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to suggest rename", variant: "destructive" });
+    },
+  });
+
+  const applyRenameMutation = useMutation({
+    mutationFn: async (newTitle: string) => {
+      await apiRequest("PATCH", `/api/moves/${move?.id}`, { title: newTitle });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      toast({ title: "Move renamed" });
+      setRenameDialogOpen(false);
+      form.setValue("title", suggestedTitle || "");
+      onUpdate();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to rename", variant: "destructive" });
+    },
+  });
+
+  const breakdownMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/moves/${move?.id}/breakdown`);
+      return res.json();
+    },
+    onSuccess: (data: { subtasks: Subtask[] }) => {
+      setSubtasks(data.subtasks || []);
+      setBreakdownDialogOpen(true);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to break down task", variant: "destructive" });
+    },
+  });
+
+  const applyBreakdownMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/moves/${move?.id}/apply-breakdown`, { subtasks });
+      return res.json();
+    },
+    onSuccess: (data: { created: Move[]; message: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      toast({ title: "Task broken down", description: `Created ${data.created.length} subtasks` });
+      setBreakdownDialogOpen(false);
+      onOpenChange(false);
+      onUpdate();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to apply breakdown", variant: "destructive" });
+    },
+  });
+
   if (!move) return null;
 
   const client = clients.find(c => c.id === move.clientId);
@@ -177,7 +255,7 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canPromote && (
               <Button
                 variant="outline"
@@ -218,6 +296,41 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
               </Button>
             )}
           </div>
+
+          {move.status !== "done" && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+                onClick={() => suggestRenameMutation.mutate()}
+                disabled={suggestRenameMutation.isPending}
+                data-testid="sheet-button-rename"
+              >
+                {suggestRenameMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mr-1" />
+                )}
+                Rename
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                onClick={() => breakdownMutation.mutate()}
+                disabled={breakdownMutation.isPending}
+                data-testid="sheet-button-breakdown"
+              >
+                {breakdownMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Scissors className="h-4 w-4 mr-1" />
+                )}
+                Break Down
+              </Button>
+            </div>
+          )}
 
           <Separator className="bg-white/10" />
 
@@ -402,6 +515,110 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
           </div>
         </div>
       </SheetContent>
+
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="bg-[#141420] border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5 text-purple-400" />
+              Rename Suggestion
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              AI-suggested actionable title for this move.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Current</p>
+              <p className="text-sm text-slate-400 line-through">{move?.title}</p>
+            </div>
+            <div className="flex items-center gap-2 text-purple-400">
+              <ArrowRight className="h-4 w-4" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Suggested</p>
+              <p className="text-sm font-medium text-white">{suggestedTitle}</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="bg-transparent border-white/10 text-white hover:bg-white/5"
+              onClick={() => setRenameDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() => suggestedTitle && applyRenameMutation.mutate(suggestedTitle)}
+              disabled={applyRenameMutation.isPending}
+              data-testid="dialog-button-apply-rename"
+            >
+              {applyRenameMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-1" />
+              )}
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={breakdownDialogOpen} onOpenChange={setBreakdownDialogOpen}>
+        <DialogContent className="bg-[#141420] border-white/10 text-white sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-5 w-5 text-cyan-400" />
+              Break Down Task
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              This will replace "{move?.title}" with {subtasks.length} smaller subtasks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[50vh] overflow-y-auto">
+            {subtasks.map((subtask, idx) => (
+              <div 
+                key={idx} 
+                className="flex items-start gap-3 p-3 rounded-xl bg-black/30 border border-white/5"
+                data-testid={`breakdown-subtask-${idx}`}
+              >
+                <span className="shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{subtask.title}</p>
+                  <Badge variant="secondary" className="mt-1.5 text-[10px] bg-white/10 text-white/60 border-0">
+                    {subtask.drainType}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="bg-transparent border-white/10 text-white hover:bg-white/5"
+              onClick={() => setBreakdownDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              onClick={() => applyBreakdownMutation.mutate()}
+              disabled={applyBreakdownMutation.isPending || subtasks.length === 0}
+              data-testid="dialog-button-apply-breakdown"
+            >
+              {applyBreakdownMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-1" />
+              )}
+              Replace with {subtasks.length} Subtasks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
