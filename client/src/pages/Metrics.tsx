@@ -71,6 +71,7 @@ interface BacklogHealthMetric {
   agingCount: number;
   totalCount: number;
   avgDays: number;
+  isEmpty: boolean;
 }
 
 interface ProductivityHour {
@@ -443,9 +444,15 @@ export default function Metrics() {
                 <div key={client.clientName} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
                   <div className="flex flex-col">
                     <span className="font-medium text-white/90 capitalize">{client.clientName}</span>
-                    <span className="text-xs text-muted-foreground">{client.totalCount} tasks • avg {client.avgDays}d old</span>
+                    <span className="text-xs text-muted-foreground">
+                      {client.isEmpty ? "No backlog tasks" : `${client.totalCount} tasks • avg ${client.avgDays}d old`}
+                    </span>
                   </div>
-                  {client.agingCount > 0 ? (
+                  {client.isEmpty ? (
+                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30">
+                      Empty
+                    </Badge>
+                  ) : client.agingCount > 0 ? (
                     <Badge variant="destructive" className="bg-rose-500/20 text-rose-300 border-rose-500/30 hover:bg-rose-500/30">
                       {client.agingCount} aging
                     </Badge>

@@ -639,8 +639,8 @@ class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getBacklogHealth(): Promise<{ clientName: string; oldestDays: number; agingCount: number; totalCount: number; avgDays: number }[]> {
-    // 1. Get all active clients to map IDs to Names
+  async getBacklogHealth(): Promise<{ clientName: string; oldestDays: number; agingCount: number; totalCount: number; avgDays: number; isEmpty: boolean }[]> {
+    // 1. Get all active clients - we want to show ALL clients, even those with 0 backlog
     const allClients = await this.getAllClientsEntity();
     
     // 2. Get ALL moves that are currently in backlog (Source of Truth)
@@ -654,7 +654,12 @@ class DatabaseStorage implements IStorage {
     const entryMap = new Map<string, Date>();
     entries.forEach(e => entryMap.set(e.taskId, e.enteredAt));
 
+    // Initialize all active clients with empty stats
     const clientStats = new Map<string, { ages: number[] }>();
+    for (const client of allClients) {
+      clientStats.set(client.name, { ages: [] });
+    }
+
     const now = new Date();
 
     for (const move of backlogMoves) {
@@ -670,28 +675,31 @@ class DatabaseStorage implements IStorage {
       const startDate = entryMap.get(String(move.id)) || move.createdAt;
       const daysOld = Math.floor((now.getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
       
-      if (!clientStats.has(clientName)) {
-        clientStats.set(clientName, { ages: [] });
-      }
       clientStats.get(clientName)!.ages.push(daysOld);
     }
 
-    // 4. Aggregate stats
+    // 4. Aggregate stats - include ALL clients
     return Array.from(clientStats.entries()).map(([clientName, stats]) => {
       const ages = stats.ages;
       const oldestDays = ages.length > 0 ? Math.max(...ages) : 0;
       const agingCount = ages.filter(d => d >= 7).length;
       const totalCount = ages.length;
       const avgDays = totalCount > 0 ? Math.round(ages.reduce((a, b) => a + b, 0) / totalCount) : 0;
+      const isEmpty = totalCount === 0;
 
       return {
         clientName,
         oldestDays,
         agingCount,
         totalCount,
-        avgDays
+        avgDays,
+        isEmpty
       };
-    }).sort((a, b) => b.oldestDays - a.oldestDays);
+    }).sort((a, b) => {
+      // Sort: Empty backlogs first (unhealthy), then by oldest days descending
+      if (a.isEmpty !== b.isEmpty) return a.isEmpty ? -1 : 1;
+      return b.oldestDays - a.oldestDays;
+    });
   }
 
   async getAgingBacklogTasks(daysThreshold: number = 7): Promise<BacklogEntry[]> {
