@@ -153,7 +153,7 @@ export interface IStorage {
   getAllMoves(filters?: { status?: MoveStatus; clientId?: number; includeCompleted?: boolean }): Promise<Move[]>;
   updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined>;
   completeMove(id: number, effortActual?: number): Promise<Move | undefined>;
-  promoteMove(id: number): Promise<Move | undefined>;
+  promoteMove(id: number, targetStatus?: "active" | "queued"): Promise<Move | undefined>;
   demoteMove(id: number): Promise<Move | undefined>;
   deleteMove(id: number): Promise<void>;
   reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void>;
@@ -1214,7 +1214,7 @@ class DatabaseStorage implements IStorage {
     return completed;
   }
 
-  async promoteMove(id: number): Promise<Move | undefined> {
+  async promoteMove(id: number, targetStatus?: "active" | "queued"): Promise<Move | undefined> {
     const move = await this.getMove(id);
     if (!move) return undefined;
     
@@ -1225,7 +1225,19 @@ class DatabaseStorage implements IStorage {
       return move; // Already at top or invalid status
     }
     
-    const newStatus = statusOrder[currentIndex + 1];
+    // If target specified, jump directly to it (if it's higher in pipeline)
+    let newStatus: MoveStatus;
+    if (targetStatus) {
+      const targetIndex = statusOrder.indexOf(targetStatus);
+      if (targetIndex > currentIndex) {
+        newStatus = targetStatus;
+      } else {
+        newStatus = statusOrder[currentIndex + 1];
+      }
+    } else {
+      newStatus = statusOrder[currentIndex + 1];
+    }
+    
     const updatedMove = await this.updateMove(id, { status: newStatus });
     
     // Enforce 1 active + 1 queued per client rule

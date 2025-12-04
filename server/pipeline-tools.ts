@@ -992,12 +992,12 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         return { error: `Move ${moveId} not found` };
       }
       
-      // Use storage.promoteMove which handles rebalancing automatically
-      const promotedMove = await storage.promoteMove(moveId);
+      // Use storage.promoteMove with target to jump directly to desired status
+      const promotedMove = await storage.promoteMove(moveId, target);
       
       return { 
         success: true, 
-        message: `Promoted "${move.title}" to ${target}`,
+        message: `Promoted "${move.title}" to ${promotedMove?.status || target}`,
         move: promotedMove || { ...move, status: target }
       };
     }

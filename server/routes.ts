@@ -519,7 +519,8 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
   app.post("/api/moves/:id/promote", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const move = await storage.promoteMove(id);
+      const target = req.body.target as "active" | "queued" | undefined;
+      const move = await storage.promoteMove(id, target);
       if (!move) {
         res.status(404).json({ error: "Move not found" });
         return;
