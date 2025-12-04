@@ -812,18 +812,33 @@ class DatabaseStorage implements IStorage {
   }> {
     const targetMinutes = 180;
     
-    // 1. Determine "Current Week" (Monday-Sunday)
-    const now = new Date();
-    const dayOfWeek = now.getDay(); 
+    // 1. Get "Today" as a string in NY Time (YYYY-MM-DD)
+    // This is our Anchor of Truth.
+    const todayStr = getLocalDateString(new Date());
+    
+    // 2. Convert to a UTC Midnight Date Object to do math safely
+    // (We treat this abstractly as "The Current Date", ignoring hours)
+    const anchorDate = new Date(`${todayStr}T00:00:00Z`);
+    
+    // 3. Calculate Days to Subtract to reach Monday
+    // getUTCDay() is safe here because we forced it to Z (UTC) above
+    const dayOfWeek = anchorDate.getUTCDay(); // 0=Sun, 1=Mon, etc.
     const daysToMonday = (dayOfWeek + 6) % 7;
     
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysToMonday);
-    monday.setHours(0, 0, 0, 0);
+    // 4. Determine "Current Week Monday"
+    const currentMonday = new Date(anchorDate);
+    currentMonday.setUTCDate(anchorDate.getUTCDate() - daysToMonday);
     
-    // Fetch logs for last 7 days
+    // 5. Determine "Previous Week Monday"
+    const prevMonday = new Date(currentMonday);
+    prevMonday.setUTCDate(currentMonday.getUTCDate() - 7);
+    
+    // Fetch logs using the string representation of Prev Monday
+    // We construct the YYYY-MM-DD string manually to avoid timezone shifts
+    const prevMondayStr = prevMonday.toISOString().split('T')[0];
+    
     const logs = await db.select().from(dailyLog)
-      .where(gte(dailyLog.date, getLocalDateString(monday)))
+      .where(gte(dailyLog.date, prevMondayStr))
       .orderBy(desc(dailyLog.date));
 
     const logsByDate = new Map<string, DailyLog>();
@@ -831,23 +846,25 @@ class DatabaseStorage implements IStorage {
       logsByDate.set(log.date, log);
     }
     
-    // 2. Build Week Data & Calculate Factors
+    // 6. Build Current Week Data (Strictly Mon -> Sun)
     const days: Array<{
       date: string;
       movesCompleted: number;
       estimatedMinutes: number;
       pacingPercent: number;
     }> = [];
-    
     let currentWeekMinutes = 0;
     let currentWeekMoves = 0;
     let activeDaysCount = 0;
     let highImpactMinutes = 0;
 
     for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const dateStr = getLocalDateString(d);
+      // Create date: Monday + i days
+      const d = new Date(currentMonday);
+      d.setUTCDate(currentMonday.getUTCDate() + i);
+      
+      // Extract YYYY-MM-DD safely
+      const dateStr = d.toISOString().split('T')[0];
       
       const log = logsByDate.get(dateStr);
       const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
@@ -873,7 +890,7 @@ class DatabaseStorage implements IStorage {
       currentWeekMoves += movesArr.length;
     }
 
-    // 3. MULTIFACTORIAL MOMENTUM SCORE (0-100)
+    // 7. MULTIFACTORIAL MOMENTUM SCORE (0-100)
     
     // A. Velocity (40%): Target 15 hours (900 mins) / week
     const velocityScore = Math.min((currentWeekMinutes / 900) * 100, 100);

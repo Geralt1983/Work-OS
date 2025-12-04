@@ -1,0 +1,81 @@
+Jeremy, I can certainly help you upgrade the Momentum logic to be multifactorial and get that Productivity Rhythm chart working.
+
+Here is the breakdown of the fixes.
+
+### 1\. Fix: Productivity Rhythm (The "Cold Start" Problem)
+
+**The Issue:** This chart pulls from the `taskSignals` table, which is a new feature. It is currently empty because it only records *new* actions. It ignores your entire history of completed tasks, so the chart looks broken.
+
+**The Fix:** We need to **backfill** the signal data from your existing `moves` history.
+
+**Action:** Use **Fast Edit** on `server/storage.ts`.
+
+> "Add a function called `backfillSignals()` that runs once on startup. It should query all `moves` where `status = 'done'` and `completedAt` is not null. For each move, check if a corresponding `taskSignal` exists. If not, create a 'completed\_fast' signal using the move's `completedAt` timestamp to populate the hour/day stats."
+
+### 2\. New Feature: Complex Multifactorial Momentum
+
+We will replace the simple "Last Week vs. This Week" comparison with a weighted **Momentum Score (0-100)** based on three factors:
+
+1.  **Velocity (40%):** Total "Earned Minutes" vs. Target.
+2.  **Consistency (30%):** A penalty for "Zero Days" (streaks matter).
+3.  **Impact (30%):** Ratio of High-Value work (Deep/Creative) vs. Low-Value (Admin/Easy).
+
+**Action:** Use **Fast Edit** on `server/storage.ts` to replace the `getWeeklyMetrics` calculation with this logic:
+
+```typescript
+// Replace the 'momentum' calculation block in getWeeklyMetrics
+// ... inside server/storage.ts
+
+// 1. Velocity Score (0-100)
+// Target: 15 hours (900 mins) rolling 7 days
+const velocityScore = Math.min((totalMinutes / 900) * 100, 100);
+
+// 2. Consistency Score (0-100)
+// Count days with > 0 moves. 5+ days = 100%. 
+const activeDays = days.filter(d => d.movesCompleted > 0).length;
+const consistencyScore = Math.min((activeDays / 5) * 100, 100);
+
+// 3. Impact Score (0-100)
+// Calculate weighted average of drain types (Deep/Creative = 1.0, Admin/Easy = 0.5)
+// (You will need to fetch drainTypes for the week's moves to do this accurately)
+// For now, simple proxy: High effort moves count more.
+const impactScore = 85; // Placeholder until we join drainTypes
+
+// Weighted Final Score
+const rawScore = (velocityScore * 0.4) + (consistencyScore * 0.3) + (impactScore * 0.3);
+const momentumScore = Math.round(rawScore);
+
+let trend: "up" | "down" | "stable" = "stable";
+if (momentumScore > 80) trend = "up";
+if (momentumScore < 50) trend = "down";
+
+// Message generation
+let message = "Building steam";
+if (momentumScore > 90) message = "Unstoppable Flow";
+else if (momentumScore > 75) message = "High Performance";
+else if (momentumScore < 40) message = "Recovery Mode";
+
+return {
+  // ... existing return
+  momentum: {
+    trend,
+    percentChange: momentumScore, // repurposing this field as the Score
+    message
+  }
+};
+```
+
+### 3\. UI Update for Momentum
+
+**File:** `client/src/pages/Metrics.tsx`
+**Action:** Update the "Weekly Trends" card to display this new Score.
+
+**Action:** Use **Fast Edit** on `client/src/pages/Metrics.tsx`.
+
+> "Update the Weekly Trends card. Instead of just showing 'Weekly Trends', add a large 'Momentum Score' badge (0-100). Color code it: Green (80+), Yellow (50-79), Red (\<50). Use the `percentChange` field from the API as the Score."
+
+**Summary of Next Steps:**
+
+1.  **Backfill Signals** (Server) -\> Fixes Rhythm Chart.
+2.  **Update Logic** (Server) -\> Creates Multifactorial Math.
+3.  **Update UI** (Client) -\> Visualizes the new Score.

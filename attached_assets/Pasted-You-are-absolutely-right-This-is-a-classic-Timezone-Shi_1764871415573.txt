@@ -1,0 +1,151 @@
+You are absolutely right. This is a classic "Timezone Shift" bug.
+
+The issue is that the server calculates "Today" using UTC, but formats the date using New York time.
+
+  * **Scenario:** It is Sunday night (11 PM) in New York.
+  * **The Bug:** The server (UTC) thinks it is already **Monday morning**.
+      * It calculates the "Start of Week" based on Monday (Today).
+      * Then it formats "Today" into NY time -\> **Sunday**.
+      * Result: Your "Current Week" list starts on **Sunday**, pulling in all of Sunday's work into the *new* week's total.
+
+Here is the robust fix. We will normalize everything to **New York Midnight** before doing any math. This ensures Monday is Monday, regardless of what UTC thinks.
+
+### **Fix for "Sunday Counting as This Week"**
+
+**File:** `server/storage.ts`
+**Action:** Replace the `getWeeklyMetrics` function with this timezone-safe version.
+
+```typescript
+// server/storage.ts
+
+  async getWeeklyMetrics(): Promise<{
+    days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }>;
+    averageMovesPerDay: number;
+    totalMoves: number;
+    totalMinutes: number;
+    momentum: {
+      trend: "up" | "down" | "stable";
+      percentChange: number;
+      message: string;
+    };
+  }> {
+    const targetMinutes = 180;
+    
+    // 1. Get "Today" as a string in NY Time (YYYY-MM-DD)
+    // This is our Anchor of Truth.
+    const todayStr = getLocalDateString(new Date());
+    
+    // 2. Convert to a UTC Midnight Date Object to do math safely
+    // (We treat this abstractly as "The Current Date", ignoring hours)
+    const anchorDate = new Date(`${todayStr}T00:00:00Z`);
+    
+    // 3. Calculate Days to Subtract to reach Monday
+    // getUTCDay() is safe here because we forced it to Z (UTC) above
+    const dayOfWeek = anchorDate.getUTCDay(); // 0=Sun, 1=Mon, etc.
+    const daysToMonday = (dayOfWeek + 6) % 7;
+    
+    // 4. Determine "Current Week Monday"
+    const currentMonday = new Date(anchorDate);
+    currentMonday.setUTCDate(anchorDate.getUTCDate() - daysToMonday);
+    
+    // 5. Determine "Previous Week Monday"
+    const prevMonday = new Date(currentMonday);
+    prevMonday.setUTCDate(currentMonday.getUTCDate() - 7);
+    
+    // Fetch logs using the string representation of Prev Monday
+    // We construct the YYYY-MM-DD string manually to avoid timezone shifts
+    const prevMondayStr = prevMonday.toISOString().split('T')[0];
+    
+    const logs = await db.select().from(dailyLog)
+      .where(gte(dailyLog.date, prevMondayStr))
+      .orderBy(desc(dailyLog.date));
+
+    const logsByDate = new Map<string, DailyLog>();
+    for (const log of logs) {
+      logsByDate.set(log.date, log);
+    }
+    
+    // 6. Build Current Week Data (Strictly Mon -> Sun)
+    const days: Array<{
+      date: string;
+      movesCompleted: number;
+      estimatedMinutes: number;
+      pacingPercent: number;
+    }> = [];
+    let currentWeekMinutes = 0;
+    let currentWeekMoves = 0;
+
+    for (let i = 0; i < 7; i++) {
+      // Create date: Monday + i days
+      const d = new Date(currentMonday);
+      d.setUTCDate(currentMonday.getUTCDate() + i);
+      
+      // Extract YYYY-MM-DD safely
+      const dateStr = d.toISOString().split('T')[0];
+      
+      const log = logsByDate.get(dateStr);
+      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
+      const dailyMinutes = movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+      
+      days.push({
+        date: dateStr,
+        movesCompleted: movesArr.length,
+        estimatedMinutes: dailyMinutes,
+        pacingPercent: Math.min(Math.round((dailyMinutes / targetMinutes) * 100), 100)
+      });
+      
+      currentWeekMinutes += dailyMinutes;
+      currentWeekMoves += movesArr.length;
+    }
+
+    // 7. Calculate Previous Week Stats
+    let prevWeekMinutes = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(prevMonday);
+      d.setUTCDate(prevMonday.getUTCDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      
+      const log = logsByDate.get(dateStr);
+      const movesArr = (log?.completedMoves as Array<{ earnedMinutes?: number }>) || [];
+      prevWeekMinutes += movesArr.reduce((sum, m) => sum + (m.earnedMinutes || 20), 0);
+    }
+
+    // Momentum Logic
+    let trend: "up" | "down" | "stable" = "stable";
+    let percentChange = 0;
+    let message = "Steady flow";
+
+    if (prevWeekMinutes === 0) {
+      if (currentWeekMinutes > 0) {
+        trend = "up"; 
+        percentChange = 100; 
+        message = "Building momentum";
+      }
+    } else {
+      const rawChange = ((currentWeekMinutes - prevWeekMinutes) / prevWeekMinutes) * 100;
+      percentChange = Math.round(Math.abs(rawChange));
+      if (rawChange >= 10) { 
+        trend = "up"; 
+        message = "Accelerating"; 
+      } else if (rawChange <= -10) { 
+        trend = "down"; 
+        message = "Cooling down"; 
+      }
+    }
+
+    const daysWithData = days.filter(d => d.movesCompleted > 0).length;
+    
+    return {
+      days,
+      averageMovesPerDay: daysWithData > 0 ? Math.round(currentWeekMoves / daysWithData) : 0,
+      totalMoves: currentWeekMoves,
+      totalMinutes: currentWeekMinutes,
+      momentum: { trend, percentChange, message }
+    };
+  }
+```
