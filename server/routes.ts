@@ -348,9 +348,9 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
     try {
       const status = req.query.status as MoveStatus | undefined;
       const clientId = req.query.clientId ? parseInt(req.query.clientId as string) : undefined;
-      const includeCompleted = req.query.includeCompleted === "true";
+      const excludeCompleted = req.query.excludeCompleted === "true";
       
-      const moves = await storage.getAllMoves({ status, clientId, includeCompleted });
+      const moves = await storage.getAllMoves({ status, clientId, excludeCompleted });
       res.json(moves);
     } catch (error) {
       console.error("Error fetching moves:", error);

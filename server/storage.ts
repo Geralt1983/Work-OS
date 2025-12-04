@@ -150,7 +150,7 @@ export interface IStorage {
   getMove(id: number): Promise<Move | undefined>;
   getMovesByStatus(status: MoveStatus): Promise<Move[]>;
   getMovesByClient(clientId: number): Promise<Move[]>;
-  getAllMoves(filters?: { status?: MoveStatus; clientId?: number; includeCompleted?: boolean }): Promise<Move[]>;
+  getAllMoves(filters?: { status?: MoveStatus; clientId?: number; excludeCompleted?: boolean }): Promise<Move[]>;
   updateMove(id: number, updates: Partial<InsertMove>): Promise<Move | undefined>;
   completeMove(id: number, effortActual?: number): Promise<Move | undefined>;
   promoteMove(id: number, targetStatus?: "active" | "queued"): Promise<Move | undefined>;
@@ -1113,13 +1113,13 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(moves.createdAt));
   }
 
-  async getAllMoves(filters?: { status?: MoveStatus; clientId?: number; includeCompleted?: boolean }): Promise<Move[]> {
+  async getAllMoves(filters?: { status?: MoveStatus; clientId?: number; excludeCompleted?: boolean }): Promise<Move[]> {
     const conditions: any[] = [];
     
     if (filters?.status) {
       conditions.push(eq(moves.status, filters.status));
-    } else if (!filters?.includeCompleted) {
-      // By default, exclude completed moves unless explicitly asked
+    } else if (filters?.excludeCompleted) {
+      // Only exclude completed moves if explicitly requested
       conditions.push(sql`${moves.status} != 'done'`);
     }
     

@@ -1155,7 +1155,7 @@ export async function executePipelineTool(name: string, args: Record<string, unk
       }
       
       // Check for duplicate - prevent creating same task twice for same client
-      const existingMoves = await storage.getAllMoves({ includeCompleted: false });
+      const existingMoves = await storage.getAllMoves({ excludeCompleted: true });
       const duplicate = existingMoves.find(m => 
         m.title.toLowerCase().trim() === title.toLowerCase().trim() && 
         m.clientId === clientId &&
