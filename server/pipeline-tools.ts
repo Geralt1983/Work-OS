@@ -1154,6 +1154,22 @@ export async function executePipelineTool(name: string, args: Record<string, unk
         clientId = client.id;
       }
       
+      // Check for duplicate - prevent creating same task twice for same client
+      const existingMoves = await storage.getAllMoves({ includeCompleted: false });
+      const duplicate = existingMoves.find(m => 
+        m.title.toLowerCase().trim() === title.toLowerCase().trim() && 
+        m.clientId === clientId &&
+        m.status !== 'done'
+      );
+      
+      if (duplicate) {
+        return {
+          success: false,
+          error: `A task with this title already exists for this client (ID: ${duplicate.id}, status: ${duplicate.status}). Use promote_move to change its status instead.`,
+          existingMove: duplicate,
+        };
+      }
+      
       const move = await storage.createMove({
         title,
         description: description || null,

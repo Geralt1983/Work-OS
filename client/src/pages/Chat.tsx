@@ -17,7 +17,18 @@ import { Button } from "@/components/ui/button";
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem("work_os_session_id"));
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    const storedId = localStorage.getItem("work_os_session_id");
+    const storedDate = localStorage.getItem("work_os_session_date");
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (storedId && storedDate === today) {
+      return storedId;
+    }
+    localStorage.removeItem("work_os_session_id");
+    localStorage.removeItem("work_os_session_date");
+    return null;
+  });
   const [isConnected, setIsConnected] = useState(true);
   const [triageOpen, setTriageOpen] = useState(false);
   const [hasCheckedBriefing, setHasCheckedBriefing] = useState(false);
@@ -132,6 +143,7 @@ export default function Chat() {
       if (!sessionId) {
         setSessionId(response.sessionId);
         localStorage.setItem("work_os_session_id", response.sessionId);
+        localStorage.setItem("work_os_session_date", new Date().toISOString().split('T')[0]);
       }
 
       const aiMessage: ChatMessageProps = {
