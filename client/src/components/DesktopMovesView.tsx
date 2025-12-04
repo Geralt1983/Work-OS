@@ -402,6 +402,7 @@ function MoveListRow({
     onSuccess: () => {
       playSfx("delete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move deleted" });
       onUpdate();
     },

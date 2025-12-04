@@ -356,6 +356,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
     onSuccess: () => {
       playSfx("delete");
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move deleted" });
       onOpenChange(false);
       onUpdate();

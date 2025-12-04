@@ -150,6 +150,7 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Move deleted" });
       onOpenChange(false);
       onUpdate();
@@ -207,6 +208,7 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
     },
     onSuccess: (data: { created: Move[]; message: string }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       toast({ title: "Task broken down", description: `Created ${data.created.length} subtasks` });
       setBreakdownDialogOpen(false);
       onOpenChange(false);

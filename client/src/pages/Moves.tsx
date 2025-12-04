@@ -51,9 +51,19 @@ export default function Moves() {
     localStorage.setItem("moves-view-mode", viewMode);
   }, [viewMode]);
 
-  const { data: moves = [], isLoading: movesLoading, refetch: refetchMoves } = useQuery<Move[]>({
-    queryKey: ["/api/moves"],
+  const { data: activeMoves = [], isLoading: activeMovesLoading } = useQuery<Move[]>({
+    queryKey: ["/api/moves", { excludeCompleted: true }],
+    queryFn: () => fetch("/api/moves?excludeCompleted=true").then(res => res.json()),
   });
+
+  const { data: completedMoves = [], isLoading: completedMovesLoading } = useQuery<Move[]>({
+    queryKey: ["/api/moves", { status: "done" }],
+    queryFn: () => fetch("/api/moves?status=done").then(res => res.json()),
+    enabled: viewMode === "history",
+  });
+
+  const moves = viewMode === "history" ? completedMoves : activeMoves;
+  const movesLoading = viewMode === "history" ? completedMovesLoading : activeMovesLoading;
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -186,7 +196,7 @@ export default function Moves() {
             clients={clients}
             showBacklog={showBacklog}
             onToggleBacklog={setShowBacklog}
-            onUpdate={() => refetchMoves()}
+            onUpdate={() => queryClient.invalidateQueries({ queryKey: ["/api/moves"] })}
             onCreateMove={() => setCreateDialogOpen(true)}
             onEditMove={handleEditMove}
           />
@@ -210,7 +220,7 @@ export default function Moves() {
         sortDirection={sortDirection}
         onSort={handleSort}
         backlogCount={backlogCount}
-        onUpdate={() => refetchMoves()}
+        onUpdate={() => queryClient.invalidateQueries({ queryKey: ["/api/moves"] })}
         onCreateMove={() => setCreateDialogOpen(true)}
         onSelectMove={handleSelectMove}
         onDragEnd={handleDragEnd}
@@ -232,7 +242,7 @@ export default function Moves() {
         open={detailSheetOpen}
         onOpenChange={setDetailSheetOpen}
         onUpdate={() => {
-          refetchMoves();
+          queryClient.invalidateQueries({ queryKey: ["/api/moves"] });
           if (selectedMove) {
             const updatedMove = moves.find(m => m.id === selectedMove.id);
             if (updatedMove) setSelectedMove(updatedMove);
