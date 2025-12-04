@@ -149,7 +149,7 @@ export function TriageDialog({ open, onOpenChange }: TriageDialogProps) {
       }
       onOpenChange(newOpen);
     }}>
-      <DialogContent className="max-w-2xl w-[calc(100%-1rem)] sm:w-auto h-[85vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden mx-2 bg-[#0f0f1a]/95 backdrop-blur-2xl border-white/10 text-white shadow-2xl">
+      <DialogContent className="max-w-2xl w-[calc(100%-1rem)] sm:w-auto max-h-[85vh] flex flex-col overflow-hidden mx-2 bg-[#0f0f1a]/95 backdrop-blur-2xl border-white/10 text-white shadow-2xl">
         <DialogHeader className="shrink-0 border-b border-white/5 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
