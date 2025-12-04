@@ -29,12 +29,16 @@ interface MoveFormProps {
 }
 
 export default function MoveForm({ clients, onSuccess, defaultValues }: MoveFormProps) {
+  // Find General Admin client as default (all tasks must have a client)
+  const adminClient = clients.find(c => c.name.toLowerCase().includes('admin') || c.name.toLowerCase().includes('general'));
+  const defaultClientId = adminClient?.id?.toString() || clients[0]?.id?.toString() || "";
+  
   const form = useForm<MoveFormValues>({
     resolver: zodResolver(moveFormSchema),
     defaultValues: {
       title: "",
       description: "",
-      clientId: "none",
+      clientId: defaultClientId,
       status: "backlog",
       effortEstimate: 2,
       drainType: "none",
@@ -46,7 +50,7 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
     mutationFn: async (values: MoveFormValues) => {
       const payload = {
         ...values,
-        clientId: values.clientId && values.clientId !== "none" ? parseInt(values.clientId) : null,
+        clientId: values.clientId ? parseInt(values.clientId) : null,
         drainType: values.drainType && values.drainType !== "none" ? values.drainType : null,
       };
       await apiRequest("POST", "/api/moves", payload);
@@ -116,7 +120,6 @@ export default function MoveForm({ clients, onSuccess, defaultValues }: MoveForm
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
-                    <SelectItem value="none">No client</SelectItem>
                     {clients.map(client => (
                       <SelectItem key={client.id} value={client.id.toString()}>
                         {client.name}

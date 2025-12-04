@@ -29,9 +29,15 @@ The AI uses these categories to match work to current energy levels when suggest
 ## Pipeline Workflow
 
 Every client should have a healthy pipeline:
-- **Active (Today)**: 1 task currently being worked on
-- **Queued (Next)**: 1 task ready to start next
+- **Active (Today)**: Maximum 1 task currently being worked on
+- **Queued (Next)**: Maximum 1 task ready to start next (enforced - extras auto-demote to backlog)
 - **Backlog**: Future tasks to pull from
+
+**Pipeline Enforcement:**
+- Only 1 active task per client at a time
+- Only 1 queued task per client at a time (any extras automatically demote to backlog)
+- All tasks MUST have a client (no orphan tasks - defaults to "General Admin")
+- When promoting or creating tasks, excess tasks automatically move to backlog
 
 The daily audit checks:
 1. Every client has active/queued/backlog tasks

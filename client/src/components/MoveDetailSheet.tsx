@@ -57,12 +57,16 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   
+  // Find General Admin client as default fallback (all tasks must have a client)
+  const adminClient = clients.find(c => c.name.toLowerCase().includes('admin') || c.name.toLowerCase().includes('general'));
+  const defaultClientId = adminClient?.id?.toString() || clients[0]?.id?.toString() || "";
+  
   const form = useForm<MoveEditValues>({
     resolver: zodResolver(moveEditSchema),
     defaultValues: {
       title: "",
       description: "",
-      clientId: "none",
+      clientId: defaultClientId,
       status: "backlog",
       effortEstimate: 2,
       drainType: "none",
@@ -74,13 +78,13 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
       form.reset({
         title: move.title,
         description: move.description || "",
-        clientId: move.clientId?.toString() || "none",
+        clientId: move.clientId?.toString() || defaultClientId,
         status: move.status as MoveStatus,
         effortEstimate: move.effortEstimate || 2,
         drainType: move.drainType || "none",
       });
     }
-  }, [move, form]);
+  }, [move, form, defaultClientId]);
 
   useEffect(() => {
     if (!open) {
@@ -93,7 +97,7 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
     mutationFn: async (values: MoveEditValues) => {
       const payload = {
         ...values,
-        clientId: values.clientId && values.clientId !== "none" ? parseInt(values.clientId) : null,
+        clientId: values.clientId ? parseInt(values.clientId) : null,
         drainType: values.drainType && values.drainType !== "none" ? values.drainType : null,
       };
       await apiRequest("PATCH", `/api/moves/${move?.id}`, payload);
@@ -388,7 +392,6 @@ export default function MoveDetailSheet({ move, clients, open, onOpenChange, onU
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
-                        <SelectItem value="none">No client</SelectItem>
                         {clients.map(c => (
                           <SelectItem key={c.id} value={c.id.toString()}>
                             {c.name}

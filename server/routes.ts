@@ -412,6 +412,11 @@ export async function registerRoutes(app: Express, storageArg?: IStorage): Promi
         const today = getLocalDateString();
         await storage.removeCompletedMoves(today, [id.toString()]);
       }
+      
+      // Enforce 1 active + 1 queued per client rule when status changes to active/queued
+      if (move.clientId && updates.status && (updates.status === 'active' || updates.status === 'queued')) {
+        await storage.rebalanceClientPipeline(move.clientId, id);
+      }
 
       res.json(move);
     } catch (error) {

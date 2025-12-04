@@ -392,7 +392,7 @@ function MobileDetailDrawer({ move, clients, open, onOpenChange, onUpdate, onEdi
             )}
           </DrawerTitle>
           <DrawerDescription className="text-slate-400">
-            {client ? client.name : "No client"} • {STATUS_LABELS[move.status as MoveStatus].label}
+            {client?.name || "Admin"} • {STATUS_LABELS[move.status as MoveStatus].label}
           </DrawerDescription>
         </DrawerHeader>
 

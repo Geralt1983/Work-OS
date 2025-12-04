@@ -157,6 +157,7 @@ export interface IStorage {
   demoteMove(id: number): Promise<Move | undefined>;
   deleteMove(id: number): Promise<void>;
   reorderMoves(status: MoveStatus, orderedIds: number[]): Promise<void>;
+  rebalanceClientPipeline(clientId: number, preserveMoveId?: number): Promise<void>;
   
   demoteStaleActiveMoves(): Promise<string[]>;
   backfillSignals(): Promise<string>;
