@@ -188,13 +188,13 @@ export default function Metrics() {
         
         {weeklyMetrics && (
           <div className="flex items-center gap-4 mb-6">
-            <div className="text-5xl font-bold text-cyan-400">{weeklyMetrics.momentum.score}</div>
+            <div className="text-5xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
             <div>
               <div className="text-xs text-zinc-400 tracking-wider uppercase">Momentum Score</div>
               <div className="text-lg text-emerald-400 font-medium">{weeklyMetrics.momentum.message}</div>
             </div>
             <div className="ml-auto text-right">
-              <div className="text-2xl font-bold text-white">{weeklyMetrics.momentum.score}/100</div>
+              <div className="text-2xl font-bold text-white">{weeklyMetrics.momentum.percentChange}/100</div>
               <div className="text-xs text-zinc-500">Overall</div>
             </div>
           </div>
