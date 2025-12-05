@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -483,10 +482,23 @@ export default function Metrics() {
   return (
     <>
       <div className="h-screen flex md:hidden flex-col bg-black text-foreground font-sans overflow-hidden">
-        <header className="border-b border-zinc-800 bg-black sticky top-0 z-10">
-          <div className="px-4 py-4">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Metrics</h1>
-            <p className="text-sm text-zinc-400">Real-time dashboard insights</p>
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          <h1 className="text-lg font-semibold tracking-wider text-gradient-purple">Metrics</h1>
+          <div className="flex items-center gap-1">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10" data-testid="mobile-link-chat">
+                <MessageSquare className="h-5 w-5 text-purple-400" />
+              </Button>
+            </Link>
+            <Link href="/moves">
+              <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10" data-testid="mobile-link-moves">
+                <List className="h-5 w-5 text-cyan-400" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" className="hover:bg-emerald-500/10 text-emerald-400">
+              <BarChart3 className="h-5 w-5" />
+            </Button>
           </div>
         </header>
 
