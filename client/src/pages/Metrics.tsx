@@ -187,7 +187,10 @@ export default function Metrics() {
             Weekly Trends
           </h3>
           {weeklyMetrics && (
-            <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
+              <div className="text-xs text-zinc-400">Momentum</div>
+            </div>
           )}
         </div>
 
@@ -444,10 +447,10 @@ export default function Metrics() {
   return (
     <>
       <div className="h-screen flex md:hidden flex-col bg-black text-foreground font-sans overflow-hidden">
-        <header className="border-b border-border bg-black sticky top-0 z-10">
+        <header className="border-b border-zinc-800 bg-black sticky top-0 z-10">
           <div className="px-4 py-4">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
-            <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Metrics</h1>
+            <p className="text-sm text-zinc-400">Real-time dashboard insights</p>
           </div>
         </header>
 
@@ -463,9 +466,9 @@ export default function Metrics() {
           <GlassSidebar />
           <IslandLayout>
             <div className="flex flex-col h-full bg-black">
-              <div className="border-b border-border px-6 py-4">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
-                <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
+              <div className="border-b border-zinc-800 px-6 py-4">
+                <h1 className="text-2xl font-bold tracking-tight text-white">Metrics</h1>
+                <p className="text-sm text-zinc-400">Real-time dashboard insights</p>
               </div>
               <IslandContent noPadding>
                 <ScrollArea className="flex-1 h-full">
