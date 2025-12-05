@@ -123,11 +123,13 @@ export default function Metrics() {
     },
   });
 
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const weeklyChartData = weeklyMetrics?.days.map((day, index) => ({
     day: dayNames[index],
     hours: Number(formatMinutesToHours(day.estimatedMinutes)),
+    moves: day.movesCompleted,
   })) || [];
+  const maxWeeklyHours = Math.max(...weeklyChartData.map(d => d.hours), 1);
 
   const productivityChartData = productivityData?.filter((h, idx) => h.hour >= 6 && h.hour <= 22 && idx % 2 === 0).map(h => {
     const hour = h.hour;
@@ -185,78 +187,55 @@ export default function Metrics() {
       </section>
 
       <section className="card-section" data-testid="section-weekly-trends">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
-            <BarChartIcon className="h-4 w-4 text-cyan-400" />
-          </div>
-          Weekly Trends
-        </h3>
-        
-        {weeklyMetrics && (
-          <div className="flex items-center gap-4 mb-6">
-            <div className="text-5xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
+              <BarChartIcon className="h-4 w-4 text-cyan-400" />
+            </div>
             <div>
-              <div className="text-xs text-zinc-400 tracking-wider uppercase">Momentum Score</div>
-              <div className="text-lg text-emerald-400 font-medium">{weeklyMetrics.momentum.message}</div>
+              <h3 className="text-lg font-semibold text-white">Weekly Trends</h3>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Momentum score</p>
             </div>
           </div>
-        )}
+          {weeklyMetrics && (
+            <div className="text-right">
+              <div className="text-3xl font-semibold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
+              <div className="text-xs font-medium text-emerald-400">{weeklyMetrics.momentum.message}</div>
+            </div>
+          )}
+        </div>
 
         {loadingWeekly ? (
           <Skeleton className="h-48 w-full" />
         ) : weeklyMetrics && weeklyChartData.length > 0 ? (
           <>
-            <div className="w-full h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="day" stroke="#888" tick={{ fill: '#ccc', fontSize: 12 }} />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1a1a1a",
-                      border: "1px solid #333",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
-                    formatter={(value: number) => [`${value}h`, "Hours"]}
-                  />
-                  <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-zinc-700">
-              <div>
-                <span className="text-zinc-400">Moves: </span>
-                <span className="text-white font-semibold">{weeklyMetrics.totalMoves}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400">Avg/day: </span>
-                <span className="text-white font-semibold">{weeklyMetrics.averageMovesPerDay}</span>
+            <div className="h-40 rounded-2xl bg-zinc-900/60 px-3 pb-4 pt-3">
+              <div className="flex h-full items-end gap-2">
+                {weeklyChartData.map((d) => {
+                  const barHeight = d.hours > 0 ? Math.max((d.hours / maxWeeklyHours) * 120, 12) : 6;
+                  return (
+                    <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
+                      <div className="flex w-full items-end justify-center" style={{ height: "120px" }}>
+                        <div
+                          className="w-full rounded-t-lg bg-cyan-500 transition-all"
+                          style={{ height: `${barHeight}px` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-500">{d.day}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-zinc-700">
-              <p className="text-xs text-zinc-400 mb-2">Momentum Score Breakdown:</p>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="text-center p-2 rounded-lg bg-zinc-900">
-                  <div className="text-cyan-400 font-semibold">40%</div>
-                  <div className="text-zinc-500">Velocity</div>
-                  <div className="text-zinc-400 text-[10px]">15h/week target</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-zinc-900">
-                  <div className="text-cyan-400 font-semibold">30%</div>
-                  <div className="text-zinc-500">Consistency</div>
-                  <div className="text-zinc-400 text-[10px]">5 active days</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-zinc-900">
-                  <div className="text-cyan-400 font-semibold">30%</div>
-                  <div className="text-zinc-500">Impact</div>
-                  <div className="text-zinc-400 text-[10px]">50% deep work</div>
-                </div>
-              </div>
+            <div className="flex items-center justify-between text-xs text-zinc-400 mt-4">
+              <span>
+                <span className="text-zinc-100">{weeklyMetrics.totalMoves}</span> moves
+              </span>
+              <span>
+                <span className="text-zinc-100">{weeklyMetrics.averageMovesPerDay}</span> avg/day
+              </span>
+              <span className="text-emerald-400">Weekly target hit!</span>
             </div>
           </>
         ) : <p className="text-muted-foreground">No data</p>}
