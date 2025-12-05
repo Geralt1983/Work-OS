@@ -352,7 +352,7 @@ export default function Metrics() {
               return (
                 <div 
                   key={client.clientName} 
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-white/10"
+                  className="flex items-center justify-between p-3 rounded-xl bg-black border border-zinc-800"
                   data-testid={`card-backlog-${client.clientName}`}
                 >
                   <div>
@@ -391,7 +391,7 @@ export default function Metrics() {
               return (
                 <div 
                   key={client.clientName} 
-                  className="p-4 rounded-xl bg-zinc-900/80 border border-white/10"
+                  className="p-4 rounded-xl bg-black border border-zinc-800"
                   data-testid={`card-client-${client.clientName}`}
                 >
                   <div className="flex items-center justify-between mb-4">
