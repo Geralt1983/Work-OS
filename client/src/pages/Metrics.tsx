@@ -181,18 +181,20 @@ export default function Metrics() {
       </section>
 
       <section className="card-section" data-testid="section-weekly-trends">
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span className="text-xl">📈</span>
-            Weekly Trends
-          </h3>
-          {weeklyMetrics && (
-            <div className="text-right">
-              <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.score}/100</div>
-              <div className="text-xs text-zinc-400">Momentum Score</div>
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+          <span className="text-xl">📈</span>
+          Weekly Trends
+        </h3>
+        
+        {weeklyMetrics && (
+          <div className="flex items-center gap-4 mb-6">
+            <div className="text-5xl font-bold text-cyan-400">{weeklyMetrics.momentum.score}</div>
+            <div>
+              <div className="text-xs text-zinc-400 tracking-wider uppercase">Momentum Score</div>
+              <div className="text-lg text-emerald-400 font-medium">{weeklyMetrics.momentum.message}</div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {loadingWeekly ? (
           <Skeleton className="h-48 w-full" />
