@@ -125,12 +125,11 @@ export default function Metrics() {
     hours: Number(formatMinutesToHours(day.estimatedMinutes)),
   })) || [];
 
-  const productivityChartData = productivityData?.filter(h => h.hour >= 6 && h.hour <= 22).map(h => {
+  const productivityChartData = productivityData?.filter((h, idx) => h.hour >= 6 && h.hour <= 22 && idx % 2 === 0).map(h => {
     const hour = h.hour;
-    const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
     return {
-      time: `${displayHour}${ampm}`,
+      time: `${displayHour}`,
       productivity: h.completions + h.deferrals,
     };
   }) || [];
@@ -265,19 +264,7 @@ export default function Metrics() {
           <Skeleton className="h-24 w-full" />
         ) : drainMetrics && drainMetrics.length > 0 ? (
           <>
-            <div className="flex flex-wrap gap-4 mb-4">
-              {drainMetrics.map((item) => (
-                <div key={item.drainType} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
-                  />
-                  <span className="text-sm text-white capitalize">{item.drainType}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex h-5 rounded-full overflow-hidden gap-0.5">
+            <div className="flex h-4 rounded-full overflow-hidden">
               {drainMetrics.map((item) => (
                 <div
                   key={item.drainType}
@@ -291,15 +278,20 @@ export default function Metrics() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-700">
+            <div className="grid grid-cols-2 gap-3 mt-5">
               {drainMetrics.map((item) => (
-                <div key={item.drainType} className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full"
+                <div 
+                  key={item.drainType} 
+                  className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3"
+                >
+                  <span 
+                    className="h-3 w-3 rounded-full flex-shrink-0 shadow-lg"
                     style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
                   />
-                  <span className="text-xs text-zinc-300 capitalize">{item.drainType}</span>
-                  <span className="text-xs text-white font-medium ml-auto">{item.count}</span>
+                  <div className="flex flex-col items-start">
+                    <span className="text-xl font-semibold text-zinc-100">{item.count}</span>
+                    <span className="text-xs text-zinc-500 capitalize">{item.drainType}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -317,46 +309,45 @@ export default function Metrics() {
           <Skeleton className="h-48 w-full" />
         ) : productivityData && productivityChartData.length > 0 ? (
           <>
-            <div className="w-full h-48">
+            <div className="h-48 rounded-2xl bg-zinc-900/60 px-3 pb-5 pt-3">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={productivityChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                <BarChart data={productivityChartData} margin={{ top: 10, right: 5, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                   <XAxis 
                     dataKey="time" 
                     stroke="#888" 
-                    tick={{ fill: '#ccc', fontSize: 10 }} 
-                    interval={2}
+                    tick={{ fill: '#888', fontSize: 10 }} 
+                    interval={0}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <YAxis hide />
-                  <Bar dataKey="productivity" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="productivity" fill="#10b981" radius={[4, 4, 0, 0]} minPointSize={2} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-zinc-700">
-              <div>
-                <span className="text-zinc-400">Mid - Total: </span>
-                <span className="text-white font-semibold">
-                  {productivityChartData.reduce((a, b) => a + b.productivity, 0)}
-                </span>
-              </div>
-              <div>
-                <span className="text-white font-semibold">
+            <div className="flex justify-between text-xs text-zinc-400 mt-4">
+              <span>
+                <span className="text-zinc-100">{productivityChartData.reduce((a, b) => a + b.productivity, 0)}</span> total
+              </span>
+              <span>
+                <span className="text-zinc-100">
                   {productivityChartData.length > 0 
                     ? Math.round(productivityChartData.reduce((a, b) => a + b.productivity, 0) / productivityChartData.length)
-                    : 0} moves/hr
-                </span>
-              </div>
+                    : 0}
+                </span> avg/hr
+              </span>
             </div>
           </>
         ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
       </section>
 
-      <section className="space-y-3" data-testid="section-backlog-health">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+      <section className="card-section" data-testid="section-backlog-health">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
           <span className="text-xl">🗂️</span>
           Backlog Health
-        </h2>
+        </h3>
 
         {loadingBacklog ? (
           <Skeleton className="h-32 w-full" />
@@ -365,27 +356,27 @@ export default function Metrics() {
             {backlogHealth.map((client) => {
               const status = client.isEmpty ? "empty" : client.agingCount > 0 ? "aging" : "healthy";
               const statusConfig = {
-                empty: { label: "Empty", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-                healthy: { label: "Healthy", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-                aging: { label: "aging", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+                empty: { label: "Empty", className: "border-zinc-600/40 bg-zinc-800/40 text-zinc-100" },
+                healthy: { label: "Healthy", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
+                aging: { label: `${client.agingCount} aging`, className: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
               };
               const config = statusConfig[status];
 
               return (
                 <div 
                   key={client.clientName} 
-                  className="flex items-center justify-between p-3 rounded-xl bg-black border border-zinc-800"
+                  className="flex items-center justify-between p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50"
                   data-testid={`card-backlog-${client.clientName}`}
                 >
                   <div>
                     <h3 className="font-medium text-white capitalize">{client.clientName}</h3>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-500">
                       {client.isEmpty 
                         ? "No backlog tasks" 
                         : `${client.totalCount} tasks • avg ${client.avgDays}d old`}
                     </p>
                   </div>
-                  <Badge className={`${config.className} border rounded-full px-3 py-1 text-xs font-medium`}>
+                  <Badge className={`${config.className} border rounded-full px-3 py-1.5 text-xs font-medium`}>
                     {config.label}
                   </Badge>
                 </div>
@@ -395,77 +386,81 @@ export default function Metrics() {
         ) : <p className="text-muted-foreground text-sm">No backlog data yet</p>}
       </section>
 
-      <section className="space-y-3" data-testid="section-client-activity">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+      <section className="card-section" data-testid="section-client-activity">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
           <span className="text-xl">👥</span>
           Client Activity
-        </h2>
+        </h3>
 
         {loadingClients ? (
           <Skeleton className="h-48 w-full" />
         ) : clientMetrics && clientMetrics.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {clientMetrics.map((client) => {
+              const isStale = client.daysSinceLastMove >= 2;
               const statusLabel = client.daysSinceLastMove === 0 
                 ? "Active" 
-                : `${client.daysSinceLastMove}d ago`;
+                : isStale 
+                  ? `${client.daysSinceLastMove}d stale`
+                  : `${client.daysSinceLastMove}d ago`;
+              const statusClass = isStale 
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                : "border-zinc-600/40 bg-zinc-800/40 text-zinc-100";
 
               return (
                 <div 
                   key={client.clientName} 
-                  className="p-4 rounded-xl bg-black border border-zinc-800"
+                  className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50"
                   data-testid={`card-client-${client.clientName}`}
                 >
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h3 className="font-semibold text-white capitalize">{client.clientName}</h3>
-                      <p className="text-xs text-zinc-400">{client.totalMoves} moves • {statusLabel}</p>
+                      <h3 className="font-medium text-white capitalize">{client.clientName}</h3>
+                      <p className="text-xs text-zinc-500">{client.totalMoves} moves</p>
                     </div>
-                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 border rounded-full px-3 py-1 text-xs">
+                    <Badge className={`${statusClass} border rounded-full px-3 py-1.5 text-xs font-medium`}>
                       {statusLabel}
                     </Badge>
                   </div>
 
-                  <div className="h-px bg-white/10 mb-4" />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-zinc-400 mb-2">Sentiment</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-500 w-16">Sentiment</span>
                       <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
                         <SelectTrigger 
-                          className={`h-auto py-1.5 px-3 text-sm border rounded-full w-fit gap-1 ${
-                            client.sentiment === 'positive' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-                            client.sentiment === 'negative' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                            client.sentiment === 'complicated' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                            'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          className={`h-auto py-1 px-3 text-xs border rounded-full w-fit gap-1 ${
+                            client.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40' :
+                            client.sentiment === 'negative' ? 'bg-rose-500/10 text-rose-300 border-rose-500/40' :
+                            client.sentiment === 'complicated' ? 'bg-orange-500/10 text-orange-300 border-orange-500/40' :
+                            'bg-zinc-800/40 text-zinc-100 border-zinc-700'
                           }`}
                         >
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-800 border-zinc-700">
-                          <SelectItem value="positive"><div className="flex gap-2 items-center text-emerald-400">👍 Positive</div></SelectItem>
-                          <SelectItem value="neutral"><div className="flex gap-2 items-center text-amber-400">− Neutral</div></SelectItem>
-                          <SelectItem value="negative"><div className="flex gap-2 items-center text-red-400">👎 Negative</div></SelectItem>
-                          <SelectItem value="complicated"><div className="flex gap-2 items-center text-orange-400">⚠️ Complicated</div></SelectItem>
+                        <SelectContent className="bg-zinc-900 border-zinc-700">
+                          <SelectItem value="positive"><span className="text-emerald-300">Positive</span></SelectItem>
+                          <SelectItem value="neutral"><span className="text-zinc-100">Neutral</span></SelectItem>
+                          <SelectItem value="negative"><span className="text-rose-300">Negative</span></SelectItem>
+                          <SelectItem value="complicated"><span className="text-orange-300">Complicated</span></SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
-                      <p className="text-xs text-zinc-400 mb-2">Priority</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-500 w-16">Priority</span>
                       <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
                         <SelectTrigger 
-                          className={`h-auto py-1.5 px-3 text-sm border rounded-full w-fit gap-1 ${
-                            client.importance === 'high' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
-                            client.importance === 'low' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' :
-                            'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          className={`h-auto py-1 px-3 text-xs border rounded-full w-fit gap-1 ${
+                            client.importance === 'high' ? 'bg-rose-500/10 text-rose-300 border-rose-500/40' :
+                            client.importance === 'low' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40' :
+                            'bg-zinc-800/40 text-zinc-100 border-zinc-700'
                           }`}
                         >
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-800 border-zinc-700">
-                          <SelectItem value="high"><div className="flex gap-2 items-center text-yellow-400"><Star className="w-3 h-3" /> High</div></SelectItem>
-                          <SelectItem value="medium"><div className="flex gap-2 items-center text-amber-400"><Star className="w-3 h-3" /> Medium</div></SelectItem>
-                          <SelectItem value="low"><div className="flex gap-2 items-center text-cyan-400">Low</div></SelectItem>
+                        <SelectContent className="bg-zinc-900 border-zinc-700">
+                          <SelectItem value="high"><span className="text-rose-300">High</span></SelectItem>
+                          <SelectItem value="medium"><span className="text-zinc-100">Medium</span></SelectItem>
+                          <SelectItem value="low"><span className="text-emerald-300">Low</span></SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
