@@ -410,27 +410,40 @@ export default function Metrics() {
                     <div>
                       <p className="text-xs text-zinc-400 mb-2">Sentiment</p>
                       <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
-                        <SelectTrigger className="h-9 text-sm bg-zinc-800 border-zinc-700 text-white">
+                        <SelectTrigger 
+                          className={`h-auto py-1.5 px-3 text-sm border rounded-full w-fit gap-1 ${
+                            client.sentiment === 'positive' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                            client.sentiment === 'negative' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                            client.sentiment === 'complicated' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                            'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          }`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-800 border-zinc-700">
-                          <SelectItem value="positive"><div className="flex gap-2 items-center text-white">👍 Positive</div></SelectItem>
-                          <SelectItem value="neutral"><div className="flex gap-2 items-center text-white">− Neutral</div></SelectItem>
-                          <SelectItem value="negative"><div className="flex gap-2 items-center text-white">👎 Negative</div></SelectItem>
-                          <SelectItem value="complicated"><div className="flex gap-2 items-center text-white">⚠️ Complicated</div></SelectItem>
+                          <SelectItem value="positive"><div className="flex gap-2 items-center text-emerald-400">👍 Positive</div></SelectItem>
+                          <SelectItem value="neutral"><div className="flex gap-2 items-center text-amber-400">− Neutral</div></SelectItem>
+                          <SelectItem value="negative"><div className="flex gap-2 items-center text-red-400">👎 Negative</div></SelectItem>
+                          <SelectItem value="complicated"><div className="flex gap-2 items-center text-orange-400">⚠️ Complicated</div></SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
                       <p className="text-xs text-zinc-400 mb-2">Priority</p>
                       <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
-                        <SelectTrigger className="h-9 text-sm bg-zinc-800 border-zinc-700 text-white">
+                        <SelectTrigger 
+                          className={`h-auto py-1.5 px-3 text-sm border rounded-full w-fit gap-1 ${
+                            client.importance === 'high' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                            client.importance === 'low' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' :
+                            'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          }`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-800 border-zinc-700">
-                          <SelectItem value="high"><div className="flex gap-2 items-center text-white"><Star className="w-3 h-3 text-yellow-400" /> High</div></SelectItem>
-                          <SelectItem value="medium"><div className="flex gap-2 items-center text-white">Medium</div></SelectItem>
-                          <SelectItem value="low"><div className="flex gap-2 items-center text-white">Low</div></SelectItem>
+                          <SelectItem value="high"><div className="flex gap-2 items-center text-yellow-400"><Star className="w-3 h-3" /> High</div></SelectItem>
+                          <SelectItem value="medium"><div className="flex gap-2 items-center text-amber-400"><Star className="w-3 h-3" /> Medium</div></SelectItem>
+                          <SelectItem value="low"><div className="flex gap-2 items-center text-cyan-400">Low</div></SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
