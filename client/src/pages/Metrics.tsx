@@ -146,7 +146,7 @@ export default function Metrics() {
             Today's Pacing
           </h3>
           {todayMetrics && (
-            <div className="text-2xl font-bold text-primary">{todayMetrics.pacingPercent}%</div>
+            <div className="text-2xl font-bold text-emerald-400">{todayMetrics.pacingPercent}%</div>
           )}
         </div>
 
@@ -155,10 +155,10 @@ export default function Metrics() {
         ) : todayMetrics ? (
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground mb-2">
+              <p className="text-sm text-zinc-300 mb-2">
                 {formatMinutesToHours(todayMetrics.estimatedMinutes)}h of 3.0h target
               </p>
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+              <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
@@ -168,12 +168,12 @@ export default function Metrics() {
 
             <div className="flex gap-6 text-sm">
               <div>
-                <span className="text-muted-foreground">From backlog: </span>
-                <span className="text-foreground font-medium">{todayMetrics.backlogMoves}</span>
+                <span className="text-zinc-400">From backlog: </span>
+                <span className="text-white font-medium">{todayMetrics.backlogMoves}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Clients touched: </span>
-                <span className="text-foreground font-medium">{todayMetrics.clientsTouched.length}</span>
+                <span className="text-zinc-400">Clients touched: </span>
+                <span className="text-white font-medium">{todayMetrics.clientsTouched.length}</span>
               </div>
             </div>
           </div>
@@ -187,7 +187,7 @@ export default function Metrics() {
             Weekly Trends
           </h3>
           {weeklyMetrics && (
-            <div className="text-2xl font-bold text-primary">{weeklyMetrics.momentum.percentChange}</div>
+            <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
           )}
         </div>
 
@@ -199,7 +199,7 @@ export default function Metrics() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="day" stroke="#666" tick={{ fill: '#888', fontSize: 12 }} />
+                  <XAxis dataKey="day" stroke="#888" tick={{ fill: '#ccc', fontSize: 12 }} />
                   <YAxis hide />
                   <Tooltip
                     contentStyle={{
@@ -216,14 +216,14 @@ export default function Metrics() {
               </ResponsiveContainer>
             </div>
 
-            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-border">
+            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-zinc-700">
               <div>
-                <span className="text-muted-foreground">Moves: </span>
-                <span className="text-foreground font-semibold">{weeklyMetrics.totalMoves}</span>
+                <span className="text-zinc-400">Moves: </span>
+                <span className="text-white font-semibold">{weeklyMetrics.totalMoves}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Avg/day: </span>
-                <span className="text-foreground font-semibold">{weeklyMetrics.averageMovesPerDay}</span>
+                <span className="text-zinc-400">Avg/day: </span>
+                <span className="text-white font-semibold">{weeklyMetrics.averageMovesPerDay}</span>
               </div>
             </div>
           </>
@@ -247,7 +247,7 @@ export default function Metrics() {
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
                   />
-                  <span className="text-sm text-foreground capitalize">{item.drainType}</span>
+                  <span className="text-sm text-white capitalize">{item.drainType}</span>
                 </div>
               ))}
             </div>
@@ -266,15 +266,15 @@ export default function Metrics() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-700">
               {drainMetrics.map((item) => (
                 <div key={item.drainType} className="flex items-center gap-2">
                   <div
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
                   />
-                  <span className="text-xs text-muted-foreground capitalize">{item.drainType}</span>
-                  <span className="text-xs text-foreground font-medium ml-auto">{item.count}</span>
+                  <span className="text-xs text-zinc-300 capitalize">{item.drainType}</span>
+                  <span className="text-xs text-white font-medium ml-auto">{item.count}</span>
                 </div>
               ))}
             </div>
@@ -298,8 +298,8 @@ export default function Metrics() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                   <XAxis 
                     dataKey="time" 
-                    stroke="#666" 
-                    tick={{ fill: '#888', fontSize: 10 }} 
+                    stroke="#888" 
+                    tick={{ fill: '#ccc', fontSize: 10 }} 
                     interval={2}
                   />
                   <YAxis hide />
@@ -308,15 +308,15 @@ export default function Metrics() {
               </ResponsiveContainer>
             </div>
 
-            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-border">
+            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-zinc-700">
               <div>
-                <span className="text-muted-foreground">Mid - Total: </span>
-                <span className="text-foreground font-semibold">
+                <span className="text-zinc-400">Mid - Total: </span>
+                <span className="text-white font-semibold">
                   {productivityChartData.reduce((a, b) => a + b.productivity, 0)}
                 </span>
               </div>
               <div>
-                <span className="text-foreground font-semibold">
+                <span className="text-white font-semibold">
                   {productivityChartData.length > 0 
                     ? Math.round(productivityChartData.reduce((a, b) => a + b.productivity, 0) / productivityChartData.length)
                     : 0} moves/hr
