@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  Target, TrendingUp, Users, AlertCircle, CheckCircle2, 
-  Brain, MessageCircle, FileText, Lightbulb, Zap, 
-  ThumbsUp, ThumbsDown, Minus, ArrowUpRight, ArrowDownRight, Activity,
-  Flame, Sparkles, BarChart3, Clock, Archive
+  Clock, Target, TrendingUp, Users, AlertCircle, CheckCircle2, 
+  Brain, MessageCircle, FileText, Lightbulb, Zap, Archive, 
+  ThumbsUp, ThumbsDown, Minus, AlertTriangle, Star, Loader2,
+  MessageSquare, List, BarChart3, ArrowUpRight, ArrowDownRight, Activity
 } from "lucide-react";
+import { DRAIN_TYPE_LABELS, type DrainType } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +20,6 @@ import IslandLayout from "@/components/IslandLayout";
 import { TriageDialog } from "@/components/TriageDialog";
 import { ArcCard } from "@/components/ArcCard";
 
-// --- Types (Kept consistent) ---
 interface TodayMetrics {
   date: string;
   movesCompleted: number;
@@ -72,6 +71,7 @@ interface BacklogHealthMetric {
   agingCount: number;
   totalCount: number;
   avgDays: number;
+  isEmpty: boolean;
 }
 
 interface ProductivityHour {
@@ -80,8 +80,7 @@ interface ProductivityHour {
   deferrals: number;
 }
 
-// --- Configuration ---
-const DRAIN_ICONS: Record<string, any> = {
+const DRAIN_ICONS: Record<string, typeof Brain> = {
   deep: Brain,
   comms: MessageCircle,
   admin: FileText,
@@ -91,58 +90,22 @@ const DRAIN_ICONS: Record<string, any> = {
 
 const DRAIN_COLORS: Record<string, string> = {
   deep: "bg-cyan-500",
-  comms: "bg-emerald-500",
+  comms: "bg-green-500",
   admin: "bg-orange-500",
   creative: "bg-purple-500",
   easy: "bg-yellow-500",
-  unset: "bg-zinc-500",
+  unset: "bg-gray-500",
 };
 
-// Static day names for timezone-safe display (Backend returns Mon-Sun order)
-const DAY_NAMES_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-// --- Components ---
-
-// Animated Number
-function AnimatedNumber({ value }: { value: number }) {
-  return (
-    <motion.span
-      initial={{ opacity: 0, filter: "blur(4px)" }}
-      animate={{ opacity: 1, filter: "blur(0px)" }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
-    >
-      {value}
-    </motion.span>
-  );
-}
-
-// Helper: Format Hours
 function formatMinutesToHours(minutes: number): string {
-  return (minutes / 60).toFixed(1);
-}
-
-// Helper: Consistent Badge Style
-function StatusBadge({ children, variant = "neutral" }: { children: React.ReactNode, variant?: "neutral" | "success" | "warning" | "danger" | "info" }) {
-  const styles = {
-    neutral: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
-    success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    warning: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    danger: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    info: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  };
-
-  return (
-    <Badge variant="outline" className={`${styles[variant]} backdrop-blur-sm px-2.5 py-0.5 h-6 text-[10px] font-medium tracking-wide uppercase shadow-sm`}>
-      {children}
-    </Badge>
-  );
+  const hours = (minutes / 60).toFixed(1);
+  return `${hours}h`;
 }
 
 export default function Metrics() {
   const [triageOpen, setTriageOpen] = useState(false);
   const { toast } = useToast();
 
-  // Queries
   const { data: todayMetrics, isLoading: loadingToday } = useQuery<TodayMetrics>({ queryKey: ["/api/metrics/today"] });
   const { data: weeklyMetrics, isLoading: loadingWeekly } = useQuery<WeeklyMetrics>({ queryKey: ["/api/metrics/weekly"] });
   const { data: clientMetrics, isLoading: loadingClients } = useQuery<ClientMetric[]>({ queryKey: ["/api/metrics/clients"] });
@@ -150,7 +113,6 @@ export default function Metrics() {
   const { data: backlogHealth, isLoading: loadingBacklog } = useQuery<BacklogHealthMetric[]>({ queryKey: ["/api/metrics/backlog-health"] });
   const { data: productivityData, isLoading: loadingProductivity } = useQuery<ProductivityHour[]>({ queryKey: ["/api/metrics/productivity"] });
 
-  // Mutations
   const updateSentiment = useMutation({
     mutationFn: async ({ clientName, sentiment }: { clientName: string; sentiment: string }) => {
       return apiRequest("PATCH", `/api/client-memory/${encodeURIComponent(clientName)}/sentiment`, { sentiment });
@@ -171,501 +133,340 @@ export default function Metrics() {
     },
   });
 
-  // Calculations
-  const currentMinutes = weeklyMetrics?.totalMinutes || 0;
-  const currentHours = parseFloat((currentMinutes / 60).toFixed(1));
-  const weeklyTarget = 15; // 15h minimum
-
-  // Animation Variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
-  };
-  const itemVariants = {
-    hidden: { y: 10, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { duration: 0.4, ease: "easeOut" } }
-  };
+  const weeklyTargetMinutes = 900; // 15 hours
+  const weeklyHours = weeklyMetrics ? (weeklyMetrics.totalMinutes / 60).toFixed(1) : "0.0";
+  const weeklyPacing = weeklyMetrics ? Math.min(Math.round((weeklyMetrics.totalMinutes / weeklyTargetMinutes) * 100), 100) : 0;
 
   const MetricsContent = (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-12 w-full max-w-5xl mx-auto pb-20"
-    >
+    <div className="space-y-6 w-full overflow-x-hidden">
       
-      {/* === SECTION 1: PRIMARY METRICS (Light Glass Background) === */}
-      <section className="space-y-8">
-        <div className="flex items-end justify-between px-1">
-          <div>
-            <h2 className="text-2xl font-semibold text-white tracking-tight">Performance</h2>
-            <p className="text-sm text-muted-foreground mt-1">Real-time velocity & pacing</p>
+      {/* Today's Pacing */}
+      <ArcCard glowColor="purple" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-row items-center justify-between gap-2 pb-4">
+            <div className="text-lg font-semibold flex items-center gap-2 text-white">
+              <Target className="h-5 w-5 text-purple-400" />
+              Today's Pacing
+            </div>
+            {todayMetrics && (
+              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                {todayMetrics.pacingPercent}%
+              </Badge>
+            )}
           </div>
+          
+          {loadingToday ? (
+            <Skeleton className="h-12 w-full bg-white/5" />
+          ) : todayMetrics ? (
+            <>
+              <div className="flex justify-between text-sm mb-2 text-white/80">
+                <span>{formatMinutesToHours(todayMetrics.estimatedMinutes)} of 3.0h target</span>
+                <span>{todayMetrics.movesCompleted} moves</span>
+              </div>
+              <div className="h-3 bg-black/40 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" 
+                  style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }} 
+                />
+              </div>
+              <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
+                <span>{todayMetrics.backlogMoves} from backlog</span>
+                <span>{todayMetrics.clientsTouched.length} clients touched</span>
+              </div>
+            </>
+          ) : <p className="text-muted-foreground">No data</p>}
         </div>
+      </ArcCard>
 
-        {/* Today's Pacing */}
-        <motion.div variants={itemVariants}>
-          <ArcCard glowColor="purple" className="w-full rounded-2xl overflow-hidden bg-white/[0.02] backdrop-blur-md border border-white/10 shadow-2xl">
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-purple-500/10 ring-1 ring-purple-500/20">
-                    <Target className="h-6 w-6 text-purple-400" strokeWidth={1.5} />
+      {/* Weekly Trends - Meter List View */}
+      <ArcCard glowColor="cyan" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="flex items-center justify-between pb-6">
+            <div className="flex flex-col gap-1">
+              <div className="text-lg font-semibold flex items-center gap-2 text-white">
+                <TrendingUp className="h-5 w-5 text-cyan-400" />
+                Weekly Trends
+              </div>
+              
+              {/* MOMENTUM SCORE DISPLAY */}
+              {weeklyMetrics && (
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`text-2xl font-bold ${
+                    weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400" :
+                    weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400" : "text-rose-400"
+                  }`}>
+                    {weeklyMetrics.momentum.percentChange}
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">Today's Pacing</h3>
-                    <p className="text-xs text-muted-foreground">Daily momentum check</p>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Momentum Score</span>
+                    <span className={`text-xs font-medium ${
+                      weeklyMetrics.momentum.percentChange >= 80 ? "text-emerald-400/80" :
+                      weeklyMetrics.momentum.percentChange >= 50 ? "text-yellow-400/80" : "text-rose-400/80"
+                    }`}>
+                      {weeklyMetrics.momentum.message}
+                    </span>
                   </div>
                 </div>
-                {todayMetrics && (
-                  <StatusBadge variant={todayMetrics.pacingPercent >= 100 ? "success" : "info"}>
-                    {todayMetrics.pacingPercent}% GOAL
-                  </StatusBadge>
+              )}
+            </div>
+            
+            {/* Hours Badge */}
+            <div className="text-right">
+              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 mb-1">
+                {weeklyHours}h / 15h
+              </Badge>
+            </div>
+          </div>
+
+          {loadingWeekly ? (
+            <Skeleton className="h-40 w-full bg-white/5" />
+          ) : weeklyMetrics ? (
+            <div className="space-y-5">
+              {/* List of Days with Horizontal Meters */}
+              <div className="space-y-4">
+                {weeklyMetrics.days.map((day, index) => {
+                  const dailyHours = (day.estimatedMinutes / 60).toFixed(1);
+                  const isZero = day.estimatedMinutes === 0;
+                  // Backend returns Mon-Sun order (index 0-6), use static names to avoid timezone shifts
+                  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                  const dayName = dayNames[index];
+                  const percent = Math.min((day.estimatedMinutes / 180) * 100, 100); // Based on 3h daily target
+
+                  return (
+                    <div key={day.date} className="flex items-center gap-3 sm:gap-4">
+                      <div className="w-20 sm:w-24 shrink-0 text-sm text-muted-foreground font-medium">
+                        {dayName}
+                      </div>
+                      
+                      <div className="flex-1 h-3 bg-black/40 rounded-full overflow-hidden relative">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${isZero ? 'bg-transparent' : 'bg-cyan-500'}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+
+                      <div className={`w-12 shrink-0 text-right text-sm font-bold ${isZero ? 'text-white/20' : 'text-cyan-300'}`}>
+                        {dailyHours}h
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-between text-sm text-muted-foreground border-t border-white/5 pt-4 mt-2">
+                <div>
+                  <span className="text-white font-bold">{weeklyMetrics.totalMoves}</span> <span className="text-[10px] uppercase tracking-wider">Moves</span>
+                </div>
+                <div>
+                  <span className="text-cyan-400 font-bold">{weeklyMetrics.averageMovesPerDay}</span> <span className="text-[10px] uppercase tracking-wider">Avg/Day</span>
+                </div>
+              </div>
+              
+              <div className="text-xs text-center text-muted-foreground pt-2">
+                {weeklyPacing >= 100 ? (
+                  <span className="text-emerald-400 font-medium">Weekly target hit!</span>
+                ) : (
+                  <span>{Math.round(100 - weeklyPacing)}% to weekly 15h target</span>
                 )}
               </div>
-
-              {loadingToday ? (
-                <Skeleton className="h-12 w-full bg-white/5 rounded-xl" />
-              ) : todayMetrics ? (
-                <div className="space-y-6">
-                  {/* Progress Bar with Glow */}
-                  <div className="h-5 bg-black/40 rounded-full overflow-hidden relative shadow-inner">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
-                      transition={{ duration: 1.2, ease: "circOut" }}
-                      className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-purple-600 to-pink-500 z-10" 
-                    />
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
-                      transition={{ duration: 1.2, ease: "circOut" }}
-                      className="absolute top-0 left-0 h-full rounded-full bg-purple-500 blur-md opacity-30 z-0" 
-                    />
-                  </div>
-                  
-                  <div className="flex justify-between items-end">
-                    <div className="flex flex-col">
-                      <span className="text-4xl font-bold text-white tracking-tight tabular-nums">
-                        <AnimatedNumber value={todayMetrics.movesCompleted} />
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Moves Completed</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-2xl font-semibold text-white/90 tabular-nums">
-                        {formatMinutesToHours(todayMetrics.estimatedMinutes)}h
-                      </span>
-                      <span className="text-xs text-muted-foreground block mt-1">of 3.0h target</span>
-                    </div>
-                  </div>
-                </div>
-              ) : <p className="text-muted-foreground">No data</p>}
             </div>
-          </ArcCard>
-        </motion.div>
+          ) : <p className="text-muted-foreground">No data</p>}
+        </div>
+      </ArcCard>
 
-        {/* Weekly Trends */}
-        <motion.div variants={itemVariants}>
-          <ArcCard glowColor="cyan" className="w-full rounded-2xl bg-white/[0.02] backdrop-blur-md border border-white/10 shadow-2xl">
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-cyan-500/10 ring-1 ring-cyan-500/20">
-                    <TrendingUp className="h-6 w-6 text-cyan-400" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">Weekly Flow</h3>
-                    {weeklyMetrics && (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {weeklyMetrics.momentum.trend === "up" && <ArrowUpRight className="w-3 h-3 text-emerald-400" />}
-                        {weeklyMetrics.momentum.trend === "down" && <ArrowDownRight className="w-3 h-3 text-rose-400" />}
-                        <span className={`text-xs font-medium ${
-                          weeklyMetrics.momentum.trend === "up" ? "text-emerald-400" :
-                          weeklyMetrics.momentum.trend === "down" ? "text-rose-400" : "text-cyan-400"
-                        }`}>
-                          {weeklyMetrics.momentum.message}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-2xl font-bold text-white tabular-nums">{currentHours}h</span>
-                  <span className="text-xs text-muted-foreground block uppercase tracking-wide"> / {weeklyTarget}h Goal</span>
-                </div>
+      {/* Work Type Breakdown */}
+      <ArcCard glowColor="orange" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+            <Brain className="h-5 w-5 text-orange-400" />
+            Work Type Breakdown
+          </div>
+          
+          {loadingDrain ? (
+            <Skeleton className="h-24 w-full bg-white/5" />
+          ) : drainMetrics && drainMetrics.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex h-3 rounded-full overflow-hidden bg-black/40">
+                {drainMetrics.map((metric) => (
+                  <div
+                    key={metric.drainType}
+                    className={`${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset} transition-all opacity-80 hover:opacity-100`}
+                    style={{ width: `${metric.percentage}%` }}
+                    title={`${metric.drainType}: ${metric.percentage}%`}
+                  />
+                ))}
               </div>
-
-              {loadingWeekly ? (
-                <Skeleton className="h-40 w-full bg-white/5 rounded-xl" />
-              ) : weeklyMetrics ? (
-                <div className="space-y-3">
-                  {weeklyMetrics.days.map((day, i) => {
-                    const dailyHours = parseFloat((day.estimatedMinutes / 60).toFixed(1));
-                    const isZero = day.estimatedMinutes === 0;
-                    // TIMEZONE FIX: Use static day names based on index (backend returns Mon-Sun order)
-                    const dayName = DAY_NAMES_SHORT[i];
-                    const percent = Math.min((day.estimatedMinutes / 180) * 100, 100);
-
-                    return (
-                      <div key={day.date} className="group flex items-center gap-4 py-1 relative">
-                        {/* Micro Separator */}
-                        {i !== weeklyMetrics.days.length - 1 && (
-                          <div className="absolute bottom-0 left-12 right-0 h-px bg-white/[0.04]" />
-                        )}
-                        
-                        <div className="w-12 shrink-0 text-xs font-medium uppercase tracking-wider text-muted-foreground group-hover:text-white transition-colors">
-                          {dayName}
+              <div className="grid grid-cols-2 gap-3">
+                {drainMetrics.map((metric) => {
+                  const DrainIcon = DRAIN_ICONS[metric.drainType];
+                  return (
+                    <div key={metric.drainType} className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+                      <div className={`w-2 h-2 rounded-full ${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset}`} />
+                      {DrainIcon && <DrainIcon className="h-3 w-3 text-muted-foreground" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate text-white/90 capitalize">
+                          {metric.drainType}
                         </div>
-                        
-                        <div className="flex-1 h-2.5 bg-black/40 rounded-full overflow-visible relative">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${percent}%` }}
-                            transition={{ duration: 0.8, delay: i * 0.05 }}
-                            className={`absolute top-0 left-0 h-full rounded-full ${isZero ? 'bg-transparent' : 'bg-cyan-500'} shadow-[0_0_8px_rgba(6,182,212,0.3)]`}
-                          />
-                        </div>
-
-                        <div className={`w-10 shrink-0 text-right text-xs font-semibold tabular-nums ${isZero ? 'text-white/20' : 'text-white'}`}>
-                          {dailyHours}h
+                        <div className="text-[10px] text-muted-foreground">
+                          {metric.count} moves
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : <p className="text-muted-foreground">No data</p>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </ArcCard>
-        </motion.div>
-      </section>
+          ) : <p className="text-muted-foreground text-sm">No completed moves yet</p>}
+        </div>
+      </ArcCard>
 
-      {/* === SECTION 2: SECONDARY METRICS (Darker Solid Background) === */}
-      <section className="space-y-8">
-        <h2 className="text-2xl font-semibold text-white tracking-tight px-1">Deep Dive</h2>
+      {/* Productivity by Time of Day */}
+      <ArcCard glowColor="emerald" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+            <Clock className="h-5 w-5 text-emerald-400" />
+            Productivity Rhythm
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Work Type Breakdown */}
-          <motion.div variants={itemVariants} className="h-full">
-            <ArcCard glowColor="orange" className="h-full rounded-2xl bg-[#0A0A0B] border border-white/5">
-              <div className="p-8 flex flex-col h-full">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="p-2 rounded-lg bg-orange-500/10">
-                    <Brain className="h-5 w-5 text-orange-400" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Focus Type</h3>
-                </div>
-                
-                {drainMetrics && drainMetrics.length > 0 ? (
-                  <div className="flex-1 space-y-6">
-                    {/* Visual Bar */}
-                    <div className="flex h-3 rounded-full overflow-hidden bg-black/60 shadow-inner w-full">
-                      {drainMetrics.map((metric, i) => (
-                        <motion.div
-                          key={metric.drainType}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${metric.percentage}%` }}
-                          transition={{ duration: 0.8, delay: i * 0.1 }}
-                          className={`${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset} h-full`}
-                        />
-                      ))}
-                    </div>
-                    {/* Legend List */}
-                    <div className="space-y-3">
-                      {drainMetrics.map((metric) => (
-                        <div key={metric.drainType} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${DRAIN_COLORS[metric.drainType] || DRAIN_COLORS.unset} shadow-[0_0_6px_currentColor]`} />
-                            <span className="text-zinc-300 font-medium capitalize">{metric.drainType}</span>
-                          </div>
-                          <div className="text-zinc-500 tabular-nums text-xs">
-                            {metric.count} moves ({metric.percentage}%)
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : <div className="text-muted-foreground text-sm">No data</div>}
-              </div>
-            </ArcCard>
-          </motion.div>
-
-          {/* Productivity Rhythm */}
-          <motion.div variants={itemVariants} className="h-full">
-            <ArcCard glowColor="emerald" className="h-full rounded-2xl bg-[#0A0A0B] border border-white/5">
-              <div className="p-8 flex flex-col h-full">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <Clock className="h-5 w-5 text-emerald-400" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Rhythm</h3>
-                </div>
-
-                {productivityData && productivityData.length > 0 ? (
-                  <div className="flex-1 flex flex-col justify-end">
-                    <div className="flex items-end justify-between h-40 gap-1 relative px-2">
-                      {/* Grid Lines */}
-                      <div className="absolute inset-0 w-full h-full flex flex-col justify-between pointer-events-none opacity-[0.03]">
-                        <div className="w-full h-px bg-white" />
-                        <div className="w-full h-px bg-white" />
-                        <div className="w-full h-px bg-white" />
-                        <div className="w-full h-px bg-white" />
-                      </div>
-
-                      {productivityData.filter(h => h.hour >= 6 && h.hour <= 22).map((hourData, i) => {
+          {loadingProductivity ? (
+            <Skeleton className="h-32 w-full bg-white/5" />
+          ) : productivityData && productivityData.length > 0 ? (
+            <div className="space-y-3">
+              {(() => {
+                const filteredData = productivityData.filter(h => h.hour >= 6 && h.hour <= 22);
+                const maxTotal = Math.max(...filteredData.map(h => h.completions + h.deferrals));
+                return (
+                  <>
+                    <div className="flex gap-0.5 h-32 items-end px-2">
+                      {filteredData.map((hourData) => {
                         const total = hourData.completions + hourData.deferrals;
-                        const height = total > 0 ? Math.max(10, Math.min(total * 15, 100)) : 4;
+                        const heightPercent = maxTotal > 0 ? (total / maxTotal) * 100 : 5;
                         const isPositive = hourData.completions >= hourData.deferrals;
-                        
+                        const barHeight = Math.max(4, Math.round((heightPercent / 100) * 128));
                         return (
-                          <div key={hourData.hour} className="flex-1 flex flex-col items-center group relative z-10">
-                            <motion.div
-                              initial={{ height: 0 }}
-                              animate={{ height: `${height}%` }}
-                              transition={{ duration: 0.5, delay: i * 0.02 }}
-                              className={`w-full max-w-[12px] rounded-t-sm transition-all duration-300 ${
-                                isPositive 
-                                  ? "bg-gradient-to-t from-emerald-600 to-emerald-400 group-hover:to-emerald-300" 
-                                  : total > 0 ? "bg-gradient-to-t from-rose-600 to-rose-500" : "bg-white/5"
-                              }`}
+                          <div
+                            key={hourData.hour}
+                            className="flex-1 flex flex-col items-center group relative justify-end h-full"
+                            title={`${hourData.hour}:00 - ${total} tasks`}
+                          >
+                            <div
+                              className={`w-full min-w-[2px] rounded-t-sm transition-all duration-200 ${isPositive ? "bg-emerald-500 group-hover:bg-emerald-400" : total > 0 ? "bg-rose-500 group-hover:bg-rose-400" : "bg-white/10"}`}
+                              style={{ height: `${barHeight}px` }}
                             />
                           </div>
                         );
                       })}
                     </div>
-                    <div className="flex justify-between text-[10px] font-medium text-zinc-600 uppercase tracking-widest mt-3 px-2">
-                      <span>6AM</span>
-                      <span>12PM</span>
-                      <span>6PM</span>
-                      <span>10PM</span>
+                    <div className="flex justify-between text-[10px] text-muted-foreground uppercase tracking-wider px-2">
+                      <span>6am</span>
+                      <span>12pm</span>
+                      <span>6pm</span>
+                      <span>10pm</span>
                     </div>
-                  </div>
-                ) : <div className="text-muted-foreground text-sm">No data</div>}
-              </div>
-            </ArcCard>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* === SECTION 3: LISTS (Darkest Background) === */}
-      <section className="space-y-8">
-        <h2 className="text-2xl font-semibold text-white tracking-tight px-1">Engagement</h2>
-
-        <div className="grid md:grid-cols-1 gap-8">
-          {/* Client Activity */}
-          <motion.div variants={itemVariants}>
-            <ArcCard glowColor="none" className="w-full rounded-2xl bg-[#050505] border border-white/5 overflow-hidden">
-              <div className="p-8">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="p-2 rounded-lg bg-white/5">
-                    <Users className="h-5 w-5 text-zinc-400" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Client Activity</h3>
-                </div>
-                
-                {clientMetrics && clientMetrics.length > 0 ? (
-                  <div className="flex flex-col">
-                    {clientMetrics.map((client, i) => (
-                      <div 
-                        key={client.clientName} 
-                        className={`
-                          group relative flex items-center justify-between p-4 -mx-4 hover:bg-white/[0.03] transition-colors
-                          ${i !== clientMetrics.length - 1 ? 'border-b border-white/[0.08]' : ''}
-                        `}
-                      >
-                        {/* Visual Anchor (Left Stripe) */}
-                        <div className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md ${
-                          client.daysSinceLastMove === 0 ? 'bg-emerald-500' : 'bg-transparent'
-                        }`} />
-
-                        <div className="flex items-center gap-4 pl-2">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                            client.daysSinceLastMove >= 2 ? 'bg-rose-900/30 text-rose-400 border border-rose-500/20' : 
-                            client.daysSinceLastMove === 0 ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/20' :
-                            'bg-zinc-800 text-zinc-400 border border-white/10'
-                          }`}>
-                            {client.clientName.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-zinc-200 block capitalize">{client.clientName}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wide">{client.totalMoves} Lifetime Moves</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          {client.daysSinceLastMove >= 2 ? (
-                            <StatusBadge variant="danger">{client.daysSinceLastMove}d Stale</StatusBadge>
-                          ) : client.daysSinceLastMove === 0 ? (
-                            <StatusBadge variant="success">Active</StatusBadge>
-                          ) : (
-                            <span className="text-xs text-zinc-500">{client.daysSinceLastMove}d ago</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <div className="text-muted-foreground text-sm">No data</div>}
-              </div>
-            </ArcCard>
-          </motion.div>
-
-          {/* Backlog Health */}
-          <motion.div variants={itemVariants}>
-            <ArcCard glowColor="none" className="w-full rounded-2xl bg-[#050505] border border-white/5 overflow-hidden">
-              <div className="p-8">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="p-2 rounded-lg bg-white/5">
-                    <Archive className="h-5 w-5 text-zinc-400" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">Backlog Health</h3>
-                </div>
-
-                {backlogHealth && backlogHealth.length > 0 ? (
-                  <div className="flex flex-col">
-                    {backlogHealth.map((client, i) => (
-                      <div 
-                        key={client.clientName} 
-                        className={`
-                          flex items-center justify-between p-4 -mx-4 hover:bg-white/[0.03] transition-colors
-                          ${i !== backlogHealth.length - 1 ? 'border-b border-white/[0.08]' : ''}
-                        `}
-                      >
-                        <div className="flex flex-col pl-2">
-                          <span className="text-sm font-medium text-zinc-300 capitalize">{client.clientName}</span>
-                          <span className="text-[10px] text-zinc-500">{client.totalCount} tasks • {client.avgDays}d avg age</span>
-                        </div>
-                        
-                        {client.agingCount > 0 ? (
-                          <StatusBadge variant="warning">{client.agingCount} Aging</StatusBadge>
-                        ) : (
-                          <StatusBadge variant="success">Healthy</StatusBadge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : <div className="text-muted-foreground text-sm">No backlog data</div>}
-              </div>
-            </ArcCard>
-          </motion.div>
-        </div>
-      </section>
-
-    </motion.div>
-  );
-
-  // Mobile Content (simplified version of same layout)
-  const MobileMetricsContent = (
-    <div className="space-y-6 pb-20">
-      {/* Today's Pacing - Mobile */}
-      <ArcCard glowColor="purple" className="w-full">
-        <div className="p-5">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-3">
-              <Target className="h-5 w-5 text-purple-400" strokeWidth={1.5} />
-              <h3 className="text-base font-semibold text-white">Today's Pacing</h3>
-            </div>
-            {todayMetrics && (
-              <StatusBadge variant={todayMetrics.pacingPercent >= 100 ? "success" : "info"}>
-                {todayMetrics.pacingPercent}%
-              </StatusBadge>
-            )}
-          </div>
-
-          {loadingToday ? (
-            <Skeleton className="h-10 w-full bg-white/5" />
-          ) : todayMetrics ? (
-            <div className="space-y-4">
-              <div className="h-4 bg-black/40 rounded-full overflow-hidden relative">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
-                  transition={{ duration: 1.2, ease: "circOut" }}
-                  className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-purple-600 to-pink-500" 
-                />
-              </div>
-              
-              <div className="flex justify-between text-sm">
-                <span className="text-white font-bold">{todayMetrics.movesCompleted} moves</span>
-                <span className="text-muted-foreground">{formatMinutesToHours(todayMetrics.estimatedMinutes)}h of 3.0h</span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </ArcCard>
-
-      {/* Weekly Flow - Mobile */}
-      <ArcCard glowColor="cyan" className="w-full">
-        <div className="p-5">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="h-5 w-5 text-cyan-400" strokeWidth={1.5} />
-              <h3 className="text-base font-semibold text-white">Weekly Flow</h3>
-            </div>
-            <span className="text-sm font-bold text-white">{currentHours}h / {weeklyTarget}h</span>
-          </div>
-
-          {loadingWeekly ? (
-            <Skeleton className="h-32 w-full bg-white/5" />
-          ) : weeklyMetrics ? (
-            <div className="space-y-2">
-              {weeklyMetrics.days.map((day, i) => {
-                const dailyHours = parseFloat((day.estimatedMinutes / 60).toFixed(1));
-                const isZero = day.estimatedMinutes === 0;
-                const dayName = DAY_NAMES_SHORT[i];
-                const percent = Math.min((day.estimatedMinutes / 180) * 100, 100);
-
-                return (
-                  <div key={day.date} className="flex items-center gap-3">
-                    <div className="w-10 shrink-0 text-xs text-muted-foreground">{dayName}</div>
-                    <div className="flex-1 h-2 bg-black/40 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${isZero ? 'bg-transparent' : 'bg-cyan-500'}`}
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <div className={`w-8 text-right text-xs ${isZero ? 'text-white/20' : 'text-white'}`}>
-                      {dailyHours}h
-                    </div>
-                  </div>
+                  </>
                 );
-              })}
+              })()}
             </div>
-          ) : null}
+          ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
         </div>
       </ArcCard>
 
-      {/* Client Activity - Mobile */}
-      <ArcCard glowColor="none" className="w-full bg-[#050505]">
-        <div className="p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Users className="h-5 w-5 text-zinc-400" strokeWidth={1.5} />
-            <h3 className="text-base font-semibold text-white">Client Activity</h3>
+      {/* Client Activity List */}
+      <ArcCard glowColor="none" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+            <Users className="h-5 w-5 text-white/70" />
+            Client Activity
           </div>
-
-          {clientMetrics && clientMetrics.length > 0 ? (
+          
+          {loadingClients ? (
+            <div className="space-y-3"><Skeleton className="h-16 w-full bg-white/5" /></div>
+          ) : clientMetrics && clientMetrics.length > 0 ? (
             <div className="space-y-3">
-              {clientMetrics.slice(0, 5).map((client) => (
-                <div key={client.clientName} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      client.daysSinceLastMove >= 2 ? 'bg-rose-900/30 text-rose-400' : 
-                      client.daysSinceLastMove === 0 ? 'bg-emerald-900/30 text-emerald-400' :
-                      'bg-zinc-800 text-zinc-400'
-                    }`}>
-                      {client.clientName.charAt(0).toUpperCase()}
+              {clientMetrics.map((client) => (
+                <div key={client.clientName} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3 hover:bg-white/[0.07] transition-colors">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-white tracking-wide capitalize">{client.clientName}</span>
+                      <span className="text-xs text-muted-foreground">{client.totalMoves} moves</span>
                     </div>
-                    <span className="text-sm text-zinc-300 capitalize">{client.clientName}</span>
+                    <div className="flex items-center gap-2">
+                      {client.daysSinceLastMove >= 2 ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full border border-rose-400/20">
+                          <AlertCircle className="w-3 h-3" /> {client.daysSinceLastMove}d stale
+                        </span>
+                      ) : client.daysSinceLastMove === 0 ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                          <CheckCircle2 className="w-3 h-3" /> Active
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{client.daysSinceLastMove}d ago</span>
+                      )}
+                    </div>
                   </div>
-                  {client.daysSinceLastMove >= 2 ? (
-                    <StatusBadge variant="danger">{client.daysSinceLastMove}d</StatusBadge>
-                  ) : client.daysSinceLastMove === 0 ? (
-                    <StatusBadge variant="success">Active</StatusBadge>
+                  
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                    <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
+                      <SelectTrigger className="h-8 text-xs bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
+                        <SelectItem value="positive"><div className="flex gap-1"><ThumbsUp className="w-3 h-3 text-emerald-400"/> Positive</div></SelectItem>
+                        <SelectItem value="neutral"><div className="flex gap-1"><Minus className="w-3 h-3"/> Neutral</div></SelectItem>
+                        <SelectItem value="negative"><div className="flex gap-1"><ThumbsDown className="w-3 h-3 text-rose-400"/> Negative</div></SelectItem>
+                        <SelectItem value="complicated"><div className="flex gap-1"><AlertTriangle className="w-3 h-3 text-orange-400"/> Complicated</div></SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
+                      <SelectTrigger className="h-8 text-xs bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
+                        <SelectItem value="high"><div className="flex gap-1"><Star className="w-3 h-3 text-yellow-400"/> High</div></SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-muted-foreground text-sm">No client data yet</p>}
+        </div>
+      </ArcCard>
+
+      {/* Backlog Health */}
+      <ArcCard glowColor="none" className="w-full">
+        <div className="p-5 sm:p-6">
+          <div className="text-lg font-semibold flex items-center gap-2 text-white pb-4">
+            <Archive className="h-5 w-5 text-white/70" />
+            Backlog Health
+          </div>
+          {loadingBacklog ? (
+            <Skeleton className="h-20 w-full bg-white/5" />
+          ) : backlogHealth && backlogHealth.length > 0 ? (
+            <div className="space-y-2">
+              {backlogHealth.map((client) => (
+                <div key={client.clientName} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-white/90 capitalize">{client.clientName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {client.isEmpty ? "No backlog tasks" : `${client.totalCount} tasks • avg ${client.avgDays}d old`}
+                    </span>
+                  </div>
+                  {client.isEmpty ? (
+                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30">
+                      Empty
+                    </Badge>
+                  ) : client.agingCount > 0 ? (
+                    <Badge variant="destructive" className="bg-rose-500/20 text-rose-300 border-rose-500/30 hover:bg-rose-500/30">
+                      {client.agingCount} aging
+                    </Badge>
                   ) : (
-                    <span className="text-xs text-zinc-500">{client.daysSinceLastMove}d</span>
+                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30">
+                      Healthy
+                    </Badge>
                   )}
                 </div>
               ))}
             </div>
-          ) : <div className="text-muted-foreground text-sm">No data</div>}
+          ) : <p className="text-muted-foreground text-sm">No backlog data yet</p>}
         </div>
       </ArcCard>
     </div>
@@ -673,36 +474,55 @@ export default function Metrics() {
 
   return (
     <>
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-noise opacity-[0.02]" />
-        <div className="absolute inset-0 bg-gradient-to-tr from-black via-[#050505] to-black opacity-90" />
+      {/* === MOBILE VIEW (Hidden on Desktop) === */}
+      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground font-sans overflow-hidden">
+        <header className="h-14 glass-strong border-b border-purple-500/20 flex items-center justify-between px-4 shrink-0 relative z-50">
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          <h1 className="text-lg font-display font-semibold tracking-wider text-gradient-purple">Metrics</h1>
+          <div className="flex items-center gap-1">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
+                <MessageSquare className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link href="/moves">
+              <Button variant="ghost" size="icon" className="hover:bg-purple-500/10 text-muted-foreground">
+                <List className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" className="hover:bg-cyan-500/10 text-cyan-400">
+              <BarChart3 className="h-5 w-5" />
+            </Button>
+          </div>
+        </header>
+
+        <ScrollArea className="flex-1">
+          <div className="p-4 pb-24 w-full">
+            {MetricsContent}
+          </div>
+        </ScrollArea>
       </div>
 
-      {/* Desktop View */}
-      <div className="h-screen hidden md:flex bg-[#030309] text-foreground font-sans relative z-10">
+      {/* === DESKTOP VIEW (Hidden on Mobile) === */}
+      <div className="h-screen hidden md:flex bg-transparent text-foreground font-sans">
         <GlassSidebar onTriageClick={() => setTriageOpen(true)} />
+
         <IslandLayout>
           <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between px-10 py-8 border-b border-white/[0.04]">
-              <h2 className="text-3xl font-bold text-white tracking-tight">Metrics</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Metrics</h2>
+                <p className="text-sm text-muted-foreground">Track your work pacing and client activity</p>
+              </div>
             </div>
+
             <ScrollArea className="flex-1">
-              <div className="max-w-5xl mx-auto px-10 py-10">
+              <div className="max-w-4xl mx-auto px-6 py-6">
                 {MetricsContent}
               </div>
             </ScrollArea>
           </div>
         </IslandLayout>
-      </div>
-
-      {/* Mobile View */}
-      <div className="md:hidden min-h-screen bg-[#030309] text-foreground font-sans relative z-10">
-        <div className="sticky top-0 z-20 bg-[#030309]/95 backdrop-blur-lg border-b border-white/5 px-4 py-4">
-          <h2 className="text-xl font-bold text-white">Metrics</h2>
-        </div>
-        <div className="px-4 py-4">
-          {MobileMetricsContent}
-        </div>
       </div>
 
       <TriageDialog open={triageOpen} onOpenChange={setTriageOpen} />
