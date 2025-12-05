@@ -641,7 +641,8 @@ body {
    PREMIUM CARD SECTIONS
    ======================================== */
 .card-section {
-  @apply p-6 rounded-2xl border border-border bg-card;
+  @apply p-5 rounded-2xl border border-white/10;
+  background: rgba(20, 20, 20, 0.8);
   transition: border-color 0.2s ease;
 }
 
@@ -650,5 +651,5 @@ body {
 }
 
 .card-divider {
-  @apply h-px bg-border;
+  @apply h-px bg-white/10;
 }

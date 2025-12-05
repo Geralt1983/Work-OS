@@ -349,7 +349,7 @@ export default function Metrics() {
               return (
                 <div 
                   key={client.clientName} 
-                  className="flex items-center justify-between p-3 rounded-xl bg-card border border-border"
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10"
                   data-testid={`card-backlog-${client.clientName}`}
                 >
                   <div>
@@ -388,7 +388,7 @@ export default function Metrics() {
               return (
                 <div 
                   key={client.clientName} 
-                  className="p-3 rounded-xl bg-card border border-border"
+                  className="p-3 rounded-xl bg-white/5 border border-white/10"
                   data-testid={`card-client-${client.clientName}`}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -433,8 +433,8 @@ export default function Metrics() {
 
   return (
     <>
-      <div className="h-screen flex md:hidden flex-col bg-background text-foreground font-sans overflow-hidden">
-        <header className="border-b border-border bg-card sticky top-0 z-10">
+      <div className="h-screen flex md:hidden flex-col bg-black text-foreground font-sans overflow-hidden">
+        <header className="border-b border-border bg-black sticky top-0 z-10">
           <div className="px-4 py-4">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
             <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
@@ -448,11 +448,11 @@ export default function Metrics() {
         </ScrollArea>
       </div>
 
-      <div className="h-screen hidden md:flex flex-col bg-background text-foreground font-sans overflow-hidden">
+      <div className="h-screen hidden md:flex flex-col bg-black text-foreground font-sans overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
           <GlassSidebar />
           <IslandLayout>
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full bg-black">
               <div className="border-b border-border px-6 py-4">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
                 <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
