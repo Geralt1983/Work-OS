@@ -123,13 +123,12 @@ export default function Metrics() {
     },
   });
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const weeklyChartData = weeklyMetrics?.days.map((day, index) => ({
     day: dayNames[index],
     hours: Number(formatMinutesToHours(day.estimatedMinutes)),
     moves: day.movesCompleted,
   })) || [];
-  const maxWeeklyHours = Math.max(...weeklyChartData.map(d => d.hours), 1);
 
   const productivityChartData = productivityData?.filter((h, idx) => h.hour >= 6 && h.hour <= 22 && idx % 2 === 0).map(h => {
     const hour = h.hour;
@@ -206,29 +205,32 @@ export default function Metrics() {
         </div>
 
         {loadingWeekly ? (
-          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-52 w-full" />
         ) : weeklyMetrics && weeklyChartData.length > 0 ? (
           <>
-            <div className="h-40 rounded-2xl bg-zinc-900/60 px-3 pb-4 pt-3">
+            <div className="h-52 rounded-2xl bg-zinc-900/60 px-3 pb-4 pt-3">
               <div className="flex h-full items-end gap-2">
                 {weeklyChartData.map((d) => {
-                  const barHeight = d.hours > 0 ? Math.max((d.hours / maxWeeklyHours) * 120, 12) : 6;
+                  const barHeight = d.hours > 0 ? Math.max((d.hours / 5) * 180, 12) : 6;
                   return (
                     <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
-                      <div className="flex w-full items-end justify-center" style={{ height: "120px" }}>
+                      <div className="relative flex w-full items-end justify-center" style={{ height: "180px" }}>
+                        {d.hours > 0 && (
+                          <span className="absolute -top-5 text-[10px] text-cyan-400">{d.hours}h</span>
+                        )}
                         <div
                           className="w-full rounded-t-lg bg-cyan-500 transition-all"
                           style={{ height: `${barHeight}px` }}
                         />
                       </div>
-                      <span className="text-[10px] text-zinc-500">{d.day}</span>
+                      <span className="text-[11px] text-zinc-500">{d.day}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-zinc-400 mt-4">
+            <div className="flex items-center justify-between text-xs text-zinc-400 mt-6">
               <span>
                 <span className="text-zinc-100">{weeklyMetrics.totalMoves}</span> moves
               </span>
