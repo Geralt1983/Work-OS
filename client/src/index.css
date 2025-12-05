@@ -642,7 +642,7 @@ body {
    ======================================== */
 .card-section {
   @apply p-5 rounded-2xl border border-white/10;
-  background: rgba(20, 20, 20, 0.8);
+  background: rgba(24, 24, 27, 0.9);
   transition: border-color 0.2s ease;
 }
 
@@ -652,4 +652,14 @@ body {
 
 .card-divider {
   @apply h-px bg-white/10;
+}
+
+/* Ensure text visibility on dark backgrounds */
+.card-section h3,
+.card-section h2 {
+  color: white;
+}
+
+.card-section p {
+  color: #a1a1aa;
 }

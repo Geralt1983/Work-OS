@@ -141,7 +141,7 @@ export default function Metrics() {
       
       <section className="card-section" data-testid="section-todays-pacing">
         <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <span className="text-xl">🎯</span>
             Today's Pacing
           </h3>
@@ -182,7 +182,7 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-weekly-trends">
         <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <span className="text-xl">📈</span>
             Weekly Trends
           </h3>
@@ -231,7 +231,7 @@ export default function Metrics() {
       </section>
 
       <section className="card-section" data-testid="section-work-type">
-        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
           <span className="text-xl">🧠</span>
           Work Type Breakdown
         </h3>
@@ -283,7 +283,7 @@ export default function Metrics() {
       </section>
 
       <section className="card-section" data-testid="section-productivity">
-        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
           <span className="text-xl">🕐</span>
           Productivity Rhythm
         </h3>
@@ -328,7 +328,7 @@ export default function Metrics() {
       </section>
 
       <section className="space-y-3" data-testid="section-backlog-health">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <span className="text-xl">🗂️</span>
           Backlog Health
         </h2>
@@ -349,12 +349,12 @@ export default function Metrics() {
               return (
                 <div 
                   key={client.clientName} 
-                  className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10"
+                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-white/10"
                   data-testid={`card-backlog-${client.clientName}`}
                 >
                   <div>
-                    <h3 className="font-medium text-foreground capitalize">{client.clientName}</h3>
-                    <p className="text-xs text-muted-foreground">
+                    <h3 className="font-medium text-white capitalize">{client.clientName}</h3>
+                    <p className="text-xs text-zinc-400">
                       {client.isEmpty 
                         ? "No backlog tasks" 
                         : `${client.totalCount} tasks • avg ${client.avgDays}d old`}
@@ -371,7 +371,7 @@ export default function Metrics() {
       </section>
 
       <section className="space-y-3" data-testid="section-client-activity">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <span className="text-xl">👥</span>
           Client Activity
         </h2>
@@ -385,48 +385,58 @@ export default function Metrics() {
                 ? "Active" 
                 : `${client.daysSinceLastMove}d ago`;
 
+              const sentimentConfig: Record<string, { icon: string; label: string; className: string }> = {
+                positive: { icon: "👍", label: "Positive", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+                neutral: { icon: "−", label: "Neutral", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                negative: { icon: "👎", label: "Negative", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+                complicated: { icon: "⚠️", label: "Complicated", className: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+              };
+              const priorityConfig: Record<string, { label: string; className: string }> = {
+                high: { label: "High", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+                medium: { label: "Medium", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                low: { label: "Low", className: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+              };
+
+              const sentimentInfo = sentimentConfig[client.sentiment] || sentimentConfig.neutral;
+              const priorityInfo = priorityConfig[client.importance] || priorityConfig.medium;
+
               return (
                 <div 
                   key={client.clientName} 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10"
+                  className="p-4 rounded-xl bg-zinc-900/80 border border-white/10"
                   data-testid={`card-client-${client.clientName}`}
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="font-medium text-foreground capitalize">{client.clientName}</h3>
-                      <p className="text-xs text-muted-foreground">{client.totalMoves} moves</p>
+                      <h3 className="font-semibold text-white capitalize">{client.clientName}</h3>
+                      <p className="text-xs text-zinc-400">{client.totalMoves} moves • {statusLabel}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground">{statusLabel}</span>
+                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 border rounded-full px-3 py-1 text-xs">
+                      {statusLabel}
+                    </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="positive"><div className="flex gap-2 items-center">👍 Positive</div></SelectItem>
-                        <SelectItem value="neutral"><div className="flex gap-2 items-center">− Neutral</div></SelectItem>
-                        <SelectItem value="negative"><div className="flex gap-2 items-center">👎 Negative</div></SelectItem>
-                        <SelectItem value="complicated"><div className="flex gap-2 items-center">⚠️ Complicated</div></SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="high"><div className="flex gap-2 items-center"><Star className="w-3 h-3 text-yellow-400" /> High</div></SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="h-px bg-white/10 mb-4" />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">Sentiment</p>
+                      <Badge className={`${sentimentInfo.className} border rounded-full px-3 py-1.5 text-xs font-medium`}>
+                        {sentimentInfo.icon} {sentimentInfo.label}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">Priority</p>
+                      <Badge className={`${priorityInfo.className} border rounded-full px-3 py-1.5 text-xs font-medium`}>
+                        <Star className="w-3 h-3 mr-1 inline" /> {priorityInfo.label}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        ) : <p className="text-muted-foreground text-sm">No client data yet</p>}
+        ) : <p className="text-zinc-400 text-sm">No client data yet</p>}
       </section>
     </div>
   );
