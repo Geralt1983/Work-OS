@@ -1,0 +1,21 @@
+"use client"
+
+import { MetricsHeader } from "@/components/metrics/metrics-header"
+import { BacklogHealthSection } from "@/components/metrics/backlog-health-section"
+import { PacingTrendsSection } from "@/components/metrics/pacing-trends-section"
+import { WorkTypeProductivitySection } from "@/components/metrics/work-type-productivity-section"
+import { ClientActivitySection } from "@/components/metrics/client-activity-section"
+
+export default function MetricsPage() {
+  return (
+    <main className="min-h-screen bg-background">
+      <MetricsHeader />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+        <PacingTrendsSection />
+        <WorkTypeProductivitySection />
+        <BacklogHealthSection />
+        <ClientActivitySection />
+      </div>
+    </main>
+  )
+}

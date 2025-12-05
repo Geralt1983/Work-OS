@@ -636,3 +636,19 @@
 body {
   @apply antialiased text-slate-200 selection:bg-purple-500/30;
 }
+
+/* ========================================
+   PREMIUM CARD SECTIONS
+   ======================================== */
+.card-section {
+  @apply p-6 rounded-2xl border border-border bg-card;
+  transition: border-color 0.2s ease;
+}
+
+.card-section:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.card-divider {
+  @apply h-px bg-border;
+}

@@ -1,0 +1,122 @@
+"use client"
+
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+
+const pacingData = {
+  percentage: 89,
+  hours: 2.7,
+  target: 3.0,
+  moves: 12,
+  backlog: 0,
+  clientsTouched: 2,
+}
+
+const weeklyData = [
+  { day: "Sunday", hours: 3.8 },
+  { day: "Monday", hours: 2.8 },
+  { day: "Tuesday", hours: 3.1 },
+  { day: "Wednesday", hours: 2.8 },
+  { day: "Thursday", hours: 2.7 },
+  { day: "Friday", hours: 0.0 },
+  { day: "Saturday", hours: 0.0 },
+]
+
+export function PacingTrendsSection() {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      {/* Today's Pacing Card */}
+      <section className="card-section">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+              <span className="text-2xl">🎯</span>
+              Today's Pacing
+            </h3>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-primary">{pacingData.percentage}%</div>
+            <p className="text-xs text-muted-foreground">of target</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">
+              {pacingData.hours}h of {pacingData.target}h target
+            </p>
+            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
+                style={{ width: `${(pacingData.hours / pacingData.target) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="card-divider" />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">From backlog</p>
+              <p className="text-sm font-medium text-foreground">{pacingData.backlog}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Clients touched</p>
+              <p className="text-sm font-medium text-foreground">{pacingData.clientsTouched}</p>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <p className="text-xs text-muted-foreground">{pacingData.moves} moves</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Weekly Trends Card */}
+      <section className="card-section">
+        <div className="flex items-start justify-between mb-6">
+          <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+            <span className="text-2xl">📈</span>
+            Weekly Trends
+          </h3>
+          <div className="text-right">
+            <div className="text-lg font-semibold text-primary">82</div>
+            <p className="text-xs text-muted-foreground">Momentum Score</p>
+          </div>
+        </div>
+
+        <div style={{ width: "100%", height: "220px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#404040" vertical={false} />
+              <XAxis dataKey="day" stroke="#808080" style={{ fontSize: "12px" }} />
+              <YAxis hide />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1a1a1a",
+                  border: "1px solid #404040",
+                  borderRadius: "0.75rem",
+                  color: "#ffffff",
+                }}
+                cursor={{ fill: "#2a2a2a" }}
+              />
+              <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="card-divider my-4" />
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">51 Moves</p>
+            <p className="text-muted-foreground">This week</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">10 Avg/day</p>
+            <p className="text-emerald-400">Weekly target hit!</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}

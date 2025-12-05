@@ -1,0 +1,149 @@
+"use client"
+
+import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
+
+interface Client {
+  id: string
+  name: string
+  moves: number
+  sentiment: "positive" | "neutral" | "negative"
+  priority: "low" | "medium" | "high"
+  status: "active" | "aging" | "stale"
+  lastUpdate: string
+}
+
+const clientData: Client[] = [
+  {
+    id: "1",
+    name: "General Admin",
+    moves: 4,
+    sentiment: "neutral",
+    priority: "medium",
+    status: "stale",
+    lastUpdate: "3d ago",
+  },
+  {
+    id: "2",
+    name: "Memphis",
+    moves: 11,
+    sentiment: "negative",
+    priority: "high",
+    status: "aging",
+    lastUpdate: "2d ago",
+  },
+  {
+    id: "3",
+    name: "Kentucky",
+    moves: 10,
+    sentiment: "neutral",
+    priority: "medium",
+    status: "aged",
+    lastUpdate: "1d ago",
+  },
+  {
+    id: "4",
+    name: "Orlando",
+    moves: 5,
+    sentiment: "positive",
+    priority: "low",
+    status: "aged",
+    lastUpdate: "1d ago",
+  },
+  {
+    id: "5",
+    name: "Revenue",
+    moves: 3,
+    sentiment: "positive",
+    priority: "high",
+    status: "aged",
+    lastUpdate: "1d ago",
+  },
+  {
+    id: "6",
+    name: "Raleigh",
+    moves: 20,
+    sentiment: "negative",
+    priority: "high",
+    status: "active",
+    lastUpdate: "now",
+  },
+]
+
+const sentimentConfig = {
+  positive: { icon: "👍", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+  neutral: { icon: "−", className: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+  negative: { icon: "👎", className: "bg-red-500/20 text-red-300 border-red-500/30" },
+}
+
+const priorityConfig = {
+  low: { label: "Low", className: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  medium: { label: "Medium", className: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+  high: { label: "High", className: "bg-red-500/20 text-red-300 border-red-500/30" },
+}
+
+export function ClientActivitySection() {
+  const [filter, setFilter] = useState<"all" | "active" | "aging">("all")
+
+  const filtered = filter === "all" ? clientData : clientData.filter((c) => c.status === filter)
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+          <span className="text-2xl">👥</span>
+          Client Activity
+        </h2>
+      </div>
+
+      <div className="space-y-3">
+        {filtered.map((client) => {
+          const sentimentIcon = sentimentConfig[client.sentiment]
+          const priorityConfig_ = priorityConfig[client.priority]
+
+          return (
+            <div key={client.id} className="card-section group hover:border-primary/50 transition-colors">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground">{client.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {client.moves} moves • {client.lastUpdate}
+                  </p>
+                </div>
+                <Badge
+                  className={`${sentimentConfig[client.sentiment].className} border rounded-full px-3 py-1 text-xs font-medium ml-2`}
+                >
+                  {client.status === "stale" && <span>3d stale</span>}
+                  {client.status === "aging" && <span>2d stale</span>}
+                  {client.status === "aged" && <span>1d ago</span>}
+                  {client.status === "active" && <span>Active</span>}
+                </Badge>
+              </div>
+
+              <div className="card-divider mb-4" />
+
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground mb-2">Sentiment</p>
+                  <Badge
+                    className={`${sentimentIcon.className} border rounded-full px-3 py-1 text-xs font-medium w-fit`}
+                  >
+                    {sentimentIcon.icon} {client.sentiment.charAt(0).toUpperCase() + client.sentiment.slice(1)}
+                  </Badge>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground mb-2">Priority</p>
+                  <Badge
+                    className={`${priorityConfig_.className} border rounded-full px-3 py-1 text-xs font-medium w-fit`}
+                  >
+                    ⭐ {priorityConfig_.label}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
