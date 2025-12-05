@@ -205,10 +205,10 @@ export default function Metrics() {
         </div>
 
         {loadingWeekly ? (
-          <Skeleton className="h-52 w-full" />
+          <Skeleton className="h-64 w-full" />
         ) : weeklyMetrics && weeklyChartData.length > 0 ? (
           <>
-            <div className="h-52 rounded-2xl bg-zinc-900/60 px-3 pb-4 pt-3">
+            <div className="h-64 rounded-2xl bg-zinc-900/60 px-3 pb-4 pt-8">
               <div className="flex h-full items-end gap-2">
                 {weeklyChartData.map((d) => {
                   const barHeight = d.hours > 0 ? Math.max((d.hours / 5) * 180, 12) : 6;
