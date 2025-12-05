@@ -77,14 +77,6 @@ interface ProductivityHour {
   deferrals: number;
 }
 
-const DRAIN_ICONS: Record<string, typeof Brain> = {
-  deep: Brain,
-  comms: MessageCircle,
-  admin: FileText,
-  creative: Lightbulb,
-  easy: Zap,
-};
-
 const DRAIN_COLORS: Record<string, string> = {
   deep: "#06b6d4",
   comms: "#10b981",
@@ -92,15 +84,6 @@ const DRAIN_COLORS: Record<string, string> = {
   creative: "#8b5cf6",
   easy: "#f59e0b",
   unset: "#6b7280",
-};
-
-const DRAIN_BG_COLORS: Record<string, string> = {
-  deep: "bg-cyan-500",
-  comms: "bg-emerald-500",
-  admin: "bg-red-500",
-  creative: "bg-purple-500",
-  easy: "bg-amber-500",
-  unset: "bg-gray-500",
 };
 
 function formatMinutesToHours(minutes: number): string {
@@ -137,10 +120,6 @@ export default function Metrics() {
     },
   });
 
-  const weeklyTargetMinutes = 900;
-  const weeklyHours = weeklyMetrics ? formatMinutesToHours(weeklyMetrics.totalMinutes) : "0.0";
-  const weeklyPacing = weeklyMetrics ? Math.min(Math.round((weeklyMetrics.totalMinutes / weeklyTargetMinutes) * 100), 100) : 0;
-
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const weeklyChartData = weeklyMetrics?.days.map((day, index) => ({
     day: dayNames[index],
@@ -160,249 +139,230 @@ export default function Metrics() {
   const MetricsContent = (
     <div className="space-y-6 w-full overflow-x-hidden">
       
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card-section" data-testid="section-todays-pacing">
-          <div className="flex items-start justify-between mb-6">
-            <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
-              <span className="text-2xl">🎯</span>
-              Today's Pacing
-            </h3>
-            {todayMetrics && (
-              <div className="text-right">
-                <div className="text-2xl font-bold text-primary">{todayMetrics.pacingPercent}%</div>
-                <p className="text-xs text-muted-foreground">of target</p>
-              </div>
-            )}
-          </div>
+      <section className="card-section" data-testid="section-todays-pacing">
+        <div className="flex items-start justify-between mb-4">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <span className="text-xl">🎯</span>
+            Today's Pacing
+          </h3>
+          {todayMetrics && (
+            <div className="text-2xl font-bold text-primary">{todayMetrics.pacingPercent}%</div>
+          )}
+        </div>
 
-          {loadingToday ? (
-            <Skeleton className="h-24 w-full" />
-          ) : todayMetrics ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {formatMinutesToHours(todayMetrics.estimatedMinutes)}h of 3.0h target
-                </p>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="card-divider" />
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">From backlog</p>
-                  <p className="text-sm font-medium text-foreground">{todayMetrics.backlogMoves}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Clients touched</p>
-                  <p className="text-sm font-medium text-foreground">{todayMetrics.clientsTouched.length}</p>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <p className="text-xs text-muted-foreground">{todayMetrics.movesCompleted} moves</p>
+        {loadingToday ? (
+          <Skeleton className="h-20 w-full" />
+        ) : todayMetrics ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
+                {formatMinutesToHours(todayMetrics.estimatedMinutes)}h of 3.0h target
+              </p>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(todayMetrics.pacingPercent, 100)}%` }}
+                />
               </div>
             </div>
-          ) : <p className="text-muted-foreground">No data</p>}
-        </section>
 
-        <section className="card-section" data-testid="section-weekly-trends">
-          <div className="flex items-start justify-between mb-6">
-            <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
-              <span className="text-2xl">📈</span>
-              Weekly Trends
-            </h3>
-            {weeklyMetrics && (
-              <div className="text-right">
-                <div className="text-lg font-semibold text-primary">{weeklyMetrics.momentum.percentChange}</div>
-                <p className="text-xs text-muted-foreground">Momentum Score</p>
+            <div className="flex gap-6 text-sm">
+              <div>
+                <span className="text-muted-foreground">From backlog: </span>
+                <span className="text-foreground font-medium">{todayMetrics.backlogMoves}</span>
               </div>
-            )}
+              <div>
+                <span className="text-muted-foreground">Clients touched: </span>
+                <span className="text-foreground font-medium">{todayMetrics.clientsTouched.length}</span>
+              </div>
+            </div>
           </div>
+        ) : <p className="text-muted-foreground">No data</p>}
+      </section>
 
-          {loadingWeekly ? (
-            <Skeleton className="h-56 w-full" />
-          ) : weeklyMetrics ? (
-            <>
-              <div style={{ width: "100%", height: "180px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#404040" vertical={false} />
-                    <XAxis dataKey="day" stroke="#808080" style={{ fontSize: "12px" }} />
-                    <YAxis hide />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1a1a1a",
-                        border: "1px solid #404040",
-                        borderRadius: "0.75rem",
-                        color: "#ffffff",
-                      }}
-                      cursor={{ fill: "#2a2a2a" }}
-                    />
-                    <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="card-divider my-4" />
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">{weeklyMetrics.totalMoves} Moves</p>
-                  <p className="text-muted-foreground">This week</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">{weeklyMetrics.averageMovesPerDay} Avg/day</p>
-                  {weeklyPacing >= 100 ? (
-                    <p className="text-emerald-400">Weekly target hit!</p>
-                  ) : (
-                    <p className="text-muted-foreground">{100 - weeklyPacing}% to go</p>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : <p className="text-muted-foreground">No data</p>}
-        </section>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card-section" data-testid="section-work-type">
-          <h3 className="text-xl font-semibold text-foreground flex items-center gap-2 mb-6">
-            <span className="text-2xl">🧠</span>
-            Work Type Breakdown
+      <section className="card-section" data-testid="section-weekly-trends">
+        <div className="flex items-start justify-between mb-4">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <span className="text-xl">📈</span>
+            Weekly Trends
           </h3>
+          {weeklyMetrics && (
+            <div className="text-2xl font-bold text-primary">{weeklyMetrics.momentum.percentChange}</div>
+          )}
+        </div>
 
-          {loadingDrain ? (
-            <Skeleton className="h-32 w-full" />
-          ) : drainMetrics && drainMetrics.length > 0 ? (
-            <>
-              <div className="mb-8">
-                <div className="flex h-4 rounded-full overflow-hidden gap-0.5 bg-black/20 p-0.5">
-                  {drainMetrics.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-full shadow-lg transition-all hover:opacity-80"
-                      style={{
-                        backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset,
-                        width: `${item.percentage}%`,
-                        boxShadow: `0 4px 12px ${DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset}40`,
-                      }}
-                    />
-                  ))}
+        {loadingWeekly ? (
+          <Skeleton className="h-48 w-full" />
+        ) : weeklyMetrics && weeklyChartData.length > 0 ? (
+          <>
+            <div className="w-full h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="day" stroke="#666" tick={{ fill: '#888', fontSize: 12 }} />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1a1a1a",
+                      border: "1px solid #333",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    formatter={(value: number) => [`${value}h`, "Hours"]}
+                  />
+                  <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-border">
+              <div>
+                <span className="text-muted-foreground">Moves: </span>
+                <span className="text-foreground font-semibold">{weeklyMetrics.totalMoves}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Avg/day: </span>
+                <span className="text-foreground font-semibold">{weeklyMetrics.averageMovesPerDay}</span>
+              </div>
+            </div>
+          </>
+        ) : <p className="text-muted-foreground">No data</p>}
+      </section>
+
+      <section className="card-section" data-testid="section-work-type">
+        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <span className="text-xl">🧠</span>
+          Work Type Breakdown
+        </h3>
+
+        {loadingDrain ? (
+          <Skeleton className="h-24 w-full" />
+        ) : drainMetrics && drainMetrics.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-4 mb-4">
+              {drainMetrics.map((item) => (
+                <div key={item.drainType} className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
+                  />
+                  <span className="text-sm text-foreground capitalize">{item.drainType}</span>
                 </div>
-              </div>
+              ))}
+            </div>
 
-              <div className="card-divider mb-6" />
+            <div className="flex h-5 rounded-full overflow-hidden gap-0.5">
+              {drainMetrics.map((item) => (
+                <div
+                  key={item.drainType}
+                  className="transition-all hover:opacity-80"
+                  style={{
+                    backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset,
+                    width: `${item.percentage}%`,
+                  }}
+                  title={`${item.drainType}: ${item.count} moves (${item.percentage}%)`}
+                />
+              ))}
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {drainMetrics.map((item) => {
-                  const DrainIcon = DRAIN_ICONS[item.drainType];
-                  return (
-                    <div
-                      key={item.drainType}
-                      className="p-4 rounded-xl bg-muted/50 border border-border/50 hover:border-primary/40 hover:bg-muted transition-all"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div
-                          className="w-3 h-3 rounded-full shadow-md flex-shrink-0"
-                          style={{
-                            backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset,
-                            boxShadow: `0 0 8px ${DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset}60`,
-                          }}
-                        />
-                        <p className="font-semibold text-foreground text-sm capitalize">{item.drainType}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground ml-6">{item.count} moves</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : <p className="text-muted-foreground text-sm">No completed moves yet</p>}
-        </section>
-
-        <section className="card-section" data-testid="section-productivity">
-          <h3 className="text-xl font-semibold text-foreground flex items-center gap-2 mb-6">
-            <span className="text-2xl">🕐</span>
-            Productivity Rhythm
-          </h3>
-
-          {loadingProductivity ? (
-            <Skeleton className="h-56 w-full" />
-          ) : productivityData && productivityData.length > 0 ? (
-            <>
-              <div style={{ width: "100%", height: "180px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={productivityChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="4 4" stroke="#2a2a2a" vertical={false} />
-                    <XAxis dataKey="time" stroke="#666666" style={{ fontSize: "11px" }} tick={{ fill: "#888888" }} />
-                    <YAxis hide />
-                    <Bar dataKey="productivity" fill="#10b981" radius={[6, 6, 0, 0]} isAnimationActive={true} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="card-divider my-6" />
-
-              <div className="flex justify-between text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Peak Hours</p>
-                  <p className="text-foreground font-semibold">9AM - 11AM</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
+              {drainMetrics.map((item) => (
+                <div key={item.drainType} className="flex items-center gap-2">
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: DRAIN_COLORS[item.drainType] || DRAIN_COLORS.unset }}
+                  />
+                  <span className="text-xs text-muted-foreground capitalize">{item.drainType}</span>
+                  <span className="text-xs text-foreground font-medium ml-auto">{item.count}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-muted-foreground text-xs">Average</p>
-                  <p className="text-foreground font-semibold">
-                    {productivityChartData.length > 0 
-                      ? Math.round(productivityChartData.reduce((a, b) => a + b.productivity, 0) / productivityChartData.length)
-                      : 0} moves/hr
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
-        </section>
-      </div>
+              ))}
+            </div>
+          </>
+        ) : <p className="text-muted-foreground text-sm">No completed moves yet</p>}
+      </section>
 
-      <section className="space-y-4" data-testid="section-backlog-health">
-        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-          <span className="text-2xl">🗂️</span>
+      <section className="card-section" data-testid="section-productivity">
+        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <span className="text-xl">🕐</span>
+          Productivity Rhythm
+        </h3>
+
+        {loadingProductivity ? (
+          <Skeleton className="h-48 w-full" />
+        ) : productivityData && productivityChartData.length > 0 ? (
+          <>
+            <div className="w-full h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={productivityChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis 
+                    dataKey="time" 
+                    stroke="#666" 
+                    tick={{ fill: '#888', fontSize: 10 }} 
+                    interval={2}
+                  />
+                  <YAxis hide />
+                  <Bar dataKey="productivity" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex justify-between text-sm mt-4 pt-4 border-t border-border">
+              <div>
+                <span className="text-muted-foreground">Mid - Total: </span>
+                <span className="text-foreground font-semibold">
+                  {productivityChartData.reduce((a, b) => a + b.productivity, 0)}
+                </span>
+              </div>
+              <div>
+                <span className="text-foreground font-semibold">
+                  {productivityChartData.length > 0 
+                    ? Math.round(productivityChartData.reduce((a, b) => a + b.productivity, 0) / productivityChartData.length)
+                    : 0} moves/hr
+                </span>
+              </div>
+            </div>
+          </>
+        ) : <p className="text-muted-foreground text-sm">No productivity data yet.</p>}
+      </section>
+
+      <section className="space-y-3" data-testid="section-backlog-health">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <span className="text-xl">🗂️</span>
           Backlog Health
         </h2>
 
         {loadingBacklog ? (
           <Skeleton className="h-32 w-full" />
         ) : backlogHealth && backlogHealth.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-2">
             {backlogHealth.map((client) => {
               const status = client.isEmpty ? "empty" : client.agingCount > 0 ? "aging" : "healthy";
               const statusConfig = {
-                empty: { label: "Empty", className: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
-                healthy: { label: "Healthy", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
-                aging: { label: `${client.agingCount} aging`, className: "bg-red-500/20 text-red-300 border-red-500/30" },
+                empty: { label: "Empty", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                healthy: { label: "Healthy", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+                aging: { label: "aging", className: "bg-red-500/20 text-red-400 border-red-500/30" },
               };
               const config = statusConfig[status];
 
               return (
-                <div key={client.clientName} className="card-section group" data-testid={`card-backlog-${client.clientName}`}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-foreground capitalize">{client.clientName}</h3>
-                      {!client.isEmpty && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {client.totalCount} tasks {client.avgDays > 0 && `• avg ${client.avgDays}d old`}
-                        </p>
-                      )}
-                      {client.isEmpty && <p className="text-xs text-muted-foreground mt-1">No backlog tasks</p>}
-                    </div>
-                    <Badge className={`${config.className} border rounded-full px-3 py-1 text-xs font-medium`}>
-                      {config.label}
-                    </Badge>
+                <div 
+                  key={client.clientName} 
+                  className="flex items-center justify-between p-3 rounded-xl bg-card border border-border"
+                  data-testid={`card-backlog-${client.clientName}`}
+                >
+                  <div>
+                    <h3 className="font-medium text-foreground capitalize">{client.clientName}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {client.isEmpty 
+                        ? "No backlog tasks" 
+                        : `${client.totalCount} tasks • avg ${client.avgDays}d old`}
+                    </p>
                   </div>
+                  <Badge className={`${config.className} border rounded-full px-3 py-1 text-xs font-medium`}>
+                    {config.label}
+                  </Badge>
                 </div>
               );
             })}
@@ -410,88 +370,57 @@ export default function Metrics() {
         ) : <p className="text-muted-foreground text-sm">No backlog data yet</p>}
       </section>
 
-      <section className="space-y-4" data-testid="section-client-activity">
-        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-          <span className="text-2xl">👥</span>
+      <section className="space-y-3" data-testid="section-client-activity">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <span className="text-xl">👥</span>
           Client Activity
         </h2>
 
         {loadingClients ? (
           <Skeleton className="h-48 w-full" />
         ) : clientMetrics && clientMetrics.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {clientMetrics.map((client) => {
-              const sentimentConfig = {
-                positive: { icon: "👍", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
-                neutral: { icon: "−", className: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
-                negative: { icon: "👎", className: "bg-red-500/20 text-red-300 border-red-500/30" },
-                complicated: { icon: "⚠️", className: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
-              };
-              const priorityConfig = {
-                low: { label: "Low", className: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-                medium: { label: "Medium", className: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
-                high: { label: "High", className: "bg-red-500/20 text-red-300 border-red-500/30" },
-              };
-
-              const sentimentInfo = sentimentConfig[client.sentiment as keyof typeof sentimentConfig] || sentimentConfig.neutral;
-              const priorityInfo = priorityConfig[client.importance as keyof typeof priorityConfig] || priorityConfig.medium;
-
               const statusLabel = client.daysSinceLastMove === 0 
                 ? "Active" 
-                : client.daysSinceLastMove >= 2 
-                  ? `${client.daysSinceLastMove}d stale` 
-                  : `${client.daysSinceLastMove}d ago`;
-
-              const statusClass = client.daysSinceLastMove === 0
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                : client.daysSinceLastMove >= 2
-                  ? "bg-red-500/20 text-red-300 border-red-500/30"
-                  : "bg-amber-500/20 text-amber-300 border-amber-500/30";
+                : `${client.daysSinceLastMove}d ago`;
 
               return (
-                <div key={client.clientName} className="card-section group" data-testid={`card-client-${client.clientName}`}>
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-foreground capitalize">{client.clientName}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {client.totalMoves} moves
-                      </p>
+                <div 
+                  key={client.clientName} 
+                  className="p-3 rounded-xl bg-card border border-border"
+                  data-testid={`card-client-${client.clientName}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-medium text-foreground capitalize">{client.clientName}</h3>
+                      <p className="text-xs text-muted-foreground">{client.totalMoves} moves</p>
                     </div>
-                    <Badge className={`${statusClass} border rounded-full px-3 py-1 text-xs font-medium ml-2`}>
-                      {statusLabel}
-                    </Badge>
+                    <span className="text-xs text-muted-foreground">{statusLabel}</span>
                   </div>
 
-                  <div className="card-divider mb-4" />
-
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground mb-2">Sentiment</p>
-                      <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
-                        <SelectTrigger className="h-8 text-xs bg-muted/50 border-border/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="positive"><div className="flex gap-1 items-center">👍 Positive</div></SelectItem>
-                          <SelectItem value="neutral"><div className="flex gap-1 items-center">− Neutral</div></SelectItem>
-                          <SelectItem value="negative"><div className="flex gap-1 items-center">👎 Negative</div></SelectItem>
-                          <SelectItem value="complicated"><div className="flex gap-1 items-center">⚠️ Complicated</div></SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground mb-2">Priority</p>
-                      <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
-                        <SelectTrigger className="h-8 text-xs bg-muted/50 border-border/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="high"><div className="flex gap-1 items-center"><Star className="w-3 h-3 text-yellow-400" /> High</div></SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={client.sentiment} onValueChange={(val) => updateSentiment.mutate({ clientName: client.clientName, sentiment: val })}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="positive"><div className="flex gap-2 items-center">👍 Positive</div></SelectItem>
+                        <SelectItem value="neutral"><div className="flex gap-2 items-center">− Neutral</div></SelectItem>
+                        <SelectItem value="negative"><div className="flex gap-2 items-center">👎 Negative</div></SelectItem>
+                        <SelectItem value="complicated"><div className="flex gap-2 items-center">⚠️ Complicated</div></SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={client.importance} onValueChange={(val) => updateImportance.mutate({ clientName: client.clientName, importance: val })}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="high"><div className="flex gap-2 items-center"><Star className="w-3 h-3 text-yellow-400" /> High</div></SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               );
@@ -504,23 +433,11 @@ export default function Metrics() {
 
   return (
     <>
-      <div className="h-screen flex md:hidden flex-col bg-[#030309] text-foreground font-sans overflow-hidden">
-        <header className="h-14 glass-strong border-b border-border flex items-center justify-between px-4 shrink-0 relative z-50 sticky top-0">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Metrics</h1>
-          <div className="flex items-center gap-1">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/moves">
-              <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <List className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Button variant="ghost" size="icon" className="text-primary">
-              <BarChart3 className="h-5 w-5" />
-            </Button>
+      <div className="h-screen flex md:hidden flex-col bg-background text-foreground font-sans overflow-hidden">
+        <header className="border-b border-border bg-card sticky top-0 z-10">
+          <div className="px-4 py-4">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
+            <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
           </div>
         </header>
 
@@ -536,10 +453,13 @@ export default function Metrics() {
           <GlassSidebar />
           <IslandLayout>
             <div className="flex flex-col h-full">
-              <IslandHeader title="Metrics" />
+              <div className="border-b border-border px-6 py-4">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
+                <p className="text-sm text-muted-foreground">Real-time dashboard insights</p>
+              </div>
               <IslandContent noPadding>
                 <ScrollArea className="flex-1 h-full">
-                  <div className="p-6 pb-24 max-w-5xl mx-auto">
+                  <div className="p-6 pb-24 max-w-4xl mx-auto">
                     {MetricsContent}
                   </div>
                 </ScrollArea>
