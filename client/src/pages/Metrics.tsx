@@ -224,10 +224,12 @@ export default function Metrics() {
             <div className="space-y-5">
               {/* List of Days with Horizontal Meters */}
               <div className="space-y-4">
-                {weeklyMetrics.days.map((day) => {
+                {weeklyMetrics.days.map((day, index) => {
                   const dailyHours = (day.estimatedMinutes / 60).toFixed(1);
                   const isZero = day.estimatedMinutes === 0;
-                  const dayName = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+                  // Backend returns Mon-Sun order (index 0-6), use static names to avoid timezone shifts
+                  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                  const dayName = dayNames[index];
                   const percent = Math.min((day.estimatedMinutes / 180) * 100, 100); // Based on 3h daily target
 
                   return (
