@@ -193,6 +193,10 @@ export default function Metrics() {
               <div className="text-xs text-zinc-400 tracking-wider uppercase">Momentum Score</div>
               <div className="text-lg text-emerald-400 font-medium">{weeklyMetrics.momentum.message}</div>
             </div>
+            <div className="ml-auto text-right">
+              <div className="text-2xl font-bold text-white">{weeklyMetrics.momentum.score}/100</div>
+              <div className="text-xs text-zinc-500">Overall</div>
+            </div>
           </div>
         )}
 
@@ -202,7 +206,7 @@ export default function Metrics() {
           <>
             <div className="w-full h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                <BarChart data={weeklyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                   <XAxis dataKey="day" stroke="#888" tick={{ fill: '#ccc', fontSize: 12 }} />
                   <YAxis hide />
