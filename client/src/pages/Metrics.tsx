@@ -3,11 +3,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  Brain, MessageCircle, FileText, Lightbulb, Zap, 
-  ThumbsUp, ThumbsDown, Minus, AlertTriangle, Star,
-  MessageSquare, List, BarChart3
-} from "lucide-react";
+import { MessageSquare, List, BarChart3 } from "lucide-react";
+import {
+  TargetIcon,
+  BarChartIcon,
+  MixIcon,
+  ClockIcon,
+  ArchiveIcon,
+  PersonIcon,
+} from "@radix-ui/react-icons";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -140,7 +144,9 @@ export default function Metrics() {
       <section className="card-section" data-testid="section-todays-pacing">
         <div className="flex items-start justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span className="text-xl">🎯</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
+              <TargetIcon className="h-4 w-4 text-cyan-400" />
+            </div>
             Today's Pacing
           </h3>
           {todayMetrics && (
@@ -180,7 +186,9 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-weekly-trends">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <span className="text-xl">📈</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
+            <BarChartIcon className="h-4 w-4 text-cyan-400" />
+          </div>
           Weekly Trends
         </h3>
         
@@ -256,7 +264,9 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-work-type">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <span className="text-xl">🧠</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
+            <MixIcon className="h-4 w-4 text-cyan-400" />
+          </div>
           Work Type Breakdown
         </h3>
 
@@ -301,7 +311,9 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-productivity">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <span className="text-xl">🕐</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-cyan-500/15">
+            <ClockIcon className="h-4 w-4 text-cyan-400" />
+          </div>
           Productivity Rhythm
         </h3>
 
@@ -345,7 +357,9 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-backlog-health">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <span className="text-xl">🗂️</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-zinc-700/50">
+            <ArchiveIcon className="h-4 w-4 text-zinc-400" />
+          </div>
           Backlog Health
         </h3>
 
@@ -388,7 +402,9 @@ export default function Metrics() {
 
       <section className="card-section" data-testid="section-client-activity">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-          <span className="text-xl">👥</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-zinc-700/50">
+            <PersonIcon className="h-4 w-4 text-zinc-400" />
+          </div>
           Client Activity
         </h3>
 
