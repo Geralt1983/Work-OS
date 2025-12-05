@@ -641,13 +641,13 @@ body {
    PREMIUM CARD SECTIONS
    ======================================== */
 .card-section {
-  @apply p-5 rounded-2xl border border-white/10;
-  background: rgba(24, 24, 27, 0.9);
+  @apply p-5 rounded-2xl border border-zinc-800;
+  background: #000000;
   transition: border-color 0.2s ease;
 }
 
 .card-section:hover {
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: rgba(63, 63, 70, 1);
 }
 
 .card-divider {
