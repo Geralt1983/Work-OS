@@ -188,8 +188,8 @@ export default function Metrics() {
           </h3>
           {weeklyMetrics && (
             <div className="text-right">
-              <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.percentChange}</div>
-              <div className="text-xs text-zinc-400">Momentum</div>
+              <div className="text-2xl font-bold text-cyan-400">{weeklyMetrics.momentum.score}/100</div>
+              <div className="text-xs text-zinc-400">Momentum Score</div>
             </div>
           )}
         </div>
@@ -227,6 +227,27 @@ export default function Metrics() {
               <div>
                 <span className="text-zinc-400">Avg/day: </span>
                 <span className="text-white font-semibold">{weeklyMetrics.averageMovesPerDay}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-zinc-700">
+              <p className="text-xs text-zinc-400 mb-2">Momentum Score Breakdown:</p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="text-center p-2 rounded-lg bg-zinc-900">
+                  <div className="text-cyan-400 font-semibold">40%</div>
+                  <div className="text-zinc-500">Velocity</div>
+                  <div className="text-zinc-400 text-[10px]">15h/week target</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-zinc-900">
+                  <div className="text-cyan-400 font-semibold">30%</div>
+                  <div className="text-zinc-500">Consistency</div>
+                  <div className="text-zinc-400 text-[10px]">5 active days</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-zinc-900">
+                  <div className="text-cyan-400 font-semibold">30%</div>
+                  <div className="text-zinc-500">Impact</div>
+                  <div className="text-zinc-400 text-[10px]">50% deep work</div>
+                </div>
               </div>
             </div>
           </>
