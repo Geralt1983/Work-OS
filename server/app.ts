@@ -29,14 +29,10 @@ declare module 'http' {
   }
 }
 
-// CORS configuration for Vercel frontend
+// CORS configuration - allow all origins for cross-domain API access
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://v0-work-os-main.vercel.app",
-    ],
+    origin: true, // Allow all origins
     credentials: true,
   })
 );
