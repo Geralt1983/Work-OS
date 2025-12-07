@@ -7,10 +7,10 @@ import {
   BarChart3, 
   ChevronLeft, 
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Wand2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import magnetoIcon from "@assets/Screenshot_20251126_222748_Gallery_1764214095163.jpg";
 import { playSfx } from "@/lib/sounds";
 
 interface GlassSidebarProps {
@@ -143,11 +143,7 @@ export default function GlassSidebar({ onTriageClick }: GlassSidebarProps) {
             transition={springTransition}
             data-testid="sidebar-triage"
           >
-            <img 
-              src={magnetoIcon} 
-              alt="Triage" 
-              className="w-6 h-6 rounded object-cover shrink-0"
-            />
+            <Wand2 className="w-5 h-5 text-rose-400 shrink-0" />
             <AnimatePresence>
               {!collapsed && (
                 <motion.span

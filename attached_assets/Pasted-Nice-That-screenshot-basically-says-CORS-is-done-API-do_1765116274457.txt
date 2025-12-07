@@ -1,0 +1,201 @@
+Nice. That screenshot basically says “CORS is done, API docs exist.” Perfect.
+
+Now the only thing left is wiring your new Vite front end to that Replit backend.
+
+Below is what you actually need to change in your front end repo. Everything is copy paste ready. Anywhere you see REPLIT_BASE_URL or /api/moves, replace with the real values from the API docs the agent gave you.
+
+
+---
+
+1. .env.local
+
+In the root of your Vite app, create a file called .env.local:
+
+VITE_API_BASE_URL="https://REPLIT_BASE_URL_HERE"
+VITE_USE_SERVER="true"
+
+Example:
+
+VITE_API_BASE_URL="https://dailyworkosagent.jkimble1983.repl.co"
+VITE_USE_SERVER="true"
+
+Use the exact Replit URL from the browser when the backend is running.
+
+
+---
+
+2. src/lib/apiClient.ts
+
+Create this file in your Vite app:
+
+// src/lib/apiClient.ts
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+if (!API_BASE_URL) {
+  console.error("VITE_API_BASE_URL is not set")
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`API ${res.status} ${res.statusText}: ${text}`)
+  }
+
+  // some DELETE endpoints may return no body
+  if (res.status === 204) {
+    return undefined as T
+  }
+
+  return res.json() as Promise<T>
+}
+
+This is the single pipe between your UI and Replit.
+
+
+---
+
+3. src/lib/serverMovesApi.ts
+
+Now create a server api wrapper that matches your Replit endpoints.
+
+Replace the "/api/moves" paths with whatever your Replit agent listed.
+
+// src/lib/serverMovesApi.ts
+
+import { apiRequest } from "./apiClient"
+import type { Move } from "@/types/moves" // adjust import to your actual Move type
+
+// adjust these paths to match your Replit API docs
+const MOVES_BASE_PATH = "/api/moves"
+
+export async function listMoves(): Promise<Move[]> {
+  return apiRequest<Move[]>(MOVES_BASE_PATH)
+}
+
+export async function createMove(payload: Partial<Move>): Promise<Move> {
+  return apiRequest<Move>(MOVES_BASE_PATH, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateMove(id: string, payload: Partial<Move>): Promise<Move> {
+  return apiRequest<Move>(`${MOVES_BASE_PATH}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteMove(id: string): Promise<void> {
+  await apiRequest<void>(`${MOVES_BASE_PATH}/${id}`, {
+    method: "DELETE",
+  })
+}
+
+If your docs say the routes are like:
+
+GET /moves
+
+POST /moves
+
+PATCH /moves/:id
+
+DELETE /moves/:id
+
+
+then set:
+
+const MOVES_BASE_PATH = "/moves"
+
+and keep the rest.
+
+You can repeat this pattern for other resources like clients or tasks if you want.
+
+
+---
+
+4. Swap the hooks from mock to server
+
+Wherever you are importing the mock api now (something like mockApi.ts), change it to use serverMovesApi.
+
+Example src/hooks/useMoves.ts:
+
+// before
+// import { listMoves, createMove, updateMove, deleteMove } from "@/lib/mockApi"
+
+// after
+import {
+  listMoves,
+  createMove,
+  updateMove,
+  deleteMove,
+} from "@/lib/serverMovesApi"
+
+If you want a dev switch between localStorage and server, you can centralize it like this:
+
+// src/lib/movesDataSource.ts
+import * as mock from "./mockApi"
+import * as server from "./serverMovesApi"
+
+const USE_SERVER = import.meta.env.VITE_USE_SERVER === "true"
+
+export const listMoves = USE_SERVER ? server.listMoves : mock.listMoves
+export const createMove = USE_SERVER ? server.createMove : mock.createMove
+export const updateMove = USE_SERVER ? server.updateMove : mock.updateMove
+export const deleteMove = USE_SERVER ? server.deleteMove : mock.deleteMove
+
+Then your hooks import from movesDataSource instead.
+
+
+---
+
+5. Local test
+
+1. Run the Replit backend so the URL works in a normal browser.
+
+
+2. In the Vite app:
+
+
+
+npm install
+npm run dev
+
+3. Open http://localhost:5173
+
+
+4. Open dev tools Network tab and perform actions in the app:
+
+Add a move
+
+Complete a move
+
+Reorder if supported by the API
+
+
+
+
+You should see requests going to:
+
+https://REPLIT_BASE_URL/...
+
+with 200 responses.
+
+
+---
+
+Once that works locally, the Vercel step is trivial: set the same env vars (VITE_API_BASE_URL, VITE_USE_SERVER) in Vercel and deploy.
+
+You do not need to send more code to Replit right now unless their API paths are insane. All the remaining work is on the front end side.
