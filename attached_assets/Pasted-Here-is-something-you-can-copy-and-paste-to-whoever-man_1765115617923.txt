@@ -1,0 +1,88 @@
+Here is something you can copy and paste to whoever manages the Replit project.
+
+> We are keeping Replit as the back end API only and pointing a new Vite React app on Vercel at it.
+
+I need you to do three things in the Replit code:
+
+1. Make sure the API routes are clean
+
+
+
+The server should expose JSON endpoints for things like moves, clients, and tasks. For example:
+
+GET /moves           returns a list of moves as JSON
+POST /moves          creates a move from JSON in the request body
+PATCH /moves/:id     updates a move
+DELETE /moves/:id    deletes a move
+
+If the routes currently live under /api (for example /api/moves), that is fine. I just need the paths you are actually using so I can match them from the front end.
+
+The important thing is that these endpoints return JSON, not HTML.
+
+2. Add CORS support so the Vercel app and local dev can call Replit
+
+
+
+The server should allow cross origin requests from:
+
+http://localhost:5173 (for Vite dev)
+https://MY_VERCEL_DOMAIN.vercel.app (the deployed app, I will give you the exact domain)
+
+If this is an Express server, please do this:
+
+npm install cors
+
+Then in the main server file (for example index.js or server.js):
+
+import express from "express"
+import cors from "cors"
+
+const app = express()
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://MY_VERCEL_DOMAIN.vercel.app"
+    ],
+    credentials: true,
+  })
+)
+
+app.use(express.json())
+
+// existing routes below
+// app.get("/moves", ...)
+// app.post("/moves", ...)
+
+If you do not know the Vercel domain yet, you can temporarily allow all origins while we wire things up:
+
+app.use(
+  cors({
+    origin: "*",
+  })
+)
+
+Later we will lock that down to the exact Vercel domain.
+
+3. Confirm the base URL and the route paths
+
+
+
+Once the server is running, I need:
+
+a) The public base URL of the Replit server, for example
+https://yourproject.youruser.repl.co
+
+b) The exact paths for the main resources, for example:
+
+GET  /moves
+POST /moves
+PATCH /moves/:id
+DELETE /moves/:id
+
+and any other resources that matter, like /clients or /tasks
+
+I will set VITE_API_BASE_URL in the Vite app to that Replit URL and call those paths from the new front end.
+
+You do not need to do anything with Vercel or the new React code. I just need the CORS middleware in place and the confirmed API paths and base URL.

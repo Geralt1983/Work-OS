@@ -6,6 +6,7 @@ import express, {
   Response,
   NextFunction,
 } from "express";
+import cors from "cors";
 
 import { registerRoutes } from "./routes";
 
@@ -27,6 +28,20 @@ declare module 'http' {
     rawBody: unknown
   }
 }
+
+// CORS configuration for Vercel frontend
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      process.env.VERCEL_FRONTEND_URL || "",
+      "*", // Temporarily allow all during development - will lock down to Vercel domain
+    ].filter(Boolean),
+    credentials: true,
+  })
+);
+
 app.use(express.json({
   limit: '50mb',
   verify: (req, _res, buf) => {
