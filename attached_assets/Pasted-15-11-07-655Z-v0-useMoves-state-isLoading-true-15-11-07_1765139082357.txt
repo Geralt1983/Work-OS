@@ -1,0 +1,28 @@
+15:11:07.655Z	[v0] useMoves state: {"isLoading":true}
+15:11:07.722Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:11:07.722Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:11:08.012Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:11:18.011Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:11:18.012Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:11:18.013Z	[v0] useMoves state: {"isLoading":true,"error":"Failed to fetch"}
+15:11:18.305Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:20:37.865Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:20:37.866Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:20:37.884Z	[v0] useMoves state: {"isLoading":true,"error":"Failed to fetch"}
+15:20:38.353Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:20.801Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:20.837Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:21:20.837Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:21:20.838Z	[v0] useMoves state: {"isLoading":true,"error":"Failed to fetch"}
+15:21:21.068Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:24.038Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:24.712Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:25.661Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:28.352Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:21:28.352Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:21:28.353Z	[v0] useMoves state: {"isLoading":true,"error":"Failed to fetch"}
+15:21:28.492Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
+15:21:32.364Z	[v0] useMoves state: {"isLoading":true}
+15:21:32.394Z	[v0] Fetching moves from: https://daily-work-os-agent.replit.app/api/moves
+15:21:32.394Z	[v0] apiFetch: https://daily-work-os-agent.replit.app/api/moves
+15:21:32.538Z	[v0] useMoves state: {"isLoading":false,"error":"Failed to fetch"}
