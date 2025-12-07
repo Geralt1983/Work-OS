@@ -101,3 +101,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_openai:1.0.0", "javascript_mem_db:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+VERCEL_FRONTEND_URL = "https://v0-work-os-main.vercel.app"

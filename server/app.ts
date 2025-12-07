@@ -35,9 +35,8 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:3000",
-      process.env.VERCEL_FRONTEND_URL || "",
-      "*", // Temporarily allow all during development - will lock down to Vercel domain
-    ].filter(Boolean),
+      "https://v0-work-os-main.vercel.app",
+    ],
     credentials: true,
   })
 );
