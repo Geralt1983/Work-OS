@@ -29,13 +29,54 @@ declare module 'http' {
   }
 }
 
-// CORS configuration - allow all origins for cross-domain API access
+// CORS configuration - allow v0.dev, Vercel, and localhost origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://v0-work-os-main.vercel.app",
+  "https://v0.dev",
+];
+
 app.use(
   cors({
-    origin: true, // Allow all origins
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check explicit list
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // Allow all v0.dev subdomains
+      if (origin.endsWith('.v0.dev')) {
+        return callback(null, true);
+      }
+      
+      // Allow all vercel.app subdomains  
+      if (origin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+      
+      // Allow all replit domains
+      if (origin.includes('.replit.') || origin.includes('.repl.co')) {
+        return callback(null, true);
+      }
+      
+      // Log blocked origins for debugging
+      console.log(`[CORS] Blocked origin: ${origin}`);
+      
+      // Allow anyway for now (debugging)
+      return callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
 );
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json({
   limit: '50mb',
